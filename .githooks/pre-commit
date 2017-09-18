@@ -7,7 +7,7 @@
 #
 # To enable this hook, rename this file to "pre-commit".
 
-files=$(git diff --name-only)
+files=$(git diff HEAD --name-only)
 project_dir=$(git rev-parse --show-toplevel)
 
 brew_install_if_missing () {
@@ -43,3 +43,4 @@ do
   fi
 done
 
+exit 0
