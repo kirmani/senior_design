@@ -2,7 +2,7 @@
 # Order is important. The last matching pattern has the most precedence.
 # So if a pull request only touches the highest-level directory, only those
 # owners will be requested to review.
-*                           @kirmani
+*                           @kirmani @yursky
 
 # Repository management.
 .githooks/*                 @kirmani
