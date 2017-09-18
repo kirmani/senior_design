@@ -1,0 +1,13 @@
+.githooks/*                 @kirmani
+experimental/armandb/*      @armandb
+experimental/alioup/*       @alioup
+experimental/jishminor/*    @jishminor
+experimental/kirmani/*      @kirmani
+experimental/taylorzhao/*   @taylorzhao
+experimental/yursky/*       @yursky
+hardware/*                  @armandb
+learning/*                  @kirmani
+navigation/*                @kirmani
+perception/*                @kirmani
+papers/*                    @alioup @kirmani
+scripts/*                   @kirmani
