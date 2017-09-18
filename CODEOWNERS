@@ -1,13 +1,26 @@
+# Fallback, default owner is one does not exist.
+# Order is important. The last matching pattern has the most precedence.
+# So if a pull request only touches the highest-level directory, only those
+# owners will be requested to review.
+*                           @kirmani
+
+# Repository management.
 .githooks/*                 @kirmani
+scripts/*                   @kirmani
+
+# Experimental directories
 experimental/armandb/*      @armandb
 experimental/alioup/*       @alioup
 experimental/jishminor/*    @jishminor
 experimental/kirmani/*      @kirmani
 experimental/taylorzhao/*   @taylorzhao
 experimental/yursky/*       @yursky
+
+# Technical breakdown.
 hardware/*                  @armandb
 learning/*                  @kirmani
 navigation/*                @kirmani
 perception/*                @kirmani
+
+# Miscellanous book-keeping.
 papers/*                    @alioup @kirmani
-scripts/*                   @kirmani
