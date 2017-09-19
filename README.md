@@ -7,6 +7,6 @@
 - Armand Behroozi <<armandb@utexas.edu>>
 - Ali de Jong <<ali.dejong@utexas.edu>>
 - Sean Kirmani <<sean@kirmani.io>>
-- Yuriy Minin <<yuriym@utexas.edu>>
+- Yuriy Minin <<me@yuriy.io>>
 - Josh Minor <<joshminor@utexas.edu>>
 - Taylor Zhao <<taylorzhao@utexas.edu>>
