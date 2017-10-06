@@ -1,0 +1,4 @@
+[submodule "catkin_ws/src/tum_ardrone"]
+	path = catkin_ws/src/tum_ardrone
+  url = https://github.com/tum-vision/tum_ardrone.git
+  branch = indigo-devel

@@ -41,3 +41,16 @@
 *.swp
 *ehthumbs.db
 *Thumbs.db
+
+############
+# Dotfiles #
+############
+.*
+!.githooks
+!.gitignore
+
+#######
+# ROS #
+#######
+catkin_ws/build
+catkin_ws/devel
