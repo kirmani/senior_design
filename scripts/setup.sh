@@ -28,21 +28,11 @@ rosdep update
 echo "source /opt/ros/indigo/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 sudo apt-get -y install python-rosinstall
-sudo apt-get -y freeglut3-dev
 
-# Build ardrone_autonomy.
-cd ~/catkin_ws/src
-export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:`pwd`/ardrone_autonomy
-cd ~/catkin_ws/src/ardrone_autonomy
-./build_sdk.sh
-rosmake
-
-# Build tum_ardrone
-cd ~/catkin_ws/src
-export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:`pwd`/tum_ardrone
-cd ~/catkin_ws/src/tum_ardrone
-rosmake tum_ardrone
+# Install ardrone_autonomy.
+sudo apt-get -y install ros-indigo-ardrone-autonomy
 
 # Build catkin workspace.
 cd ~/catkin_ws
+source devel/setup.bash
 catkin_make
