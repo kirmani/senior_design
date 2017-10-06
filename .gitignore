@@ -41,3 +41,9 @@
 *.swp
 *ehthumbs.db
 *Thumbs.db
+
+#######
+# ROS #
+#######
+catkin_ws/build
+catkin_ws/devel
