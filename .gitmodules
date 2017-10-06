@@ -1,0 +1,7 @@
+[submodule "catkin_ws/src/ardrone_autonomy"]
+	path = catkin_ws/src/ardrone_autonomy
+	url = https://github.com/AutonomyLab/ardrone_autonomy.git
+[submodule "catkin_ws/src/tum_ardrone"]
+	path = catkin_ws/src/tum_ardrone
+  url = https://github.com/tum-vision/tum_ardrone.git
+  branch = indigo-devel
