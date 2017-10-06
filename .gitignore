@@ -42,6 +42,13 @@
 *ehthumbs.db
 *Thumbs.db
 
+############
+# Dotfiles #
+############
+.*
+!.githooks
+!.gitignore
+
 #######
 # ROS #
 #######
