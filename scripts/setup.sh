@@ -31,8 +31,12 @@ sudo apt-get -y install python-rosinstall
 
 # Install ardrone_autonomy.
 sudo apt-get -y install ros-indigo-ardrone-autonomy
+sudo apt-get -y install freeglut3-dev
+sudo apt-get -y install liblapack-dev
+sudo apt-get -y install libopenblas-dev
+
 
 # Build catkin workspace.
 cd ~/catkin_ws
-source devel/setup.bash
+source /opt/ros/indigo/setup.bash
 catkin_make
