@@ -1,12 +1,9 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 # vim:fenc=utf-8
-#
-# Copyright © 2017 Sean Kirmani <sean@kirmani.io>
-#
-# Distributed under terms of the MIT license.
+
 """
-Homework 6: Residual networks.
+Journey Experimentation: Depth From RGB Data
 """
 import argparse
 import glob

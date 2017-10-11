@@ -42,7 +42,7 @@ from sensor_msgs.msg import Image
 
 
 def callback(data):
-    rospy.loginfo(rospy.get_caller_id() + 'Received image')
+    rospy.loginfo(rospy.get_caller_id() + ': Received image')
 
 
 def listener():
