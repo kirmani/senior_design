@@ -1,6 +1,0 @@
-model_checkpoint_path: "depth-net-20"
-all_model_checkpoint_paths: "depth-net-16"
-all_model_checkpoint_paths: "depth-net-17"
-all_model_checkpoint_paths: "depth-net-18"
-all_model_checkpoint_paths: "depth-net-19"
-all_model_checkpoint_paths: "depth-net-20"
