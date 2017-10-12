@@ -6,13 +6,12 @@
     <param name="realtime_video" value="True" />
     <param name="looprate" value="30" />
   </node>
+  <node name="drone_stateestimation" pkg="tum_ardrone" type="drone_stateestimation"></node>
   <!--
-  <node name="drone_stateestimation" pkg="tum_ardrone" type="drone_stateestimation">
-  </node>
   <node name="drone_autopilot" pkg="tum_ardrone" type="drone_autopilot">
   </node>
   <node name="drone_gui" pkg="tum_ardrone" type="drone_gui">
   </node>
-  -->
   <node name="depth_module" pkg="journey" type="depth_module.py"></node>
+  -->
 </launch>
