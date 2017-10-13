@@ -36,14 +36,20 @@ class TrajectoryPlanner:
         self.velocity_publisher = rospy.Publisher(
             '/cmd_vel', Twist, queue_size=10)
         self.pose_subscriber = rospy.Subscriber('/ardrone/predictedPose',
-                                                filter_state, self.callback)
-        s = rospy.Service('fly_to_goal', FlyToGoal, self.fly_to_goal)
+                                                filter_state, self._OnNewPose)
+        s = rospy.Service('fly_to_goal', FlyToGoal, self.FlyToGoal)
         self.pose = Pose()
         self.velocity = Pose()
         self.rate = rospy.Rate(RATE)
 
-    #Callback function implementing the pose value received
-    def callback(self, data):
+        # Start in hover mode.
+        vel_msg = Twist()
+        vel_msg.linear.x = 0
+        vel_msg.linear.y = 0
+        vel_msg.linear.z = 0
+        self.velocity_publisher.publish(vel_msg)
+
+    def _OnNewPose(self, data):
         self.pose.position.x = round(data.x, 4)
         self.pose.position.y = round(data.y, 4)
         self.pose.position.z = round(data.z, 4)
@@ -51,50 +57,54 @@ class TrajectoryPlanner:
         self.velocity.position.y = round(data.dy, 4)
         self.velocity.position.z = round(data.dz, 4)
 
-    def fly_to_goal(self, req):
-        if (req.x == 0 and req.y == 0 and req.z == 0):
-            print("Landing.")
-            self.land_publisher.publish()
-            return FlyToGoalResponse(True)
-
+    def FlyToGoal(self, req):
         start = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
-        goal = np.array([start[0] + req.x, start[1] + req.y, start[2] + req.z])
-        vel_msg = Twist()
+        delta = np.array([req.x, req.y, req.z])
+        time = req.time
+        goal = start + delta
 
         print("Flying to: (%s, %s, %s)" % (goal[0], goal[1], goal[2]))
 
         s = 1.0
-        time = 5  # seconds
         alpha = -np.log(0.01)
-        for i in range(time * RATE):
+        vel_msg = Twist()
+        for i in range(int(time * RATE)):
+            # Query position and velocity.
             x = np.array([
                 self.pose.position.x, self.pose.position.y, self.pose.position.z
             ])
-            distance = np.linalg.norm(goal - x)
-            print("Distance: %s" % distance)
             v = np.array([
                 self.velocity.position.x, self.velocity.position.y,
                 self.velocity.position.z
             ])
+            distance = np.linalg.norm(goal - x)
+            print("Distance: %s" % distance)
 
+            # Update and publish velocity.
             v_dot = ((goal - x) - v - (goal - start) * s) / time
             a = v + v_dot
             vel_msg.linear.x = a[0]
             vel_msg.linear.y = a[1]
             vel_msg.linear.z = a[1]
+            self.velocity_publisher.publish(vel_msg)
+
+            # Update phase.
             s_dot = (-alpha / time) * s
             s += s_dot
 
-            self.velocity_publisher.publish(vel_msg)
+            # Wait.
             self.rate.sleep()
-        print(s)
+
+        # Go back to hover mode when done.
+        vel_msg.linear.x = 0
+        vel_msg.linear.y = 0
+        vel_msg.linear.z = 0
+        self.velocity_publisher.publish(vel_msg)
 
         return FlyToGoalResponse(True)
 
     def Plan(self):
-        vel_msg = Twist()
-        self.velocity_publisher.publish(vel_msg)
         print("Trajectory planner initialized.")
         rospy.spin()
 
