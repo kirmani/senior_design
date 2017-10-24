@@ -35,7 +35,7 @@ class DeepDronePlanner:
 
         (self.image_input, self.control_output) = self._CreateModel()
 
-        print("Trajectory planner initialized.")
+        print("Deep drone planner initialized.")
 
     def _CreateModel(self):
         inputs = tf.placeholder(tf.float32, (None, 360, 640, 3), name='input')
