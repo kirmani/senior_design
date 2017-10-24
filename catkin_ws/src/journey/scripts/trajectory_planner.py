@@ -105,25 +105,19 @@ class TrajectoryPlanner:
                 self.goal_pose.position.x, self.goal_pose.position.y,
                 self.goal_pose.position.z
             ])
-            print("Position: %s" % x)
-            print("Goal: %s" % goal)
             distance = np.linalg.norm(goal - x)
-            print("Distance to goal: %s" % distance)
 
             # Update and publish velocity.
-            v_dot = (K * ((goal - x) -
-                          (goal - self.start) * self.s) - D * v) / self.time
+            v_dot = (goal - x) - (goal - self.start) * self.s - v
             new_v = v + v_dot  # m / s
-            new_v /= 1000
-            print("Velocity: %s" % (new_v))
             vel_msg.linear.x = new_v[0]
             vel_msg.linear.y = new_v[1]
             vel_msg.linear.z = new_v[2]
+            vel_msg.angular.z = 0
             self.velocity_publisher.publish(vel_msg)
 
             # Update phase.
             self.s = max(self.s - 1.0 / (self.time * RATE), 0.0)
-            print("Phase (s): %s" % self.s)
 
             # Wait.
             self.rate.sleep()
