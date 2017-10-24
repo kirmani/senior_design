@@ -28,6 +28,8 @@ class DeepDronePlanner:
         rospy.init_node('deep_drone_planner', anonymous=True)
         self.velocity_publisher = rospy.Publisher(
             '/cmd_vel', Twist, queue_size=10)
+
+        # TODO(kirmani): Query the depth image instead of the RGB image.
         self.pose_subscriber = rospy.Subscriber('/ardrone/front/image_raw',
                                                 Image, self._OnNewImage)
         self.rate = rospy.Rate(RATE)
