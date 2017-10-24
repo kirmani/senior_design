@@ -2,3 +2,6 @@
 	path = catkin_ws/src/tum_ardrone
   url = https://github.com/tum-vision/tum_ardrone.git
   branch = indigo-devel
+[submodule "catkin_ws/src/tum_simulator"]
+	path = catkin_ws/src/tum_simulator
+	url = https://github.com/dougvk/tum_simulator
