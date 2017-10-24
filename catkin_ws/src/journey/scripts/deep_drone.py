@@ -43,9 +43,8 @@ class DeepDronePlanner:
         return [0, 0, 0, 0]
 
     def Plan(self):
-        testing = True
         vel_msg = Twist()
-        while not rospy.is_shutdown() and testing:
+        while not rospy.is_shutdown():
             if not self.image:
                 print("No image available.")
             else:
@@ -57,9 +56,6 @@ class DeepDronePlanner:
                 vel_msg.linear.y = controls[1]
                 vel_msg.linear.z = controls[2]
                 vel_msg.angular.z = controls[3]
-                self.velocity_publisher.publish(vel_msg)
-
-                testing = False
 
             # Wait.
             self.rate.sleep()
