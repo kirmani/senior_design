@@ -33,29 +33,60 @@ class DeepDronePlanner:
         self.rate = rospy.Rate(RATE)
         self.image = None
 
+        (self.image_input, self.control_output) = self._CreateModel()
+
         print("Trajectory planner initialized.")
+
+    def _CreateModel(self):
+        inputs = tf.placeholder(tf.float32, (None, 360, 640, 3), name='input')
+        x = tf.contrib.layers.conv2d(
+            inputs, 64, [3, 3], stride=2, scope="conv1")
+        x = tf.contrib.layers.conv2d(x, 128, [3, 3], stride=2, scope="conv2")
+        x = tf.contrib.layers.conv2d(x, 256, [3, 3], stride=2, scope="conv3")
+        x = tf.contrib.layers.conv2d(x, 512, [3, 3], stride=2, scope="conv4")
+        x = tf.contrib.layers.conv2d(x, 1024, [3, 3], stride=2, scope="conv5")
+        x = tf.contrib.layers.fully_connected(x, 128)
+        x = tf.contrib.layers.flatten(x)
+        x = tf.contrib.layers.fully_connected(x, 4, activation_fn=None)
+        outputs = tf.clip_by_value(x, -1, 1)
+        return (inputs, outputs)
 
     def _OnNewImage(self, image):
         self.image = image
 
-    def QueryPolicy(self, image):
+    def Reward(self, image):
+        # TODO(kirmani): Design reward function.
+        return 1
+
+    def QueryPolicy(self, sess, image):
         # TODO(kirmani): Do on-policy learning here.
-        return [0, 0, 0, 0]
+        image = np.stack([image])
+        controls = sess.run(
+            [self.control_output], feed_dict={self.image_input: image})[0][0]
+        return controls
 
     def Plan(self):
+        # Start tensorflow session.
+        sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
+
+        # Initialize velocity message.
         vel_msg = Twist()
+
         while not rospy.is_shutdown():
             if not self.image:
                 print("No image available.")
             else:
                 input_image = ros_numpy.numpify(self.image)
 
-                controls = self.QueryPolicy(input_image)
+                controls = self.QueryPolicy(sess, input_image)
+                print(controls)
 
                 vel_msg.linear.x = controls[0]
                 vel_msg.linear.y = controls[1]
                 vel_msg.linear.z = controls[2]
                 vel_msg.angular.z = controls[3]
+                self.velocity_publisher.publish(vel_msg)
 
             # Wait.
             self.rate.sleep()
