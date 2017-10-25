@@ -26,6 +26,91 @@ from journey.srv import FlyToGoalResponse
 RATE = 10  # Hz
 
 
+class ActorNetwork:
+
+    def __init__(self,
+                 sess,
+                 num_inputs,
+                 num_actions,
+                 tau=0.1,
+                 learning_rate=0.001):
+        self.sess = sess
+        self.inputs = tf.placeholder(tf.float32, (None, num_inputs))
+        x = tf.contrib.layers.fully_connected(self.inputs, 32)
+        x = tf.contrib.layers.fully_connected(x, 32)
+        self.actions = tf.contrib.layers.fully_connected(
+            x, num_actions, activation_fn=tf.tanh)
+
+        network_params = tf.trainable_variables()
+
+        target_network_params = tf.trainable_variables()[len(network_params):]
+
+        # Op for periodically updating target network with online network weights
+        update_target_network_params = \
+            [target_network_params[i].assign(tf.mul(network_params[i], tau) + \
+                tf.mul(target_network_params[i], 1. - tau))
+                for i in range(len(target_network_params))]
+
+        # This gradient will be provided by the critic network
+        self.action_gradient = tf.placeholder(tf.float32, [None, num_actions])
+
+        # Combine the gradients here
+        self.actor_gradients = tf.gradients(self.actions, network_params,
+                                            -self.action_gradient)
+
+        # Optimization Op
+        self.optimize = tf.train.AdamOptimizer(learning_rate).\
+            apply_gradients(zip(self.actor_gradients, network_params))
+
+    def train(self, inputs, a_gradient):
+        self.sess.run(
+            self.optimize,
+            feed_dict={self.inputs: inputs,
+                       self.action_gradient: a_gradient})
+
+    def predict(self, inputs):
+        return self.sess.run(self.actions, feed_dict={self.inputs: inputs})
+
+
+class CriticNetwork:
+
+    def __init__(self, sess, num_inputs, num_actions, learning_rate=0.001):
+        self.sess = sess
+        self.inputs = tf.placeholder(tf.float32, (None, num_inputs))
+        self.actions = tf.placeholder(tf.float32, (None, num_actions))
+        x = tf.contrib.layers.fully_connected(self.inputs, 32)
+        x = tf.concat([x, self.actions], axis=-1)
+        x = tf.contrib.layers.fully_connected(x, 32)
+        self.out = tf.contrib.layers.fully_connected(x, 1, activation_fn=None)
+
+        # Network target (y_i)
+        # Obtained from the target networks
+        self.predicted_q_value = tf.placeholder(tf.float32, [None, 1])
+
+        # Define loss and optimization Op
+        self.loss = tf.losses.mean_squared_error(self.out,
+                                                 self.predicted_q_value)
+        self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
+            self.loss)
+
+        # Get the gradient of the net w.r.t. the action
+        self.action_grads = tf.gradients(self.out, self.actions)
+
+    def train(self, inputs, actions, reward):
+        self.sess.run(
+            self.optimize,
+            feed_dict={
+                self.inputs: inputs,
+                self.actions: actions,
+                self.predicted_q_value: reward
+            })
+
+    def predict(self, inputs, actions):
+        return self.sess.run(
+            self.out, feed_dict={self.inputs: inputs,
+                                 self.actions: actions})
+
+
 class DeepDronePlanner:
 
     def __init__(self):
@@ -51,48 +136,55 @@ class DeepDronePlanner:
         self.goal_pose.position.y = 0
         self.goal_pose.position.z = 1
 
-        # Actions.
-        options = [-1, 0, 1]
-        num_actions = 4
-        self.actions = np.zeros((len(options)**num_actions, num_actions))
-        for i in range(len(options)**num_actions):
-            temp = i
-            for j in range(num_actions):
-                self.actions[i][j] = options[temp % len(options)]
-                temp /= len(options)
+        # Start tensorflow session.
+        sess = tf.Session()
 
-        # Create model.
+        # Create actor network.
+        self.actor = ActorNetwork(sess, 3, 4)
+        self.critic = CriticNetwork(sess, 3, 4)
+        exit()
         self._CreateModel()
 
-        # Start tensorflow session.
-        self.sess = tf.Session()
         self.sess.run(tf.global_variables_initializer())
 
-        # Initialize policy.
-        self._InitializePolicy()
+        # # Initialize policy.
+        # self._InitializePolicy()
 
         print("Deep drone planner initialized.")
 
     def _CreateModel(self):
-        self.image = tf.placeholder(
-            tf.float32, (None, 360, 640, 3), name='input')
+        # self.image = tf.placeholder(
+        #     tf.float32, (None, 360, 640, 3), name='input')
+        num_actions = 4
+        tau = 0.1
+        learning_rate = 0.001
         self.delta = tf.placeholder(tf.float32, (None, 3), name='delta')
-        self.actions = tf.placeholder(tf.float32, (None, 4), name='actions')
+        self.actions = tf.placeholder(
+            tf.float32, (None, num_actions), name='actions')
         self.reward = tf.placeholder(tf.float32, (None), name='reward')
-        x = self.delta
-        x = tf.contrib.layers.fully_connected(x, 32)
-        x = tf.contrib.layers.fully_connected(x, 32)
-        x = tf.contrib.layers.fully_connected(x, 4, activation_fn=None)
-        self.controls = tf.clip_by_value(x, -1, 1)
+
+        # Actor network.
+        actor = tf.contrib.layers.fully_connected(self.delta, 32)
+        actor = tf.contrib.layers.fully_connected(actor, 32)
+        self.controls = tf.contrib.layers.fully_connected(
+            actor, num_actions, activation_fn=tf.tanh)
+
+        # Critic network.
+        critic = tf.contrib.layers.fully_connected(self.delta, 32)
+        critic = tf.concat([critic, self.controls], axis=-1)
+        critic = tf.contrib.layers.fully_connected(critic, 32)
+        critic = tf.contrib.layers.fully_connected(
+            critic, 1, activation_fn=None)
 
         # Define the loss function
-        self.imitation_loss = tf.reduce_mean(tf.abs(self.actions - x))
-        self.reinforcement_loss = -tf.reduce_mean(
-            tf.log(tf.sigmoid(x))) * self.reward
+        self.imitation_loss = tf.reduce_mean(
+            tf.abs(self.actions - self.controls))
+        # self.reinforcement_loss = tf.reduce_mean(
+        #     tf.log(policy_gradient) * self.reward)
 
         # Adam will likely converge much faster than SGD for this assignment.
         imitation_optimizer = tf.train.AdamOptimizer(0.001, 0.9, 0.999)
-        reinforcement_optimizer = tf.train.AdamOptimizer(0.001, 0.9, 0.999)
+        # reinforcement_optimizer = tf.train.AdamOptimizer(0.001, 0.9, 0.999)
 
         # use that optimizer on your loss function (control_dependencies makes sure any
         # batch_norm parameters are properly updated)
@@ -100,8 +192,8 @@ class DeepDronePlanner:
                 tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
             self.imitation_optimizer = imitation_optimizer.minimize(
                 self.imitation_loss)
-            self.reinforcement_optimizer = reinforcement_optimizer.minimize(
-                self.reinforcement_loss)
+            # self.reinforcement_optimizer = reinforcement_optimizer.minimize(
+            #     self.reinforcement_loss)
 
     def _InitializePolicy(self):
         num_samples = 1000
@@ -119,6 +211,7 @@ class DeepDronePlanner:
                 feed_dict={self.delta: delta,
                            self.actions: actions})
         print("Policy initialization loss: %s" % loss_val)
+        exit()
 
     def _OnNewPose(self, data):
         self.pose.position.x = round(data.x, 4)
@@ -137,26 +230,20 @@ class DeepDronePlanner:
                self.goal_pose.position.z))
         return FlyToGoalResponse(True)
 
-    def QueryPolicy(self, image, delta):
+    def QueryPolicy(self, delta):
         # TODO(kirmani): Do on-policy learning here.
-        image = np.stack([image])
         delta = np.stack([delta])
         controls = self.sess.run(
-            [self.controls], feed_dict={self.image: image,
-                                        self.delta: delta})[0][0]
+            [self.controls], feed_dict={self.delta: delta})[0][0]
         return controls
 
-    def ImprovePolicy(self, image, delta, reward):
+    def ImprovePolicy(self, delta, reward):
         # TODO(kirmani): Do policy optimization step.
-        image = np.stack([image])
         delta = np.stack([delta])
         reinforcement_loss, _ = self.sess.run(
             [self.reinforcement_loss, self.reinforcement_optimizer],
-            feed_dict={
-                self.image: image,
-                self.delta: delta,
-                self.reward: reward
-            })
+            feed_dict={self.delta: delta,
+                       self.reward: reward})
         print("Reinforcement loss: %s" % reinforcement_loss)
 
     def Plan(self):
@@ -164,56 +251,54 @@ class DeepDronePlanner:
         vel_msg = Twist()
 
         while not rospy.is_shutdown():
-            if not self.image_msg:
-                print("No image available.")
-            else:
-                # Create inputs for network.
-                image = ros_numpy.numpify(self.image_msg)
-                goal = np.array([
-                    self.goal_pose.position.x, self.goal_pose.position.y,
-                    self.goal_pose.position.z
-                ])
-                x = np.array([
-                    self.pose.position.x, self.pose.position.y,
-                    self.pose.position.z
-                ])
-                delta = goal - x
+            # if not self.image_msg:
+            #     print("No image available.")
+            # else:
+            #     # Create inputs for network.
+            #     image = ros_numpy.numpify(self.image_msg)
+            goal = np.array([
+                self.goal_pose.position.x, self.goal_pose.position.y,
+                self.goal_pose.position.z
+            ])
+            x = np.array([
+                self.pose.position.x, self.pose.position.y, self.pose.position.z
+            ])
+            delta = goal - x
 
-                # Output some control.
-                controls = self.QueryPolicy(image, delta)
-                vel_msg.linear.x = controls[0]
-                vel_msg.linear.y = controls[1]
-                vel_msg.linear.z = controls[2]
-                vel_msg.angular.z = controls[3]
-                self.velocity_publisher.publish(vel_msg)
-                # print("Controls: %s" % controls)
+            # Output some control.
+            controls = self.QueryPolicy(delta)
+            vel_msg.linear.x = controls[0]
+            vel_msg.linear.y = controls[1]
+            vel_msg.linear.z = controls[2]
+            vel_msg.angular.z = controls[3]
+            self.velocity_publisher.publish(vel_msg)
+            # print("Controls: %s" % controls)
 
-                # Wait.
-                self.rate.sleep()
+            # Wait.
+            self.rate.sleep()
 
-                # Distance after action.
-                x = np.array([
-                    self.pose.position.x, self.pose.position.y,
-                    self.pose.position.z
-                ])
-                distance = np.linalg.norm(goal - x)
+            # Distance after action.
+            x = np.array([
+                self.pose.position.x, self.pose.position.y, self.pose.position.z
+            ])
+            distance = np.linalg.norm(goal - x)
 
-                # Get reward.
-                reward = np.exp(-distance)
-                # print("Reward: %s" % reward)
+            # Get reward.
+            reward = np.exp(-distance)
+            # print("Reward: %s" % reward)
 
-                # Improve policy.
-                self.ImprovePolicy(image, delta, reward)
+            # Improve policy.
+            self.ImprovePolicy(delta, reward)
 
-                # # Start training on new goal if we succeed at this one.
-                # if (reward > 0.95):
-                #     print("Succeeded at reaching goal: %s" % goal)
-                #     new_goal = np.random.uniform(size=3) * 3 + np.array(
-                #         [0, 0, 1])
-                #     self.goal_pose.position.x = new_goal[0]
-                #     self.goal_pose.position.y = new_goal[1]
-                #     self.goal_pose.position.z = new_goal[2]
-                #     print("Going to new goal: %s" % new_goal)
+            # # Start training on new goal if we succeed at this one.
+            # if (reward > 0.95):
+            #     print("Succeeded at reaching goal: %s" % goal)
+            #     new_goal = np.random.uniform(size=3) * 3 + np.array(
+            #         [0, 0, 1])
+            #     self.goal_pose.position.x = new_goal[0]
+            #     self.goal_pose.position.y = new_goal[1]
+            #     self.goal_pose.position.z = new_goal[2]
+            #     print("Going to new goal: %s" % new_goal)
 
             # Wait.
             self.rate.sleep()
