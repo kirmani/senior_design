@@ -187,22 +187,6 @@ class DeepDronePlanner:
                self.goal_pose.position.z))
         return FlyToGoalResponse(True)
 
-    # def QueryPolicy(self, delta):
-    #     # TODO(kirmani): Do on-policy learning here.
-    #     delta = np.stack([delta])
-    #     controls = self.sess.run(
-    #         [self.controls], feed_dict={self.delta: delta})[0][0]
-    #     return controls
-
-    # def ImprovePolicy(self, delta, reward):
-    #     # TODO(kirmani): Do policy optimization step.
-    #     delta = np.stack([delta])
-    #     reinforcement_loss, _ = self.sess.run(
-    #         [self.reinforcement_loss, self.reinforcement_optimizer],
-    #         feed_dict={self.delta: delta,
-    #                    self.reward: reward})
-    #     print("Reinforcement loss: %s" % reinforcement_loss)
-
     def Plan(self):
         # Initialize velocity message.
         vel_msg = Twist()
