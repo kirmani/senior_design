@@ -142,58 +142,13 @@ class DeepDronePlanner:
         # Create actor network.
         self.actor = ActorNetwork(sess, 3, 4)
         self.critic = CriticNetwork(sess, 3, 4)
-        exit()
-        self._CreateModel()
 
-        self.sess.run(tf.global_variables_initializer())
+        sess.run(tf.global_variables_initializer())
 
-        # # Initialize policy.
-        # self._InitializePolicy()
+        # Initialize policy.
+        self._InitializePolicy()
 
         print("Deep drone planner initialized.")
-
-    def _CreateModel(self):
-        # self.image = tf.placeholder(
-        #     tf.float32, (None, 360, 640, 3), name='input')
-        num_actions = 4
-        tau = 0.1
-        learning_rate = 0.001
-        self.delta = tf.placeholder(tf.float32, (None, 3), name='delta')
-        self.actions = tf.placeholder(
-            tf.float32, (None, num_actions), name='actions')
-        self.reward = tf.placeholder(tf.float32, (None), name='reward')
-
-        # Actor network.
-        actor = tf.contrib.layers.fully_connected(self.delta, 32)
-        actor = tf.contrib.layers.fully_connected(actor, 32)
-        self.controls = tf.contrib.layers.fully_connected(
-            actor, num_actions, activation_fn=tf.tanh)
-
-        # Critic network.
-        critic = tf.contrib.layers.fully_connected(self.delta, 32)
-        critic = tf.concat([critic, self.controls], axis=-1)
-        critic = tf.contrib.layers.fully_connected(critic, 32)
-        critic = tf.contrib.layers.fully_connected(
-            critic, 1, activation_fn=None)
-
-        # Define the loss function
-        self.imitation_loss = tf.reduce_mean(
-            tf.abs(self.actions - self.controls))
-        # self.reinforcement_loss = tf.reduce_mean(
-        #     tf.log(policy_gradient) * self.reward)
-
-        # Adam will likely converge much faster than SGD for this assignment.
-        imitation_optimizer = tf.train.AdamOptimizer(0.001, 0.9, 0.999)
-        # reinforcement_optimizer = tf.train.AdamOptimizer(0.001, 0.9, 0.999)
-
-        # use that optimizer on your loss function (control_dependencies makes sure any
-        # batch_norm parameters are properly updated)
-        with tf.control_dependencies(
-                tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            self.imitation_optimizer = imitation_optimizer.minimize(
-                self.imitation_loss)
-            # self.reinforcement_optimizer = reinforcement_optimizer.minimize(
-            #     self.reinforcement_loss)
 
     def _InitializePolicy(self):
         num_samples = 1000
@@ -206,11 +161,8 @@ class DeepDronePlanner:
         # print(delta)
         # print(actions)
         for epoch in range(300):
-            loss_val, _ = self.sess.run(
-                [self.imitation_loss, self.imitation_optimizer],
-                feed_dict={self.delta: delta,
-                           self.actions: actions})
-        print("Policy initialization loss: %s" % loss_val)
+            self.actor.train(delta, actions)
+        # print("Policy initialization loss: %s" % loss_val)
         exit()
 
     def _OnNewPose(self, data):
@@ -230,21 +182,21 @@ class DeepDronePlanner:
                self.goal_pose.position.z))
         return FlyToGoalResponse(True)
 
-    def QueryPolicy(self, delta):
-        # TODO(kirmani): Do on-policy learning here.
-        delta = np.stack([delta])
-        controls = self.sess.run(
-            [self.controls], feed_dict={self.delta: delta})[0][0]
-        return controls
+    # def QueryPolicy(self, delta):
+    #     # TODO(kirmani): Do on-policy learning here.
+    #     delta = np.stack([delta])
+    #     controls = self.sess.run(
+    #         [self.controls], feed_dict={self.delta: delta})[0][0]
+    #     return controls
 
-    def ImprovePolicy(self, delta, reward):
-        # TODO(kirmani): Do policy optimization step.
-        delta = np.stack([delta])
-        reinforcement_loss, _ = self.sess.run(
-            [self.reinforcement_loss, self.reinforcement_optimizer],
-            feed_dict={self.delta: delta,
-                       self.reward: reward})
-        print("Reinforcement loss: %s" % reinforcement_loss)
+    # def ImprovePolicy(self, delta, reward):
+    #     # TODO(kirmani): Do policy optimization step.
+    #     delta = np.stack([delta])
+    #     reinforcement_loss, _ = self.sess.run(
+    #         [self.reinforcement_loss, self.reinforcement_optimizer],
+    #         feed_dict={self.delta: delta,
+    #                    self.reward: reward})
+    #     print("Reinforcement loss: %s" % reinforcement_loss)
 
     def Plan(self):
         # Initialize velocity message.
@@ -266,7 +218,7 @@ class DeepDronePlanner:
             delta = goal - x
 
             # Output some control.
-            controls = self.QueryPolicy(delta)
+            controls = self.actor.predict(delta)
             vel_msg.linear.x = controls[0]
             vel_msg.linear.y = controls[1]
             vel_msg.linear.z = controls[2]
