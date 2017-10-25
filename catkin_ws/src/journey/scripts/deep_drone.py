@@ -29,6 +29,16 @@ RATE = 10  # Hz
 class DeepDronePlanner:
 
     def __init__(self):
+        # Actions.
+        options = [-1, 0, 1]
+        num_actions = 4
+        self.actions = np.zeros((len(options)**num_actions, num_actions))
+        for i in range(len(options)**num_actions):
+            temp = i
+            for j in range(num_actions):
+                self.actions[i][j] = options[temp % len(options)]
+                temp /= len(options)
+
         rospy.init_node('deep_drone_planner', anonymous=True)
         self.velocity_publisher = rospy.Publisher(
             '/cmd_vel', Twist, queue_size=10)
@@ -61,11 +71,12 @@ class DeepDronePlanner:
         reward = tf.placeholder(tf.float32, (None), name='reward')
         x = delta
         x = tf.contrib.layers.fully_connected(x, 16)
-        x = tf.contrib.layers.fully_connected(x, 8, activation_fn=None)
-        outputs = tf.sigmoid(x)
+        logits = tf.contrib.layers.fully_connected(
+            x, len(self.actions), activation_fn=None)
+        outputs = tf.argmax(logits)
 
         # Define the loss function
-        loss = -(tf.log(outputs) * reward)
+        loss = tf.log(tf.nn.softmax(x)) * reward
 
         # Adam will likely converge much faster than SGD for this assignment.
         optimizer = tf.train.AdamOptimizer(0.001, 0.9, 0.999)
@@ -99,11 +110,11 @@ class DeepDronePlanner:
         # TODO(kirmani): Do on-policy learning here.
         image = np.stack([image])
         delta = np.stack([delta])
-        controls = sess.run(
+        output = sess.run(
             [self.control_output],
             feed_dict={self.image_input: image,
                        self.delta_input: delta})[0][0]
-        return controls
+        return self.actions[output]
 
     def ImprovePolicy(self, sess, delta, reward):
         # TODO(kirmani): Do policy optimization step.
@@ -136,14 +147,15 @@ class DeepDronePlanner:
                     self.pose.position.z
                 ])
                 input_delta = goal - x
+                distance = np.linalg.norm(goal - x)
 
                 # Output some control.
                 controls = self.QueryPolicy(sess, input_image, input_delta)
                 print("Controls: %s" % controls)
-                vel_msg.linear.x = controls[0] - controls[1]
-                vel_msg.linear.y = controls[2] - controls[3]
-                vel_msg.linear.z = controls[4] - controls[5]
-                vel_msg.angular.z = controls[6] - controls[7]
+                vel_msg.linear.x = controls[0]
+                vel_msg.linear.y = controls[1]
+                vel_msg.linear.z = controls[2]
+                vel_msg.angular.z = controls[3]
                 self.velocity_publisher.publish(vel_msg)
 
                 # Wait.
@@ -154,10 +166,10 @@ class DeepDronePlanner:
                     self.pose.position.x, self.pose.position.y,
                     self.pose.position.z
                 ])
-                distance = np.linalg.norm(goal - x)
+                new_distance = np.linalg.norm(goal - x)
 
                 # Get reward.
-                reward = np.exp(-distance)
+                reward = distance - new_distance
                 print("Reward: %s" % reward)
 
                 # Improve policy.
