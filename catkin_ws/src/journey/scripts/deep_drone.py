@@ -147,7 +147,6 @@ class DeepDronePlanner:
                     self.pose.position.z
                 ])
                 input_delta = goal - x
-                distance = np.linalg.norm(goal - x)
 
                 # Output some control.
                 controls = self.QueryPolicy(sess, input_image, input_delta)
@@ -166,10 +165,10 @@ class DeepDronePlanner:
                     self.pose.position.x, self.pose.position.y,
                     self.pose.position.z
                 ])
-                new_distance = np.linalg.norm(goal - x)
+                distance = np.linalg.norm(goal - x)
 
                 # Get reward.
-                reward = distance - new_distance
+                reward = np.exp(-distance)
                 print("Reward: %s" % reward)
 
                 # Improve policy.
