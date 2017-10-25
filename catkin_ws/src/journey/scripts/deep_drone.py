@@ -208,7 +208,7 @@ class DeepDronePlanner:
 
             # Output some control.
             controls = self.actor.predict(np.stack([delta]))[0]
-            print("Controls: %s" % controls)
+            # print("Controls: %s" % controls)
             vel_msg.linear.x = controls[0]
             vel_msg.linear.y = controls[1]
             vel_msg.linear.z = controls[2]
