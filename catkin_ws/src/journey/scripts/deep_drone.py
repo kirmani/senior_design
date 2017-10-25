@@ -85,7 +85,7 @@ class CriticNetwork:
 
         # Network target (y_i)
         # Obtained from the target networks
-        self.predicted_q_value = tf.placeholder(tf.float32, [None, 1])
+        self.predicted_q_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
         self.loss = tf.losses.mean_squared_error(self.out,
@@ -109,6 +109,12 @@ class CriticNetwork:
         return self.sess.run(
             self.out, feed_dict={self.inputs: inputs,
                                  self.actions: actions})
+
+    def action_gradients(self, inputs, actions):
+        return self.sess.run(
+            self.action_grads,
+            feed_dict={self.inputs: inputs,
+                       self.actions: actions})
 
 
 class DeepDronePlanner:
@@ -163,7 +169,6 @@ class DeepDronePlanner:
         for epoch in range(300):
             self.actor.train(delta, actions)
         # print("Policy initialization loss: %s" % loss_val)
-        exit()
 
     def _OnNewPose(self, data):
         self.pose.position.x = round(data.x, 4)
@@ -218,13 +223,13 @@ class DeepDronePlanner:
             delta = goal - x
 
             # Output some control.
-            controls = self.actor.predict(delta)
+            controls = self.actor.predict(np.stack([delta]))[0]
+            print("Controls: %s" % controls)
             vel_msg.linear.x = controls[0]
             vel_msg.linear.y = controls[1]
             vel_msg.linear.z = controls[2]
             vel_msg.angular.z = controls[3]
             self.velocity_publisher.publish(vel_msg)
-            # print("Controls: %s" % controls)
 
             # Wait.
             self.rate.sleep()
@@ -236,21 +241,18 @@ class DeepDronePlanner:
             distance = np.linalg.norm(goal - x)
 
             # Get reward.
-            reward = np.exp(-distance)
+            reward = np.array([np.exp(-distance)])
             # print("Reward: %s" % reward)
 
-            # Improve policy.
-            self.ImprovePolicy(delta, reward)
+            self.critic.train(
+                np.stack([delta]), np.stack([controls]), np.stack([reward]))
+            grads = self.critic.action_gradients(
+                np.stack([delta]), np.stack([controls]))
+            # print(grads)
+            self.actor.train(np.stack([delta]), grads[0])
 
-            # # Start training on new goal if we succeed at this one.
-            # if (reward > 0.95):
-            #     print("Succeeded at reaching goal: %s" % goal)
-            #     new_goal = np.random.uniform(size=3) * 3 + np.array(
-            #         [0, 0, 1])
-            #     self.goal_pose.position.x = new_goal[0]
-            #     self.goal_pose.position.y = new_goal[1]
-            #     self.goal_pose.position.z = new_goal[2]
-            #     print("Going to new goal: %s" % new_goal)
+            # # Improve policy.
+            # self.ImprovePolicy(delta, reward)
 
             # Wait.
             self.rate.sleep()
