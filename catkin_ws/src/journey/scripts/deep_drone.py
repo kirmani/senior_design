@@ -162,10 +162,10 @@ class DeepDronePlanner:
 
                 # Output some control.
                 controls = self.QueryPolicy(sess, input_image, input_delta)
-                vel_msg.linear.x = controls[0]
-                vel_msg.linear.y = controls[1]
-                vel_msg.linear.z = controls[2]
-                vel_msg.angular.z = controls[3]
+                vel_msg.linear.x += controls[0]
+                vel_msg.linear.y += controls[1]
+                vel_msg.linear.z += controls[2]
+                vel_msg.angular.z += controls[3]
                 self.velocity_publisher.publish(vel_msg)
 
                 # Wait.
