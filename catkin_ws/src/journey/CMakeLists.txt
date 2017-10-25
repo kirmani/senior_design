@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   roscpp
   rospy
+  ros_numpy
   std_msgs
   tum_ardrone
 )
