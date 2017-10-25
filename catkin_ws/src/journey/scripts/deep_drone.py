@@ -86,17 +86,22 @@ class DeepDronePlanner:
         self.controls = tf.clip_by_value(x, -1, 1)
 
         # Define the loss function
-        self.loss = tf.reduce_mean(tf.abs(self.actions - x))
-        # loss = tf.log(tf.nn.softmax(x)) * reward
+        self.imitation_loss = tf.reduce_mean(tf.abs(self.actions - x))
+        self.reinforcement_loss = -tf.reduce_mean(
+            tf.log(tf.sigmoid(x))) * self.reward
 
         # Adam will likely converge much faster than SGD for this assignment.
-        optimizer = tf.train.AdamOptimizer(0.001, 0.9, 0.999)
+        imitation_optimizer = tf.train.AdamOptimizer(0.001, 0.9, 0.999)
+        reinforcement_optimizer = tf.train.AdamOptimizer(0.001, 0.9, 0.999)
 
         # use that optimizer on your loss function (control_dependencies makes sure any
         # batch_norm parameters are properly updated)
         with tf.control_dependencies(
                 tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            self.optimizer = optimizer.minimize(self.loss)
+            self.imitation_optimizer = imitation_optimizer.minimize(
+                self.imitation_loss)
+            self.reinforcement_optimizer = reinforcement_optimizer.minimize(
+                self.reinforcement_loss)
 
     def _InitializePolicy(self):
         num_samples = 1000
@@ -110,7 +115,7 @@ class DeepDronePlanner:
         # print(actions)
         for epoch in range(300):
             loss_val, _ = self.sess.run(
-                [self.loss, self.optimizer],
+                [self.imitation_loss, self.imitation_optimizer],
                 feed_dict={self.delta: delta,
                            self.actions: actions})
         print("Policy initialization loss: %s" % loss_val)
@@ -119,6 +124,9 @@ class DeepDronePlanner:
         self.pose.position.x = round(data.x, 4)
         self.pose.position.y = round(data.y, 4)
         self.pose.position.z = round(data.z, 4)
+
+    def _OnNewImage(self, image):
+        self.image_msg = image
 
     def FlyToGoal(self, req):
         self.goal_pose.position.x = self.pose.position.x + req.x
@@ -129,9 +137,6 @@ class DeepDronePlanner:
                self.goal_pose.position.z))
         return FlyToGoalResponse(True)
 
-    def _OnNewImage(self, image):
-        self.image_msg = image
-
     def QueryPolicy(self, image, delta):
         # TODO(kirmani): Do on-policy learning here.
         image = np.stack([image])
@@ -141,13 +146,18 @@ class DeepDronePlanner:
                                         self.delta: delta})[0][0]
         return controls
 
-    def ImprovePolicy(self, delta, reward):
+    def ImprovePolicy(self, image, delta, reward):
         # TODO(kirmani): Do policy optimization step.
+        image = np.stack([image])
         delta = np.stack([delta])
-        self.sess.run(
-            [self.optimizer],
-            feed_dict={self.delta_input: delta,
-                       self.reward_input: reward})
+        reinforcement_loss, _ = self.sess.run(
+            [self.reinforcement_loss, self.reinforcement_optimizer],
+            feed_dict={
+                self.image: image,
+                self.delta: delta,
+                self.reward: reward
+            })
+        print("Reinforcement loss: %s" % reinforcement_loss)
 
     def Plan(self):
         # Initialize velocity message.
@@ -158,7 +168,7 @@ class DeepDronePlanner:
                 print("No image available.")
             else:
                 # Create inputs for network.
-                input_image = ros_numpy.numpify(self.image_msg)
+                image = ros_numpy.numpify(self.image_msg)
                 goal = np.array([
                     self.goal_pose.position.x, self.goal_pose.position.y,
                     self.goal_pose.position.z
@@ -167,16 +177,16 @@ class DeepDronePlanner:
                     self.pose.position.x, self.pose.position.y,
                     self.pose.position.z
                 ])
-                input_delta = goal - x
+                delta = goal - x
 
                 # Output some control.
-                controls = self.QueryPolicy(input_image, input_delta)
-                print("Controls: %s" % controls)
+                controls = self.QueryPolicy(image, delta)
                 vel_msg.linear.x = controls[0]
                 vel_msg.linear.y = controls[1]
                 vel_msg.linear.z = controls[2]
                 vel_msg.angular.z = controls[3]
                 self.velocity_publisher.publish(vel_msg)
+                # print("Controls: %s" % controls)
 
                 # Wait.
                 self.rate.sleep()
@@ -190,10 +200,10 @@ class DeepDronePlanner:
 
                 # Get reward.
                 reward = np.exp(-distance)
-                print("Reward: %s" % reward)
+                # print("Reward: %s" % reward)
 
-                # # Improve policy.
-                # self.ImprovePolicy(input_delta, reward)
+                # Improve policy.
+                self.ImprovePolicy(image, delta, reward)
 
                 # # Start training on new goal if we succeed at this one.
                 # if (reward > 0.95):
