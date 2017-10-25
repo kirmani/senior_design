@@ -59,19 +59,9 @@ class DeepDronePlanner:
         image = tf.placeholder(tf.float32, (None, 360, 640, 3), name='input')
         delta = tf.placeholder(tf.float32, (None, 3), name='delta')
         reward = tf.placeholder(tf.float32, (None), name='reward')
-        # x = tf.contrib.layers.conv2d(image, 64, [3, 3], stride=2, scope="conv1")
-        # x = tf.contrib.layers.conv2d(x, 128, [3, 3], stride=2, scope="conv2")
-        # x = tf.contrib.layers.conv2d(x, 256, [3, 3], stride=2, scope="conv3")
-        # x = tf.contrib.layers.conv2d(x, 512, [3, 3], stride=2, scope="conv4")
-        # x = tf.contrib.layers.conv2d(x, 1024, [3, 3], stride=2, scope="conv5")
-        # x = tf.contrib.layers.flatten(x)
-        # x = tf.contrib.layers.fully_connected(x, 128)
-        # x = tf.concat([x, delta], axis=-1)
         x = delta
         x = tf.contrib.layers.fully_connected(x, 16)
         x = tf.contrib.layers.fully_connected(x, 8, activation_fn=None)
-
-        # Epsilon-greedy exploration.
         outputs = tf.sigmoid(x)
 
         # Define the loss function
@@ -147,9 +137,6 @@ class DeepDronePlanner:
                 ])
                 input_delta = goal - x
 
-                # Distance before action.
-                distance = np.linalg.norm(goal - x)
-
                 # Output some control.
                 controls = self.QueryPolicy(sess, input_image, input_delta)
                 print("Controls: %s" % controls)
@@ -167,15 +154,16 @@ class DeepDronePlanner:
                     self.pose.position.x, self.pose.position.y,
                     self.pose.position.z
                 ])
-                new_distance = np.linalg.norm(goal - x)
+                distance = np.linalg.norm(goal - x)
 
                 # Get reward.
-                reward = distance - new_distance
+                reward = np.exp(-distance)
                 print("Reward: %s" % reward)
 
                 # Improve policy.
                 self.ImprovePolicy(sess, input_delta, reward)
 
+                # Start training on new goal if we succeed at this one.
                 if (reward > 0.95):
                     print("Succeeded at reaching goal: %s" % goal)
                     new_goal = np.random.uniform(size=3) * 3 + np.array(
