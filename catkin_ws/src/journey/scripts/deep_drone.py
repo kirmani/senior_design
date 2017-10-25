@@ -19,6 +19,7 @@ import time
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import Image
+from std_msgs.msg import Empty
 from tum_ardrone.msg import filter_state
 from journey.srv import FlyToGoal
 from journey.srv import FlyToGoalResponse
@@ -36,8 +37,9 @@ class ActorNetwork:
                  learning_rate=0.0001):
         self.sess = sess
         self.inputs = tf.placeholder(tf.float32, (None, num_inputs))
+        x = self.inputs
         x = tf.contrib.layers.fully_connected(self.inputs, 32)
-        x = tf.contrib.layers.fully_connected(x, 16)
+        x = tf.contrib.layers.fully_connected(x, 24)
         self.actions = tf.contrib.layers.fully_connected(
             x, num_actions, activation_fn=tf.tanh)
 
@@ -80,7 +82,7 @@ class CriticNetwork:
         self.actions = tf.placeholder(tf.float32, (None, num_actions))
         x = tf.contrib.layers.fully_connected(self.inputs, 32)
         x = tf.concat([x, self.actions], axis=-1)
-        x = tf.contrib.layers.fully_connected(x, 16)
+        x = tf.contrib.layers.fully_connected(x, 24)
         self.out = tf.contrib.layers.fully_connected(x, 1, activation_fn=None)
 
         # Network target (y_i)
@@ -97,13 +99,14 @@ class CriticNetwork:
         self.action_grads = tf.gradients(self.out, self.actions)
 
     def train(self, inputs, actions, reward):
-        self.sess.run(
-            self.optimize,
+        loss_val, _ = self.sess.run(
+            [self.loss, self.optimize],
             feed_dict={
                 self.inputs: inputs,
                 self.actions: actions,
                 self.predicted_q_value: reward
             })
+        return loss_val
 
     def predict(self, inputs, actions):
         return self.sess.run(
@@ -126,6 +129,8 @@ class DeepDronePlanner:
             '/cmd_vel', Twist, queue_size=10)
 
         # TODO(kirmani): Query the depth image instead of the RGB image.
+        self.takeoff_publisher = rospy.Publisher(
+            '/ardrone/takeoff', Empty, queue_size=10)
         self.image_subscriber = rospy.Subscriber('/ardrone/front/image_raw',
                                                  Image, self._OnNewImage)
         self.pose_subscriber = rospy.Subscriber('/ardrone/predictedPose',
@@ -152,23 +157,27 @@ class DeepDronePlanner:
         sess.run(tf.global_variables_initializer())
 
         # Initialize policy.
-        self._InitializePolicy()
+        # self._InitializePolicy()
 
         print("Deep drone planner initialized.")
 
     def _InitializePolicy(self):
-        num_samples = 1000
+        num_samples = 10000
         bounds = 5
         tolerance = 0.5
         delta = (np.random.uniform(size=(num_samples, 3)) - 0.5) * (2 * bounds)
-        actions = np.zeros((num_samples, 4))
-        actions[np.where(delta > tolerance)] = 1
-        actions[np.where(delta < -tolerance)] = -1
+        # actions = np.zeros((num_samples, 4))
+        # actions[:, 0:3] = delta / bounds
+        rewards = np.linalg.norm(delta, axis=1, keepdims=True)
         # print(delta)
         # print(actions)
+        # print(rewards)
         for epoch in range(300):
-            self.actor.train(delta, actions)
-        # print("Policy initialization loss: %s" % loss_val)
+            actions = self.actor.predict(delta)
+            loss_val = self.critic.train(delta, actions, rewards)
+            grads = self.critic.action_gradients(delta, actions)
+            self.actor.train(delta, grads[0])
+            print("Policy initialization loss: %s" % loss_val)
 
     def _OnNewPose(self, data):
         self.pose.position.x = round(data.x, 4)
@@ -190,6 +199,20 @@ class DeepDronePlanner:
     def Plan(self):
         # Initialize velocity message.
         vel_msg = Twist()
+
+        self.takeoff_publisher.publish(Empty())
+        start_time = time.time()
+
+        min_height = 1
+        max_height = 4
+        mid_height = min_height + (max_height - min_height) / 2
+        x = np.array([[max_height * max_height, max_height,
+                       1], [mid_height * mid_height, mid_height, 1],
+                      [min_height * min_height, min_height, 1]])
+        y = np.array([[0], [1], [0]])
+        height_mat = np.transpose(np.linalg.solve(x, y))[0]
+        # print(height_mat)
+        # exit()
 
         while not rospy.is_shutdown():
             # if not self.image_msg:
@@ -225,7 +248,10 @@ class DeepDronePlanner:
             distance = np.linalg.norm(goal - x)
 
             # Get reward.
-            reward = np.array([np.exp(-distance)])
+            distance_factor = np.exp(-distance)
+            height_factor = (x[2] * x[2] * height_mat[0] + x[2] * height_mat[1]
+                             + height_mat[2])
+            reward = np.array([distance_factor + height_factor])
             # print("Reward: %s" % reward)
 
             self.critic.train(
@@ -237,14 +263,19 @@ class DeepDronePlanner:
 
             # Improve policy.
             # print(reward[0])
-            if reward[0] > 0.8:
+            max_task_length = 30  # seconds
+            reward_success_threshold = 0.7
+            if (reward[0] > reward_success_threshold or
+                    time.time()) > start_time + max_task_length:
                 bounds = 1
                 new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
                 new_goal[2] += (bounds + 1)
+                print("Final reward: %s" % reward[0])
                 print("New goal: %s" % new_goal)
                 self.goal_pose.position.x = new_goal[0]
                 self.goal_pose.position.y = new_goal[1]
                 self.goal_pose.position.z = new_goal[2]
+                start_time = time.time()
 
             # Wait.
             self.rate.sleep()
