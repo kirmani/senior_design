@@ -68,12 +68,14 @@ class DeepDronePlanner:
         # x = tf.contrib.layers.fully_connected(x, 128)
         # x = tf.concat([x, delta], axis=-1)
         x = delta
-        x = tf.contrib.layers.fully_connected(x, 32)
-        x = tf.contrib.layers.fully_connected(x, 4, activation_fn=None)
-        outputs = tf.clip_by_value(x, -1, 1)
+        x = tf.contrib.layers.fully_connected(x, 16)
+        x = tf.contrib.layers.fully_connected(x, 8, activation_fn=None)
+
+        # Epsilon-greedy exploration.
+        outputs = tf.sigmoid(x)
 
         # Define the loss function
-        loss = -(tf.log(x) * reward)
+        loss = -(tf.log(outputs) * reward)
 
         # Adam will likely converge much faster than SGD for this assignment.
         optimizer = tf.train.AdamOptimizer(0.001, 0.9, 0.999)
@@ -95,28 +97,13 @@ class DeepDronePlanner:
         self.goal_pose.position.x = self.pose.position.x + req.x
         self.goal_pose.position.y = self.pose.position.y + req.y
         self.goal_pose.position.z = self.pose.position.z + req.z
-        self.s = 1
-        self.time = req.time
         print("Flying to: (%s, %s, %s)" %
               (self.goal_pose.position.x, self.goal_pose.position.y,
                self.goal_pose.position.z))
-        self.start = np.array(
-            [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         return FlyToGoalResponse(True)
 
     def _OnNewImage(self, image):
         self.image = image
-
-    def _Reward(self):
-        # TODO(kirmani): Design reward function.
-        x = np.array(
-            [self.pose.position.x, self.pose.position.y, self.pose.position.z])
-        goal = np.array([
-            self.goal_pose.position.x, self.goal_pose.position.y,
-            self.goal_pose.position.z
-        ])
-        distance = np.linalg.norm(goal - x)
-        return np.exp(-distance)
 
     def QueryPolicy(self, sess, image, delta):
         # TODO(kirmani): Do on-policy learning here.
@@ -150,34 +137,53 @@ class DeepDronePlanner:
             else:
                 # Create inputs for network.
                 input_image = ros_numpy.numpify(self.image)
-                x = np.array([
-                    self.pose.position.x, self.pose.position.y,
-                    self.pose.position.z
-                ])
                 goal = np.array([
                     self.goal_pose.position.x, self.goal_pose.position.y,
                     self.goal_pose.position.z
                 ])
+                x = np.array([
+                    self.pose.position.x, self.pose.position.y,
+                    self.pose.position.z
+                ])
                 input_delta = goal - x
+
+                # Distance before action.
+                distance = np.linalg.norm(goal - x)
 
                 # Output some control.
                 controls = self.QueryPolicy(sess, input_image, input_delta)
-                vel_msg.linear.x += controls[0]
-                vel_msg.linear.y += controls[1]
-                vel_msg.linear.z += controls[2]
-                vel_msg.angular.z += controls[3]
+                print("Controls: %s" % controls)
+                vel_msg.linear.x = controls[0] - controls[1]
+                vel_msg.linear.y = controls[2] - controls[3]
+                vel_msg.linear.z = controls[4] - controls[5]
+                vel_msg.angular.z = controls[6] - controls[7]
                 self.velocity_publisher.publish(vel_msg)
 
                 # Wait.
                 self.rate.sleep()
 
+                # Distance after action.
+                x = np.array([
+                    self.pose.position.x, self.pose.position.y,
+                    self.pose.position.z
+                ])
+                new_distance = np.linalg.norm(goal - x)
+
                 # Get reward.
-                reward = self._Reward()
-                # print(controls)
-                print(reward)
+                reward = distance - new_distance
+                print("Reward: %s" % reward)
 
                 # Improve policy.
                 self.ImprovePolicy(sess, input_delta, reward)
+
+                if (reward > 0.95):
+                    print("Succeeded at reaching goal: %s" % goal)
+                    new_goal = np.random.uniform(size=3) * 3 + np.array(
+                        [0, 0, 1])
+                    self.goal_pose.position.x = new_goal[0]
+                    self.goal_pose.position.y = new_goal[1]
+                    self.goal_pose.position.z = new_goal[2]
+                    print("Going to new goal: %s" % new_goal)
 
             # Wait.
             self.rate.sleep()
