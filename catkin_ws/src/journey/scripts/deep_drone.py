@@ -68,7 +68,7 @@ class DeepDronePlanner:
         # x = tf.contrib.layers.fully_connected(x, 128)
         # x = tf.concat([x, delta], axis=-1)
         x = delta
-        x = tf.contrib.layers.fully_connected(x, 32, activation_fn=None)
+        x = tf.contrib.layers.fully_connected(x, 32)
         x = tf.contrib.layers.fully_connected(x, 4, activation_fn=None)
         outputs = tf.clip_by_value(x, -1, 1)
 
