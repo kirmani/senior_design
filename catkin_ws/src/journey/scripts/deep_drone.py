@@ -32,12 +32,12 @@ class ActorNetwork:
                  sess,
                  num_inputs,
                  num_actions,
-                 tau=0.1,
-                 learning_rate=0.001):
+                 tau=0.001,
+                 learning_rate=0.0001):
         self.sess = sess
         self.inputs = tf.placeholder(tf.float32, (None, num_inputs))
         x = tf.contrib.layers.fully_connected(self.inputs, 32)
-        x = tf.contrib.layers.fully_connected(x, 32)
+        x = tf.contrib.layers.fully_connected(x, 16)
         self.actions = tf.contrib.layers.fully_connected(
             x, num_actions, activation_fn=tf.tanh)
 
@@ -80,7 +80,7 @@ class CriticNetwork:
         self.actions = tf.placeholder(tf.float32, (None, num_actions))
         x = tf.contrib.layers.fully_connected(self.inputs, 32)
         x = tf.concat([x, self.actions], axis=-1)
-        x = tf.contrib.layers.fully_connected(x, 32)
+        x = tf.contrib.layers.fully_connected(x, 16)
         self.out = tf.contrib.layers.fully_connected(x, 1, activation_fn=None)
 
         # Network target (y_i)
@@ -235,8 +235,16 @@ class DeepDronePlanner:
             # print(grads)
             self.actor.train(np.stack([delta]), grads[0])
 
-            # # Improve policy.
-            # self.ImprovePolicy(delta, reward)
+            # Improve policy.
+            # print(reward[0])
+            if reward[0] > 0.8:
+                bounds = 1
+                new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
+                new_goal[2] += (bounds + 1)
+                print("New goal: %s" % new_goal)
+                self.goal_pose.position.x = new_goal[0]
+                self.goal_pose.position.y = new_goal[1]
+                self.goal_pose.position.z = new_goal[2]
 
             # Wait.
             self.rate.sleep()
