@@ -253,7 +253,7 @@ class OrnsteinUhlenbeckActionNoise:
 
 class DeepDronePlanner:
 
-    def __init__(self):
+    def __init__(self, minibatch_size=32, gamma=0.99):
 
         rospy.init_node('deep_drone_planner', anonymous=True)
         self.velocity_publisher = rospy.Publisher(
@@ -288,9 +288,8 @@ class DeepDronePlanner:
         self.critic = CriticNetwork(sess, self.num_inputs, self.num_actions,
                                     self.actor.get_num_trainable_vars())
         self.replay_buffer = ReplayBuffer()
-        # self.minibatch_size = 64
-        self.minibatch_size = 32
-        self.gamma = 0.99
+        self.minibatch_size = minibatch_size
+        self.gamma = gamma
         self.actor_noise = OrnsteinUhlenbeckActionNoise(
             mu=np.zeros(self.num_actions))
 
@@ -301,17 +300,15 @@ class DeepDronePlanner:
 
         print("Deep drone planner initialized.")
 
-    def _InitializePolicy(self):
-        num_samples = 10000
-        bounds = 5
+    def _InitializePolicy(self, num_samples=10000, bounds=5.0, num_epochs=100):
         delta = (np.random.uniform(size=(num_samples, 3)) - 0.5) * (2 * bounds)
         actions = np.zeros((num_samples, 4))
         actions[:, 0:3] = delta / bounds
         rewards = np.linalg.norm(delta, axis=1, keepdims=True)
-        for epoch in range(100):
-            loss_val = self.critic.train(delta, actions, rewards)
+        for epoch in range(num_epochs):
+            self.critic.train(delta, actions, rewards)
             self.actor.train(delta, actions)
-        print("Policy initialization loss: %s" % loss_val)
+        print("Policy initialized.")
 
     def _OnNewPose(self, data):
         self.pose.position.x = round(data.x, 4)
@@ -355,7 +352,6 @@ class DeepDronePlanner:
             action = self.actor.predict(
                 np.stack([state]))[0] + self.actor_noise()
 
-            # print("Controls: %s" % controls)
             vel_msg.linear.x = action[0]
             vel_msg.linear.y = action[1]
             vel_msg.linear.z = action[2]
@@ -405,7 +401,8 @@ class DeepDronePlanner:
                 self.actor.update_target_network()
                 self.critic.update_target_network()
 
-            # Check if we've completed this task.
+            # Check if we've completed this task. This is where we do our task
+            # training. This probably should move somewhere else eventually.
             max_task_length = 30  # seconds
             distance_threshold = 0.5
             if ((distance < distance_threshold) or
