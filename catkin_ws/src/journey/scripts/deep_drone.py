@@ -19,8 +19,9 @@ import time
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import Image
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty as EmptyMessage
 from std_msgs.msg import String
+from std_srvs.srv import Empty as EmptyService
 from tum_ardrone.msg import filter_state
 from journey.srv import FlyToGoal
 from journey.srv import FlyToGoalResponse
@@ -51,8 +52,12 @@ class DeepDronePlanner:
         self.velocity_publisher = rospy.Publisher(
             '/cmd_vel', Twist, queue_size=10)
 
+        # Reset topics.
+        self.takeoff_publisher = rospy.Publisher(
+            '/ardrone/takeoff', EmptyMessage, queue_size=10)
         self.com_publisher = rospy.Publisher(
             '/tum_ardrone/com', String, queue_size=10)
+        self.reset_rate = rospy.Rate(2)
 
         # Listen for new goal when planning at test time.
         s = rospy.Service('fly_to_goal', FlyToGoal, self.FlyToGoal)
@@ -110,14 +115,27 @@ class DeepDronePlanner:
         vel_msg.angular.z = 0
         self.velocity_publisher.publish(vel_msg)
 
+        # Reset our simulation.
+        rospy.wait_for_service('/gazebo/reset_world')
+        try:
+            reset_world = rospy.ServiceProxy('/gazebo/reset_world',
+                                             EmptyService)
+            reset_world()
+        except rospy.ServiceException:
+            print("Failed to reset simulator.")
+
         # Reset our localization.
         com_msg = String()
         com_msg.data = "f reset"
         self.com_publisher.publish(com_msg)
 
+        # Take-off.
+        self.takeoff_publisher.publish(EmptyMessage())
+
         bounds = 0.5
-        new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
-        new_goal[2] += bounds + 1
+        # new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
+        # new_goal[2] += bounds + 1
+        new_goal = [2, -2, 2]
         # print("New goal: %s" % new_goal)
         self.goal_pose.position.x = new_goal[0]
         self.goal_pose.position.y = new_goal[1]
@@ -129,6 +147,7 @@ class DeepDronePlanner:
         x = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         state = goal - x
+
         return state
 
     def step(self, action):
@@ -172,7 +191,7 @@ class DeepDronePlanner:
             actor_noise,
             logdir=logdir,
             max_episodes=1000,
-            max_episode_len=50)
+            max_episode_len=25)
 
 
 def main(args):
