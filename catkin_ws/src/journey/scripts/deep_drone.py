@@ -13,6 +13,7 @@ import numpy as np
 import random
 import rospy
 import ros_numpy
+import os
 import sys
 import tensorflow as tf
 import traceback
@@ -253,7 +254,7 @@ class OrnsteinUhlenbeckActionNoise:
 
 class DeepDronePlanner:
 
-    def __init__(self, minibatch_size=32, gamma=0.99):
+    def __init__(self, minibatch_size=32, gamma=0.99, max_episode_len=100):
 
         rospy.init_node('deep_drone_planner', anonymous=True)
         self.velocity_publisher = rospy.Publisher(
@@ -279,23 +280,29 @@ class DeepDronePlanner:
         self.goal_pose.position.z = 1
 
         # Start tensorflow session.
-        sess = tf.Session()
+        self.sess = tf.Session()
 
         # Create actor network.
         self.num_inputs = 3
         self.num_actions = 4
-        self.actor = ActorNetwork(sess, self.num_inputs, self.num_actions)
-        self.critic = CriticNetwork(sess, self.num_inputs, self.num_actions,
+        self.actor = ActorNetwork(self.sess, self.num_inputs, self.num_actions)
+        self.critic = CriticNetwork(self.sess, self.num_inputs,
+                                    self.num_actions,
                                     self.actor.get_num_trainable_vars())
         self.replay_buffer = ReplayBuffer()
         self.minibatch_size = minibatch_size
         self.gamma = gamma
+        self.max_episode_len = max_episode_len
         self.actor_noise = OrnsteinUhlenbeckActionNoise(
             mu=np.zeros(self.num_actions))
 
-        sess.run(tf.global_variables_initializer())
+        self.sess.run(tf.global_variables_initializer())
 
-        # Initialize policy.
+        # Initialize target network weights
+        self.actor.update_target_network()
+        self.critic.update_target_network()
+
+        # Initialize policy with heuristic.
         # self._InitializePolicy()
 
         print("Deep drone planner initialized.")
@@ -327,18 +334,51 @@ class DeepDronePlanner:
                self.goal_pose.position.z))
         return FlyToGoalResponse(True)
 
-    def Plan(self):
+    def build_summaries(self):
+        episode_reward = tf.Variable(0.)
+        tf.summary.scalar("Reward", episode_reward)
+        episode_ave_max_q = tf.Variable(0.)
+        tf.summary.scalar("Qmax_Value", episode_ave_max_q)
+
+        summary_vars = [episode_reward, episode_ave_max_q]
+        summary_ops = tf.summary.merge_all()
+
+        return summary_ops, summary_vars
+
+    def Train(self, distance_threshold=0.5):
+        # Set up summary Ops
+        summary_ops, summary_vars = self.build_summaries()
+
+        # Create a new log directory (if you run low on disk space you can either disable this or delete old logs)
+        # run: `tensorboard --logdir log` to see all the nice summaries
+        for n_model in range(1000):
+            dirname = os.path.dirname(__file__)
+            summary_dir = os.path.join(
+                dirname, '../../../learning/deep_drone/model_%d' % n_model)
+            if not os.path.exists(summary_dir):
+                break
+        writer = tf.summary.FileWriter(summary_dir, self.sess.graph)
+
         # Initialize velocity message.
         vel_msg = Twist()
 
         self.takeoff_publisher.publish(Empty())
         start_time = time.time()
+        i = 0
         while not rospy.is_shutdown():
             # if not self.image_msg:
             #     print("No image available.")
             # else:
             #     # Create inputs for network.
             #     image = ros_numpy.numpify(self.image_msg)
+            # Set new goal.
+            bounds = 0.5
+            new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
+            new_goal[2] += (bounds + 1)
+            # print("New goal: %s" % new_goal)
+            self.goal_pose.position.x = new_goal[0]
+            self.goal_pose.position.y = new_goal[1]
+            self.goal_pose.position.z = new_goal[2]
             goal = np.array([
                 self.goal_pose.position.x, self.goal_pose.position.y,
                 self.goal_pose.position.z
@@ -346,76 +386,93 @@ class DeepDronePlanner:
             x = np.array([
                 self.pose.position.x, self.pose.position.y, self.pose.position.z
             ])
+
+            # Set the initial state.
             state = goal - x
 
-            # Added exploration noise.
-            action = self.actor.predict(
-                np.stack([state]))[0] + self.actor_noise()
+            ep_reward = 0
+            ep_ave_max_q = 0
 
-            vel_msg.linear.x = action[0]
-            vel_msg.linear.y = action[1]
-            vel_msg.linear.z = action[2]
-            vel_msg.angular.z = action[3]
-            self.velocity_publisher.publish(vel_msg)
+            for j in range(self.max_episode_len):
+                # Added exploration noise.
+                action = self.actor.predict(
+                    np.stack([state]))[0] + self.actor_noise()
 
-            # Wait.
-            self.rate.sleep()
+                vel_msg.linear.x = action[0]
+                vel_msg.linear.y = action[1]
+                vel_msg.linear.z = action[2]
+                vel_msg.angular.z = action[3]
+                self.velocity_publisher.publish(vel_msg)
 
-            # Get next state.
-            x = np.array([
-                self.pose.position.x, self.pose.position.y, self.pose.position.z
-            ])
-            next_state = goal - x
+                # Wait.
+                self.rate.sleep()
 
-            # Get reward.
-            distance = np.linalg.norm(next_state)
-            reward = np.array([np.exp(-distance)])
+                # Get next state.
+                x = np.array([
+                    self.pose.position.x, self.pose.position.y,
+                    self.pose.position.z
+                ])
+                next_state = goal - x
 
-            self.replay_buffer.add(state, action, reward, False, next_state)
+                # Get reward.
+                distance = np.linalg.norm(next_state)
+                terminal = ((distance < distance_threshold) or
+                            (j == self.max_episode_len - 1))
+                reward = np.exp(-distance)
 
-            if self.replay_buffer.size() > self.minibatch_size:
-                s_batch, a_batch, r_batch, t_batch, s2_batch = \
-                    self.replay_buffer.sample_batch(self.minibatch_size)
+                self.replay_buffer.add(state, action, reward, terminal,
+                                       next_state)
 
-                # Calculate targets
-                target_q = self.critic.predict_target(
-                    s2_batch, self.actor.predict_target(s2_batch))
+                if self.replay_buffer.size() > self.minibatch_size:
+                    s_batch, a_batch, r_batch, t_batch, s2_batch = \
+                        self.replay_buffer.sample_batch(self.minibatch_size)
 
-                y_i = []
-                for k in range(self.minibatch_size):
-                    if t_batch[k]:
-                        y_i.append(r_batch[k])
-                    else:
-                        y_i.append(r_batch[k] + self.gamma * target_q[k])
+                    # Calculate targets
+                    target_q = self.critic.predict_target(
+                        s2_batch, self.actor.predict_target(s2_batch))
 
-                # Update the critic given the targets
-                predicted_q_value, _ = self.critic.train(
-                    s_batch, a_batch, np.reshape(y_i, (self.minibatch_size, 1)))
+                    y_i = []
+                    for k in range(self.minibatch_size):
+                        if t_batch[k]:
+                            y_i.append(r_batch[k])
+                        else:
+                            y_i.append(r_batch[k] + self.gamma * target_q[k])
 
-                # Update the actor policy using the sampled gradient
-                a_outs = self.actor.predict(s_batch)
-                grads = self.critic.action_gradients(s_batch, a_outs)
-                self.actor.train(s_batch, grads[0])
+                    # Update the critic given the targets
+                    predicted_q_value, _ = self.critic.train(
+                        s_batch, a_batch,
+                        np.reshape(y_i, (self.minibatch_size, 1)))
 
-                # Update target networks
-                self.actor.update_target_network()
-                self.critic.update_target_network()
+                    ep_ave_max_q += np.amax(predicted_q_value)
 
-            # Check if we've completed this task. This is where we do our task
-            # training. This probably should move somewhere else eventually.
-            max_task_length = 30  # seconds
-            distance_threshold = 0.5
-            if ((distance < distance_threshold) or
-                (time.time() > start_time + max_task_length)):
-                bounds = 0.5
-                new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
-                new_goal[2] += (bounds + 1)
-                print("Final reward: %s" % reward[0])
-                print("New goal: %s" % new_goal)
-                self.goal_pose.position.x = new_goal[0]
-                self.goal_pose.position.y = new_goal[1]
-                self.goal_pose.position.z = new_goal[2]
-                start_time = time.time()
+                    # Update the actor policy using the sampled gradient
+                    a_outs = self.actor.predict(s_batch)
+                    grads = self.critic.action_gradients(s_batch, a_outs)
+                    self.actor.train(s_batch, grads[0])
+
+                    # Update target networks
+                    self.actor.update_target_network()
+                    self.critic.update_target_network()
+
+                state = next_state
+                ep_reward += reward
+
+                if terminal:
+                    summary_str = self.sess.run(
+                        summary_ops,
+                        feed_dict={
+                            summary_vars[0]: ep_reward,
+                            summary_vars[1]: ep_ave_max_q / float(j)
+                        })
+
+                    writer.add_summary(summary_str, i)
+                    writer.flush()
+
+                    print('| Reward: {:d} | Episode: {:d} | Qmax: {:.4f}'.format(int(ep_reward), \
+                        i, (ep_ave_max_q / float(j))))
+
+                    i += 1
+                    break
 
             # Wait.
             self.rate.sleep()
@@ -423,7 +480,7 @@ class DeepDronePlanner:
 
 def main(args):
     deep_drone_planner = DeepDronePlanner()
-    deep_drone_planner.Plan()
+    deep_drone_planner.Train()
 
 
 if __name__ == '__main__':
