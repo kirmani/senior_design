@@ -244,7 +244,7 @@ class DeepDronePlanner:
             distance_threshold = 0.5
             if ((distance < distance_threshold) or
                 (time.time() > start_time + max_task_length)):
-                bounds = 1
+                bounds = 0.5
                 new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
                 new_goal[2] += (bounds + 1)
                 print("Final reward: %s" % reward[0])
