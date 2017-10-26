@@ -10,12 +10,14 @@ DeepDrone trajectory planner.
 """
 import argparse
 import numpy as np
+import random
 import rospy
 import ros_numpy
 import sys
 import tensorflow as tf
 import traceback
 import time
+from collections import deque
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import Image
@@ -24,6 +26,53 @@ from journey.srv import FlyToGoal
 from journey.srv import FlyToGoalResponse
 
 RATE = 10  # Hz
+
+
+class ReplayBuffer:
+
+    def __init__(self, buffer_size=1000000):
+        self.buffer_size = buffer_size
+        self.count = 0
+        self.buffer = deque()
+
+    def add(self, s, a, r, t, s2):
+        experience = (s, a, r, t, s2)
+        if self.count < self.buffer_size:
+            self.buffer.append(experience)
+            self.count += 1
+        else:
+            self.buffer.popleft()
+            self.buffer.append(experience)
+
+    def size(self):
+        return self.count
+
+    def sample_batch(self, batch_size):
+        '''
+        batch_size specifies the number of experiences to add
+        to the batch. If the replay buffer has less than batch_size
+        elements, simply return all of the elements within the buffer.
+        Generally, you'll want to wait until the buffer has at least
+        batch_size elements before beginning to sample from it.
+        '''
+        batch = []
+
+        if self.count < batch_size:
+            batch = random.sample(self.buffer, self.count)
+        else:
+            batch = random.sample(self.buffer, batch_size)
+
+        s_batch = np.array([_[0] for _ in batch])
+        a_batch = np.array([_[1] for _ in batch])
+        r_batch = np.array([_[2] for _ in batch])
+        t_batch = np.array([_[3] for _ in batch])
+        s2_batch = np.array([_[4] for _ in batch])
+
+        return s_batch, a_batch, r_batch, t_batch, s2_batch
+
+    def clear(self):
+        self.deque.clear()
+        self.count = 0
 
 
 class ActorNetwork:
@@ -35,20 +84,21 @@ class ActorNetwork:
                  tau=0.001,
                  learning_rate=0.0001):
         self.sess = sess
-        self.inputs = tf.placeholder(tf.float32, (None, num_inputs))
-        x = tf.contrib.layers.fully_connected(self.inputs, 32)
-        x = tf.contrib.layers.fully_connected(x, 16)
-        self.actions = tf.contrib.layers.fully_connected(
-            x, num_actions, activation_fn=tf.tanh)
+        self.num_inputs = num_inputs
+        self.num_actions = num_actions
 
+        # Actor network.
+        self.inputs, self.actions = self.create_actor_network()
         network_params = tf.trainable_variables()
 
+        # Target network.
+        self.target_inputs, self.target_actions = self.create_actor_network()
         target_network_params = tf.trainable_variables()[len(network_params):]
 
         # Op for periodically updating target network with online network weights
-        update_target_network_params = \
-            [target_network_params[i].assign(tf.mul(network_params[i], tau) + \
-                tf.mul(target_network_params[i], 1. - tau))
+        self.update_target_network_params = \
+            [target_network_params[i].assign(tf.multiply(network_params[i], tau) + \
+                tf.multiply(target_network_params[i], 1. - tau))
                 for i in range(len(target_network_params))]
 
         # This gradient will be provided by the critic network
@@ -62,6 +112,17 @@ class ActorNetwork:
         self.optimize = tf.train.AdamOptimizer(learning_rate).\
             apply_gradients(zip(self.actor_gradients, network_params))
 
+        self.num_trainable_vars = len(network_params) + len(
+            target_network_params)
+
+    def create_actor_network(self):
+        inputs = tf.placeholder(tf.float32, (None, self.num_inputs))
+        x = tf.contrib.layers.fully_connected(inputs, 32)
+        x = tf.contrib.layers.fully_connected(x, 16)
+        actions = tf.contrib.layers.fully_connected(
+            x, self.num_actions, activation_fn=tf.tanh)
+        return inputs, actions
+
     def train(self, inputs, a_gradient):
         self.sess.run(
             self.optimize,
@@ -71,17 +132,45 @@ class ActorNetwork:
     def predict(self, inputs):
         return self.sess.run(self.actions, feed_dict={self.inputs: inputs})
 
+    def predict_target(self, inputs):
+        return self.sess.run(
+            self.target_actions, feed_dict={self.target_inputs: inputs})
+
+    def update_target_network(self):
+        self.sess.run(self.update_target_network_params)
+
+    def get_num_trainable_vars(self):
+        return self.num_trainable_vars
+
 
 class CriticNetwork:
 
-    def __init__(self, sess, num_inputs, num_actions, learning_rate=0.001):
+    def __init__(self,
+                 sess,
+                 num_inputs,
+                 num_actions,
+                 num_actor_vars,
+                 tau=0.001,
+                 learning_rate=0.001):
         self.sess = sess
-        self.inputs = tf.placeholder(tf.float32, (None, num_inputs))
-        self.actions = tf.placeholder(tf.float32, (None, num_actions))
-        x = tf.contrib.layers.fully_connected(self.inputs, 32)
-        x = tf.concat([x, self.actions], axis=-1)
-        x = tf.contrib.layers.fully_connected(x, 16)
-        self.out = tf.contrib.layers.fully_connected(x, 1, activation_fn=None)
+        self.num_inputs = num_inputs
+        self.num_actions = num_actions
+
+        # Critic network.
+        (self.inputs, self.actions, self.out) = self.create_critic_network()
+        network_params = tf.trainable_variables()[num_actor_vars:]
+
+        # Target network.
+        (self.target_inputs, self.target_actions,
+         self.target_out) = self.create_critic_network()
+        target_network_params = tf.trainable_variables()[(
+            len(network_params) + num_actor_vars):]
+
+        # Op for periodically updating target network with online network weights
+        self.update_target_network_params = \
+            [target_network_params[i].assign(tf.multiply(network_params[i], tau) + \
+                tf.multiply(target_network_params[i], 1. - tau))
+                for i in range(len(target_network_params))]
 
         # Network target (y_i)
         # Obtained from the target networks
@@ -96,9 +185,18 @@ class CriticNetwork:
         # Get the gradient of the net w.r.t. the action
         self.action_grads = tf.gradients(self.out, self.actions)
 
+    def create_critic_network(self):
+        inputs = tf.placeholder(tf.float32, (None, self.num_inputs))
+        actions = tf.placeholder(tf.float32, (None, self.num_actions))
+        x = tf.contrib.layers.fully_connected(inputs, 32)
+        x = tf.concat([x, actions], axis=-1)
+        x = tf.contrib.layers.fully_connected(x, 16)
+        out = tf.contrib.layers.fully_connected(x, 1, activation_fn=None)
+        return inputs, actions, out
+
     def train(self, inputs, actions, reward):
-        self.sess.run(
-            self.optimize,
+        return self.sess.run(
+            [self.out, self.optimize],
             feed_dict={
                 self.inputs: inputs,
                 self.actions: actions,
@@ -110,11 +208,46 @@ class CriticNetwork:
             self.out, feed_dict={self.inputs: inputs,
                                  self.actions: actions})
 
+    def predict_target(self, inputs, actions):
+        return self.sess.run(
+            self.target_out,
+            feed_dict={
+                self.target_inputs: inputs,
+                self.target_actions: actions
+            })
+
+    def update_target_network(self):
+        self.sess.run(self.update_target_network_params)
+
     def action_gradients(self, inputs, actions):
         return self.sess.run(
             self.action_grads,
             feed_dict={self.inputs: inputs,
                        self.actions: actions})
+
+
+class OrnsteinUhlenbeckActionNoise:
+
+    def __init__(self, mu, sigma=0.3, theta=.15, dt=1e-2, x0=None):
+        self.theta = theta
+        self.mu = mu
+        self.sigma = sigma
+        self.dt = dt
+        self.x0 = x0
+        self.reset()
+
+    def __call__(self):
+        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + \
+                self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.mu.shape)
+        self.x_prev = x
+        return x
+
+    def reset(self):
+        self.x_prev = self.x0 if self.x0 is not None else np.zeros_like(self.mu)
+
+    def __repr__(self):
+        return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(
+            self.mu, self.sigma)
 
 
 class DeepDronePlanner:
@@ -146,13 +279,22 @@ class DeepDronePlanner:
         sess = tf.Session()
 
         # Create actor network.
-        self.actor = ActorNetwork(sess, 3, 4)
-        self.critic = CriticNetwork(sess, 3, 4)
+        self.num_inputs = 3
+        self.num_actions = 4
+        self.actor = ActorNetwork(sess, self.num_inputs, self.num_actions)
+        self.critic = CriticNetwork(sess, self.num_inputs, self.num_actions,
+                                    self.actor.get_num_trainable_vars())
+        self.replay_buffer = ReplayBuffer()
+        # self.minibatch_size = 64
+        self.minibatch_size = 32
+        self.gamma = 0.99
+        self.actor_noise = OrnsteinUhlenbeckActionNoise(
+            mu=np.zeros(self.num_actions))
 
         sess.run(tf.global_variables_initializer())
 
         # Initialize policy.
-        self._InitializePolicy()
+        # self._InitializePolicy()
 
         print("Deep drone planner initialized.")
 
@@ -204,47 +346,72 @@ class DeepDronePlanner:
             x = np.array([
                 self.pose.position.x, self.pose.position.y, self.pose.position.z
             ])
-            delta = goal - x
+            state = goal - x
 
-            # Output some control.
-            controls = self.actor.predict(np.stack([delta]))[0]
+            # Added exploration noise.
+            action = self.actor.predict(
+                np.stack([state]))[0] + self.actor_noise()
+
             # print("Controls: %s" % controls)
-            vel_msg.linear.x = controls[0]
-            vel_msg.linear.y = controls[1]
-            vel_msg.linear.z = controls[2]
-            vel_msg.angular.z = controls[3]
+            vel_msg.linear.x = action[0]
+            vel_msg.linear.y = action[1]
+            vel_msg.linear.z = action[2]
+            vel_msg.angular.z = action[3]
             self.velocity_publisher.publish(vel_msg)
 
             # Wait.
             self.rate.sleep()
 
-            # Distance after action.
+            # Get next state.
             x = np.array([
                 self.pose.position.x, self.pose.position.y, self.pose.position.z
             ])
-            distance = np.linalg.norm(goal - x)
+            next_state = goal - x
 
             # Get reward.
+            distance = np.linalg.norm(next_state)
             reward = np.array([np.exp(-distance)])
-            # print("Reward: %s" % reward)
 
-            self.critic.train(
-                np.stack([delta]), np.stack([controls]), np.stack([reward]))
-            grads = self.critic.action_gradients(
-                np.stack([delta]), np.stack([controls]))
-            # print(grads)
-            self.actor.train(np.stack([delta]), grads[0])
+            self.replay_buffer.add(state, action, reward, False, next_state)
 
-            # Improve policy.
-            # print(reward[0])
-            if reward[0] > 0.8:
-                bounds = 1
-                new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
-                new_goal[2] += (bounds + 1)
-                print("New goal: %s" % new_goal)
-                self.goal_pose.position.x = new_goal[0]
-                self.goal_pose.position.y = new_goal[1]
-                self.goal_pose.position.z = new_goal[2]
+            if self.replay_buffer.size() > self.minibatch_size:
+                s_batch, a_batch, r_batch, t_batch, s2_batch = \
+                    self.replay_buffer.sample_batch(self.minibatch_size)
+
+                # Calculate targets
+                target_q = self.critic.predict_target(
+                    s2_batch, self.actor.predict_target(s2_batch))
+
+                y_i = []
+                for k in range(self.minibatch_size):
+                    if t_batch[k]:
+                        y_i.append(r_batch[k])
+                    else:
+                        y_i.append(r_batch[k] + self.gamma * target_q[k])
+
+                # Update the critic given the targets
+                predicted_q_value, _ = self.critic.train(
+                    s_batch, a_batch, np.reshape(y_i, (self.minibatch_size, 1)))
+
+                # Update the actor policy using the sampled gradient
+                a_outs = self.actor.predict(s_batch)
+                grads = self.critic.action_gradients(s_batch, a_outs)
+                self.actor.train(s_batch, grads[0])
+
+                # Update target networks
+                self.actor.update_target_network()
+                self.critic.update_target_network()
+
+            # # Improve policy.
+            # # print(reward[0])
+            # if reward[0] > 0.8:
+            #     bounds = 1
+            #     new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
+            #     new_goal[2] += (bounds + 1)
+            #     print("New goal: %s" % new_goal)
+            #     self.goal_pose.position.x = new_goal[0]
+            #     self.goal_pose.position.y = new_goal[1]
+            #     self.goal_pose.position.z = new_goal[2]
 
             # Wait.
             self.rate.sleep()
