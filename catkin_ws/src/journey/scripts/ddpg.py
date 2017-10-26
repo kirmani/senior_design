@@ -21,7 +21,7 @@ from collections import deque
 
 class DeepDeterministicPolicyGradients:
 
-    def __init__(self, num_inputs, num_actions, minibatch_size=32, gamma=0.99):
+    def __init__(self, num_inputs, num_actions, minibatch_size=64, gamma=0.99):
         self.num_inputs = num_inputs
         self.num_actions = num_actions
         self.minibatch_size = minibatch_size
