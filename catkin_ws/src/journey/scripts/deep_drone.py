@@ -19,6 +19,7 @@ import time
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import Image
+from std_msgs.msg import Empty
 from tum_ardrone.msg import filter_state
 from journey.srv import FlyToGoal
 from journey.srv import FlyToGoalResponse
@@ -36,8 +37,9 @@ class ActorNetwork:
                  learning_rate=0.0001):
         self.sess = sess
         self.inputs = tf.placeholder(tf.float32, (None, num_inputs))
+        x = self.inputs
         x = tf.contrib.layers.fully_connected(self.inputs, 32)
-        x = tf.contrib.layers.fully_connected(x, 16)
+        x = tf.contrib.layers.fully_connected(x, 24)
         self.actions = tf.contrib.layers.fully_connected(
             x, num_actions, activation_fn=tf.tanh)
 
@@ -80,7 +82,7 @@ class CriticNetwork:
         self.actions = tf.placeholder(tf.float32, (None, num_actions))
         x = tf.contrib.layers.fully_connected(self.inputs, 32)
         x = tf.concat([x, self.actions], axis=-1)
-        x = tf.contrib.layers.fully_connected(x, 16)
+        x = tf.contrib.layers.fully_connected(x, 24)
         self.out = tf.contrib.layers.fully_connected(x, 1, activation_fn=None)
 
         # Network target (y_i)
@@ -97,13 +99,14 @@ class CriticNetwork:
         self.action_grads = tf.gradients(self.out, self.actions)
 
     def train(self, inputs, actions, reward):
-        self.sess.run(
-            self.optimize,
+        loss_val, _ = self.sess.run(
+            [self.loss, self.optimize],
             feed_dict={
                 self.inputs: inputs,
                 self.actions: actions,
                 self.predicted_q_value: reward
             })
+        return loss_val
 
     def predict(self, inputs, actions):
         return self.sess.run(
@@ -126,6 +129,8 @@ class DeepDronePlanner:
             '/cmd_vel', Twist, queue_size=10)
 
         # TODO(kirmani): Query the depth image instead of the RGB image.
+        self.takeoff_publisher = rospy.Publisher(
+            '/ardrone/takeoff', Empty, queue_size=10)
         self.image_subscriber = rospy.Subscriber('/ardrone/front/image_raw',
                                                  Image, self._OnNewImage)
         self.pose_subscriber = rospy.Subscriber('/ardrone/predictedPose',
@@ -157,18 +162,16 @@ class DeepDronePlanner:
         print("Deep drone planner initialized.")
 
     def _InitializePolicy(self):
-        num_samples = 1000
+        num_samples = 10000
         bounds = 5
-        tolerance = 0.5
         delta = (np.random.uniform(size=(num_samples, 3)) - 0.5) * (2 * bounds)
         actions = np.zeros((num_samples, 4))
-        actions[np.where(delta > tolerance)] = 1
-        actions[np.where(delta < -tolerance)] = -1
-        # print(delta)
-        # print(actions)
-        for epoch in range(300):
+        actions[:, 0:3] = delta / bounds
+        rewards = np.linalg.norm(delta, axis=1, keepdims=True)
+        for epoch in range(100):
+            loss_val = self.critic.train(delta, actions, rewards)
             self.actor.train(delta, actions)
-        # print("Policy initialization loss: %s" % loss_val)
+        print("Policy initialization loss: %s" % loss_val)
 
     def _OnNewPose(self, data):
         self.pose.position.x = round(data.x, 4)
@@ -191,6 +194,8 @@ class DeepDronePlanner:
         # Initialize velocity message.
         vel_msg = Twist()
 
+        self.takeoff_publisher.publish(Empty())
+        start_time = time.time()
         while not rospy.is_shutdown():
             # if not self.image_msg:
             #     print("No image available.")
@@ -225,26 +230,29 @@ class DeepDronePlanner:
             distance = np.linalg.norm(goal - x)
 
             # Get reward.
-            reward = np.array([np.exp(-distance)])
-            # print("Reward: %s" % reward)
+            distance_factor = np.exp(-distance)
+            reward = np.array([distance_factor])
 
             self.critic.train(
                 np.stack([delta]), np.stack([controls]), np.stack([reward]))
             grads = self.critic.action_gradients(
                 np.stack([delta]), np.stack([controls]))
-            # print(grads)
             self.actor.train(np.stack([delta]), grads[0])
 
-            # Improve policy.
-            # print(reward[0])
-            if reward[0] > 0.8:
-                bounds = 1
+            # Check if we've completed this task.
+            max_task_length = 30  # seconds
+            distance_threshold = 0.5
+            if ((distance < distance_threshold) or
+                (time.time() > start_time + max_task_length)):
+                bounds = 0.5
                 new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
                 new_goal[2] += (bounds + 1)
+                print("Final reward: %s" % reward[0])
                 print("New goal: %s" % new_goal)
                 self.goal_pose.position.x = new_goal[0]
                 self.goal_pose.position.y = new_goal[1]
                 self.goal_pose.position.z = new_goal[2]
+                start_time = time.time()
 
             # Wait.
             self.rate.sleep()
