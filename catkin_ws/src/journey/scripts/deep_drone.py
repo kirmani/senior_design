@@ -390,8 +390,8 @@ class DeepDronePlanner:
             # Set the initial state.
             state = goal - x
 
-            ep_reward = 0
-            ep_ave_max_q = 0
+            ep_reward = 0.0
+            ep_ave_max_q = 0.0
 
             for j in range(self.max_episode_len):
                 # Added exploration noise.
@@ -468,7 +468,7 @@ class DeepDronePlanner:
                     writer.add_summary(summary_str, i)
                     writer.flush()
 
-                    print('| Reward: {:d} | Episode: {:d} | Qmax: {:.4f}'.format(int(ep_reward), \
+                    print('| Reward: {:4f} | Episode: {:d} | Qmax: {:.4f}'.format(ep_reward, \
                         i, (ep_ave_max_q / float(j))))
 
                     i += 1
