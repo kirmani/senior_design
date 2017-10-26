@@ -157,27 +157,21 @@ class DeepDronePlanner:
         sess.run(tf.global_variables_initializer())
 
         # Initialize policy.
-        # self._InitializePolicy()
+        self._InitializePolicy()
 
         print("Deep drone planner initialized.")
 
     def _InitializePolicy(self):
         num_samples = 10000
         bounds = 5
-        tolerance = 0.5
         delta = (np.random.uniform(size=(num_samples, 3)) - 0.5) * (2 * bounds)
-        # actions = np.zeros((num_samples, 4))
-        # actions[:, 0:3] = delta / bounds
+        actions = np.zeros((num_samples, 4))
+        actions[:, 0:3] = delta / bounds
         rewards = np.linalg.norm(delta, axis=1, keepdims=True)
-        # print(delta)
-        # print(actions)
-        # print(rewards)
-        for epoch in range(300):
-            actions = self.actor.predict(delta)
+        for epoch in range(100):
             loss_val = self.critic.train(delta, actions, rewards)
-            grads = self.critic.action_gradients(delta, actions)
-            self.actor.train(delta, grads[0])
-            print("Policy initialization loss: %s" % loss_val)
+            self.actor.train(delta, actions)
+        print("Policy initialization loss: %s" % loss_val)
 
     def _OnNewPose(self, data):
         self.pose.position.x = round(data.x, 4)
@@ -202,18 +196,6 @@ class DeepDronePlanner:
 
         self.takeoff_publisher.publish(Empty())
         start_time = time.time()
-
-        min_height = 1
-        max_height = 4
-        mid_height = min_height + (max_height - min_height) / 2
-        x = np.array([[max_height * max_height, max_height,
-                       1], [mid_height * mid_height, mid_height, 1],
-                      [min_height * min_height, min_height, 1]])
-        y = np.array([[0], [1], [0]])
-        height_mat = np.transpose(np.linalg.solve(x, y))[0]
-        # print(height_mat)
-        # exit()
-
         while not rospy.is_shutdown():
             # if not self.image_msg:
             #     print("No image available.")
@@ -249,24 +231,19 @@ class DeepDronePlanner:
 
             # Get reward.
             distance_factor = np.exp(-distance)
-            height_factor = (x[2] * x[2] * height_mat[0] + x[2] * height_mat[1]
-                             + height_mat[2])
-            reward = np.array([distance_factor + height_factor])
-            # print("Reward: %s" % reward)
+            reward = np.array([distance_factor])
 
             self.critic.train(
                 np.stack([delta]), np.stack([controls]), np.stack([reward]))
             grads = self.critic.action_gradients(
                 np.stack([delta]), np.stack([controls]))
-            # print(grads)
             self.actor.train(np.stack([delta]), grads[0])
 
-            # Improve policy.
-            # print(reward[0])
+            # Check if we've completed this task.
             max_task_length = 30  # seconds
-            reward_success_threshold = 0.7
-            if (reward[0] > reward_success_threshold or
-                    time.time()) > start_time + max_task_length:
+            distance_threshold = 0.5
+            if ((distance < distance_threshold) or
+                (time.time() > start_time + max_task_length)):
                 bounds = 1
                 new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
                 new_goal[2] += (bounds + 1)
