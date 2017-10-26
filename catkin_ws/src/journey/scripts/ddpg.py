@@ -21,7 +21,7 @@ from collections import deque
 
 class DeepDeterministicPolicyGradients:
 
-    def __init__(self, num_inputs, num_actions, minibatch_size=32, gamma=0.99):
+    def __init__(self, num_inputs, num_actions, minibatch_size=64, gamma=0.99):
         self.num_inputs = num_inputs
         self.num_actions = num_actions
         self.minibatch_size = minibatch_size
@@ -238,8 +238,12 @@ class ActorNetwork:
 
     def create_actor_network(self):
         inputs = tf.placeholder(tf.float32, (None, self.num_inputs))
-        x = tf.contrib.layers.fully_connected(inputs, 400)
-        x = tf.contrib.layers.fully_connected(x, 300)
+        x = tf.contrib.layers.fully_connected(inputs, 400, activation_fn=None)
+        x = tf.layers.batch_normalization(x)
+        x = tf.nn.relu(x)
+        x = tf.contrib.layers.fully_connected(inputs, 300, activation_fn=None)
+        x = tf.layers.batch_normalization(x)
+        x = tf.nn.relu(x)
         actions = tf.contrib.layers.fully_connected(
             x, self.num_actions, activation_fn=tf.tanh)
         return inputs, actions
@@ -309,7 +313,9 @@ class CriticNetwork:
     def create_critic_network(self):
         inputs = tf.placeholder(tf.float32, (None, self.num_inputs))
         actions = tf.placeholder(tf.float32, (None, self.num_actions))
-        x = tf.contrib.layers.fully_connected(inputs, 400)
+        x = tf.contrib.layers.fully_connected(inputs, 400, activation_fn=None)
+        x = tf.layers.batch_normalization(x)
+        x = tf.nn.relu(x)
         x = tf.concat([x, actions], axis=-1)
         x = tf.contrib.layers.fully_connected(x, 300)
         out = tf.contrib.layers.fully_connected(x, 1, activation_fn=None)
