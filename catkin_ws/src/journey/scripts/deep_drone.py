@@ -135,7 +135,7 @@ class DeepDronePlanner:
         bounds = 0.5
         # new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
         # new_goal[2] += bounds + 1
-        new_goal = [2, -2, 2]
+        new_goal = [-2, 2, 2]
         # print("New goal: %s" % new_goal)
         self.goal_pose.position.x = new_goal[0]
         self.goal_pose.position.y = new_goal[1]
