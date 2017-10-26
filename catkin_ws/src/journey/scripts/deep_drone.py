@@ -57,7 +57,6 @@ class DeepDronePlanner:
             '/ardrone/takeoff', EmptyMessage, queue_size=10)
         self.com_publisher = rospy.Publisher(
             '/tum_ardrone/com', String, queue_size=10)
-        self.reset_rate = rospy.Rate(2)
 
         # Listen for new goal when planning at test time.
         s = rospy.Service('fly_to_goal', FlyToGoal, self.FlyToGoal)
@@ -147,7 +146,6 @@ class DeepDronePlanner:
         x = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         state = goal - x
-
         return state
 
     def step(self, action):
