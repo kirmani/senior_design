@@ -462,7 +462,7 @@ class DeepDronePlanner:
                         summary_ops,
                         feed_dict={
                             summary_vars[0]: ep_reward,
-                            summary_vars[1]: ep_ave_max_q / float(j)
+                            summary_vars[1]: ep_ave_max_q / float(j + 1)
                         })
 
                     writer.add_summary(summary_str, i)
