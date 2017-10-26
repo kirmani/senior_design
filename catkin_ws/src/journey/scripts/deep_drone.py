@@ -21,6 +21,7 @@ from collections import deque
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import Image
+from std_msgs.msg import Empty
 from tum_ardrone.msg import filter_state
 from journey.srv import FlyToGoal
 from journey.srv import FlyToGoalResponse
@@ -259,6 +260,8 @@ class DeepDronePlanner:
             '/cmd_vel', Twist, queue_size=10)
 
         # TODO(kirmani): Query the depth image instead of the RGB image.
+        self.takeoff_publisher = rospy.Publisher(
+            '/ardrone/takeoff', Empty, queue_size=10)
         self.image_subscriber = rospy.Subscriber('/ardrone/front/image_raw',
                                                  Image, self._OnNewImage)
         self.pose_subscriber = rospy.Subscriber('/ardrone/predictedPose',
@@ -299,18 +302,16 @@ class DeepDronePlanner:
         print("Deep drone planner initialized.")
 
     def _InitializePolicy(self):
-        num_samples = 1000
+        num_samples = 10000
         bounds = 5
-        tolerance = 0.5
         delta = (np.random.uniform(size=(num_samples, 3)) - 0.5) * (2 * bounds)
         actions = np.zeros((num_samples, 4))
-        actions[np.where(delta > tolerance)] = 1
-        actions[np.where(delta < -tolerance)] = -1
-        # print(delta)
-        # print(actions)
-        for epoch in range(300):
+        actions[:, 0:3] = delta / bounds
+        rewards = np.linalg.norm(delta, axis=1, keepdims=True)
+        for epoch in range(100):
+            loss_val = self.critic.train(delta, actions, rewards)
             self.actor.train(delta, actions)
-        # print("Policy initialization loss: %s" % loss_val)
+        print("Policy initialization loss: %s" % loss_val)
 
     def _OnNewPose(self, data):
         self.pose.position.x = round(data.x, 4)
@@ -333,6 +334,8 @@ class DeepDronePlanner:
         # Initialize velocity message.
         vel_msg = Twist()
 
+        self.takeoff_publisher.publish(Empty())
+        start_time = time.time()
         while not rospy.is_shutdown():
             # if not self.image_msg:
             #     print("No image available.")
@@ -402,16 +405,20 @@ class DeepDronePlanner:
                 self.actor.update_target_network()
                 self.critic.update_target_network()
 
-            # # Improve policy.
-            # # print(reward[0])
-            # if reward[0] > 0.8:
-            #     bounds = 1
-            #     new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
-            #     new_goal[2] += (bounds + 1)
-            #     print("New goal: %s" % new_goal)
-            #     self.goal_pose.position.x = new_goal[0]
-            #     self.goal_pose.position.y = new_goal[1]
-            #     self.goal_pose.position.z = new_goal[2]
+            # Check if we've completed this task.
+            max_task_length = 30  # seconds
+            distance_threshold = 0.5
+            if ((distance < distance_threshold) or
+                (time.time() > start_time + max_task_length)):
+                bounds = 0.5
+                new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
+                new_goal[2] += (bounds + 1)
+                print("Final reward: %s" % reward[0])
+                print("New goal: %s" % new_goal)
+                self.goal_pose.position.x = new_goal[0]
+                self.goal_pose.position.y = new_goal[1]
+                self.goal_pose.position.z = new_goal[2]
+                start_time = time.time()
 
             # Wait.
             self.rate.sleep()
