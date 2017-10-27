@@ -21,7 +21,7 @@ from collections import deque
 
 class DeepDeterministicPolicyGradients:
 
-    def __init__(self, num_inputs, num_actions, minibatch_size=64, gamma=0.99):
+    def __init__(self, num_inputs, num_actions, minibatch_size=4, gamma=0.99):
         self.num_inputs = num_inputs
         self.num_actions = num_actions
         self.minibatch_size = minibatch_size
@@ -76,64 +76,82 @@ class DeepDeterministicPolicyGradients:
         for i in range(max_episodes):
             state = env.Reset()
             ep_reward = 0.0
-            ep_ave_max_q = 0.0
+
+            state_buffer = np.zeros((max_episode_len, self.num_inputs))
+            action_buffer = np.zeros((max_episode_len, self.num_actions))
+            reward_buffer = np.zeros((max_episode_len))
+            terminal_buffer = []
+            next_state_buffer = np.zeros((max_episode_len, self.num_inputs))
+
             for j in range(max_episode_len):
                 # Added exploration noise.
                 action = self.actor.predict(
-                    np.stack([state]))[0] + actor_noise()
+                    np.expand_dims(np.expand_dims(state, axis=0),
+                                   axis=0))[0][0] + actor_noise()
 
                 (next_state, reward, terminal) = env.Step(action)
 
-                replay_buffer.add(state, action, reward, terminal, next_state)
-
-                if replay_buffer.size() > self.minibatch_size:
-                    s_batch, a_batch, r_batch, t_batch, s2_batch = \
-                        replay_buffer.sample_batch(self.minibatch_size)
-
-                    # Calculate targets
-                    target_q = self.critic.predict_target(
-                        s2_batch, self.actor.predict_target(s2_batch))
-
-                    y_i = []
-                    for k in range(self.minibatch_size):
-                        if t_batch[k]:
-                            y_i.append(r_batch[k])
-                        else:
-                            y_i.append(r_batch[k] + self.gamma * target_q[k])
-
-                    # Update the critic given the targets
-                    predicted_q_value, _ = self.critic.train(
-                        s_batch, a_batch,
-                        np.reshape(y_i, (self.minibatch_size, 1)))
-
-                    ep_ave_max_q += np.amax(predicted_q_value)
-
-                    # Update the actor policy using the sampled gradient
-                    a_outs = self.actor.predict(s_batch)
-                    grads = self.critic.action_gradients(s_batch, a_outs)
-                    self.actor.train(s_batch, grads[0])
-
-                    # Update target networks
-                    self.actor.update_target_network()
-                    self.critic.update_target_network()
+                # Add to episode buffer.
+                state_buffer[j, :] = state
+                action_buffer[j, :] = action
+                reward_buffer[j] = reward
+                terminal_buffer.append(terminal)
+                next_state_buffer[j, :] = next_state
 
                 state = next_state
                 ep_reward += reward
 
-                if terminal or (j == max_episode_len - 1):
-                    summary_str = self.sess.run(
-                        summary_ops,
-                        feed_dict={
-                            summary_vars[0]: ep_reward,
-                            summary_vars[1]: ep_ave_max_q / float(j + 1)
-                        })
+            replay_buffer.add(state_buffer, action_buffer, reward_buffer,
+                              terminal_buffer, next_state_buffer)
+            predicted_q_values = self.critic.predict(
+                np.expand_dims(state_buffer, axis=0),
+                np.expand_dims(action_buffer, axis=0))
+            ep_ave_max_q = np.amax(predicted_q_values)
 
-                    writer.add_summary(summary_str, i)
-                    writer.flush()
+            if replay_buffer.size() >= self.minibatch_size:
+                (s_batch, a_batch, r_batch, t_batch,
+                 s2_batch) = replay_buffer.sample_batch(self.minibatch_size)
 
-                    print('| Reward: {:4f} | Episode: {:d} | Qmax: {:.4f}'.format(ep_reward, \
-                        i, (ep_ave_max_q / float(j))))
-                    break
+                # Calculate targets
+                target_q = self.critic.predict_target(
+                    s2_batch, self.actor.predict_target(s2_batch))
+
+                y_i = []
+                for k in range(self.minibatch_size):
+                    for l in range(max_episode_len):
+                        if t_batch[k][l]:
+                            y_i.append(r_batch[k][l])
+                        else:
+                            y_i.append(r_batch[k][l] +
+                                       self.gamma * target_q[k][l])
+
+                # Update the critic given the targets
+                predicted_q_value = self.critic.train(
+                    s_batch, a_batch,
+                    np.reshape(y_i, (self.minibatch_size, max_episode_len, 1)))
+
+                # Update the actor policy using the sampled gradient
+                a_outs = self.actor.predict(s_batch)
+                grads = self.critic.action_gradients(s_batch, a_outs)
+                self.actor.train(s_batch, grads[0])
+
+                # Update target networks
+                self.actor.update_target_network()
+                self.critic.update_target_network()
+
+            # Write episode summary statistics.
+            summary_str = self.sess.run(
+                summary_ops,
+                feed_dict={
+                    summary_vars[0]: ep_reward,
+                    summary_vars[1]: ep_ave_max_q / float(j + 1)
+                })
+
+            writer.add_summary(summary_str, i)
+            writer.flush()
+
+            print('| Reward: {:4f} | Episode: {:d} | Qmax: {:.4f}'.format(
+                ep_reward, i, (ep_ave_max_q / float(j + 1))))
 
 
 class Environment:
@@ -209,11 +227,12 @@ class ActorNetwork:
         self.num_actions = num_actions
 
         # Actor network.
-        self.inputs, self.actions = self.create_actor_network()
+        self.inputs, self.actions = self.create_actor_network("actor_source")
         network_params = tf.trainable_variables()
 
         # Target network.
-        self.target_inputs, self.target_actions = self.create_actor_network()
+        self.target_inputs, self.target_actions = self.create_actor_network(
+            "actor_target")
         target_network_params = tf.trainable_variables()[len(network_params):]
 
         # Op for periodically updating target network with online network weights
@@ -223,7 +242,8 @@ class ActorNetwork:
                 for i in range(len(target_network_params))]
 
         # This gradient will be provided by the critic network
-        self.action_gradient = tf.placeholder(tf.float32, [None, num_actions])
+        self.action_gradient = tf.placeholder(tf.float32,
+                                              [None, None, num_actions])
 
         # Combine the gradients here
         self.actor_gradients = tf.gradients(self.actions, network_params,
@@ -236,16 +256,22 @@ class ActorNetwork:
         self.num_trainable_vars = len(network_params) + len(
             target_network_params)
 
-    def create_actor_network(self):
-        inputs = tf.placeholder(tf.float32, (None, self.num_inputs))
-        x = tf.contrib.layers.fully_connected(inputs, 400, activation_fn=None)
+    def create_actor_network(self, scope):
+        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
+        x = tf.contrib.layers.fully_connected(inputs, 256, activation_fn=None)
         x = tf.layers.batch_normalization(x)
         x = tf.nn.relu(x)
-        x = tf.contrib.layers.fully_connected(inputs, 300, activation_fn=None)
+        x = tf.contrib.layers.fully_connected(x, 128, activation_fn=None)
         x = tf.layers.batch_normalization(x)
         x = tf.nn.relu(x)
+        cell = tf.contrib.rnn.LSTMCell(128)
+        lstm_outputs, state = tf.nn.dynamic_rnn(
+            cell, x, dtype=tf.float32, scope=scope)
+        lstm_outputs = tf.reshape(lstm_outputs, [-1, cell.output_size])
         actions = tf.contrib.layers.fully_connected(
-            x, self.num_actions, activation_fn=tf.tanh)
+            inputs=lstm_outputs,
+            num_outputs=self.num_actions,
+            activation_fn=tf.tanh)
         return inputs, actions
 
     def train(self, inputs, a_gradient):
@@ -255,11 +281,17 @@ class ActorNetwork:
                        self.action_gradient: a_gradient})
 
     def predict(self, inputs):
-        return self.sess.run(self.actions, feed_dict={self.inputs: inputs})
+        preds = self.sess.run(self.actions, feed_dict={self.inputs: inputs})
+        preds = np.reshape(preds,
+                           [inputs.shape[0], inputs.shape[1], self.num_actions])
+        return preds
 
     def predict_target(self, inputs):
-        return self.sess.run(
+        preds = self.sess.run(
             self.target_actions, feed_dict={self.target_inputs: inputs})
+        preds = np.reshape(preds,
+                           [inputs.shape[0], inputs.shape[1], self.num_actions])
+        return preds
 
     def update_target_network(self):
         self.sess.run(self.update_target_network_params)
@@ -282,12 +314,13 @@ class CriticNetwork:
         self.num_actions = num_actions
 
         # Critic network.
-        (self.inputs, self.actions, self.out) = self.create_critic_network()
+        (self.inputs, self.actions,
+         self.out) = self.create_critic_network("critic_source")
         network_params = tf.trainable_variables()[num_actor_vars:]
 
         # Target network.
         (self.target_inputs, self.target_actions,
-         self.target_out) = self.create_critic_network()
+         self.target_out) = self.create_critic_network("critic_target")
         target_network_params = tf.trainable_variables()[(
             len(network_params) + num_actor_vars):]
 
@@ -299,49 +332,62 @@ class CriticNetwork:
 
         # Network target (y_i)
         # Obtained from the target networks
-        self.predicted_q_value = tf.placeholder(tf.float32, (None, 1))
+        self.predicted_q_value = tf.placeholder(tf.float32, (None, None, 1))
 
         # Define loss and optimization Op
-        self.loss = tf.losses.mean_squared_error(self.out,
-                                                 self.predicted_q_value)
+        shaped_labels = tf.reshape(self.predicted_q_value, [-1, 1])
+        self.loss = tf.reduce_mean((self.out - shaped_labels)**2)
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
 
         # Get the gradient of the net w.r.t. the action
-        self.action_grads = tf.gradients(self.out, self.actions)
+        shaped_out = tf.reshape(
+            self.out, [tf.shape(self.inputs)[0],
+                       tf.shape(self.inputs)[1], 1])
+        self.action_grads = tf.gradients(shaped_out, self.actions)
 
-    def create_critic_network(self):
-        inputs = tf.placeholder(tf.float32, (None, self.num_inputs))
-        actions = tf.placeholder(tf.float32, (None, self.num_actions))
-        x = tf.contrib.layers.fully_connected(inputs, 400, activation_fn=None)
+    def create_critic_network(self, scope):
+        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
+        actions = tf.placeholder(tf.float32, (None, None, self.num_actions))
+        x = tf.contrib.layers.fully_connected(inputs, 256, activation_fn=None)
         x = tf.layers.batch_normalization(x)
         x = tf.nn.relu(x)
         x = tf.concat([x, actions], axis=-1)
-        x = tf.contrib.layers.fully_connected(x, 300)
-        out = tf.contrib.layers.fully_connected(x, 1, activation_fn=None)
+        x = tf.contrib.layers.fully_connected(x, 128)
+        cell = tf.contrib.rnn.LSTMCell(128)
+        lstm_outputs, state = tf.nn.dynamic_rnn(
+            cell, x, dtype=tf.float32, scope=scope)
+        lstm_outputs = tf.reshape(lstm_outputs, [-1, cell.output_size])
+        out = tf.contrib.layers.fully_connected(
+            inputs=lstm_outputs, num_outputs=1, activation_fn=None)
         return inputs, actions, out
 
     def train(self, inputs, actions, reward):
-        return self.sess.run(
+        preds, _ = self.sess.run(
             [self.out, self.optimize],
             feed_dict={
                 self.inputs: inputs,
                 self.actions: actions,
                 self.predicted_q_value: reward
             })
+        return preds
 
     def predict(self, inputs, actions):
-        return self.sess.run(
+        preds = self.sess.run(
             self.out, feed_dict={self.inputs: inputs,
                                  self.actions: actions})
+        preds = np.reshape(preds, [inputs.shape[0], inputs.shape[1], 1])
+        return preds
 
     def predict_target(self, inputs, actions):
-        return self.sess.run(
+        preds = self.sess.run(
             self.target_out,
             feed_dict={
                 self.target_inputs: inputs,
                 self.target_actions: actions
             })
+        preds = np.reshape(preds, [inputs.shape[0], inputs.shape[1], 1])
+        return preds
 
     def update_target_network(self):
         self.sess.run(self.update_target_network_params)
