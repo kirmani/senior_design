@@ -188,8 +188,8 @@ class DeepDronePlanner:
             env,
             actor_noise,
             logdir=logdir,
-            max_episodes=100,
-            max_episode_len=50)
+            max_episodes=50,
+            max_episode_len=30)
 
 
 def main(args):
