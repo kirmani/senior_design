@@ -131,10 +131,10 @@ class DeepDronePlanner:
         # Take-off.
         self.takeoff_publisher.publish(EmptyMessage())
 
-        bounds = 0.5
-        # new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
-        # new_goal[2] += bounds + 1
-        new_goal = [-2, 2, 2]
+        bounds = 2
+        new_goal = (np.random.uniform(size=(3)) - 0.5) * (2 * bounds)
+        new_goal += np.array([0, 0, 1])
+        # new_goal = [-2, 2, 2]
         # print("New goal: %s" % new_goal)
         self.goal_pose.position.x = new_goal[0]
         self.goal_pose.position.y = new_goal[1]
@@ -188,8 +188,8 @@ class DeepDronePlanner:
             env,
             actor_noise,
             logdir=logdir,
-            max_episodes=1000,
-            max_episode_len=30)
+            max_episodes=100,
+            max_episode_len=50)
 
 
 def main(args):

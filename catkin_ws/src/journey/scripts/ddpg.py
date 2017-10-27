@@ -53,8 +53,8 @@ class DeepDeterministicPolicyGradients:
               env,
               actor_noise,
               logdir='log',
-              max_episodes=50000,
-              max_episode_len=100):
+              max_episodes=1000,
+              max_episode_len=50):
         # Set up summary Ops
         summary_ops, summary_vars = self.build_summaries()
 
