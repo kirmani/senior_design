@@ -178,7 +178,7 @@ class DeepDronePlanner:
             env,
             actor_noise,
             logdir=logdir,
-            max_episodes=200,
+            max_episodes=1000,
             max_episode_len=50)
 
 
