@@ -160,15 +160,14 @@ class DeepDeterministicPolicyGradients:
                 average_epoch_reward = total_epoch_reward / (i + 1)
                 average_epoch_avg_max_q = total_epoch_avg_max_q / (i + 1)
 
-                print(
-                    '| Episode Reward: {:4f} | Episode: {:d} | Episode Qmax: {:.4f} |'.
-                    format(episode_reward, i, episode_avg_max_q))
+                print('| Reward: {:4f} | Episode: {:d} | Qmax: {:.4f} |'.format(
+                    episode_reward, i, episode_avg_max_q))
 
-            print('| Epoch Reward: {:4f} | Epoch: {:d} | Epoch Qmax: {:4f} |'.
-                  format(average_epoch_reward, epoch, average_epoch_avg_max_q))
-
-            print("Finished epoch. Training minibatch with %s trajectories." %
+            print("Finished data collection for epoch %d." % epoch)
+            print("Training minibatch with %s trajectories." %
                   replay_buffer.size())
+            print("Starting policy optimization.")
+            average_epoch_avg_max_q = 0.0
             for optimization_step in range(optimization_steps):
                 (s_batch, a_batch, r_batch, t_batch,
                  s2_batch) = replay_buffer.sample_batch(self.minibatch_size)
@@ -190,6 +189,10 @@ class DeepDeterministicPolicyGradients:
                 predicted_q_value = self.critic.train(
                     s_batch, a_batch,
                     np.reshape(y_i, (self.minibatch_size, max_episode_len, 1)))
+                average_epoch_avg_max_q += np.amax(predicted_q_value)
+                print("[%d] Qmax: %.4f" %
+                      (optimization_step,
+                       average_epoch_avg_max_q / (optimization_step + 1)))
 
                 # Update the actor policy using the sampled gradient
                 a_outs = self.actor.predict(s_batch)
@@ -199,6 +202,9 @@ class DeepDeterministicPolicyGradients:
                 # Update target networks
                 self.actor.update_target_network()
                 self.critic.update_target_network()
+            average_epoch_avg_max_q /= optimization_steps
+            print('| Reward: {:4f} | Epoch: {:d} | Qmax: {:4f} |'.format(
+                average_epoch_reward, epoch, average_epoch_avg_max_q))
 
             # Write episode summary statistics.
             summary_str = self.sess.run(
