@@ -6,7 +6,7 @@
 #
 # Distributed under terms of the MIT license.
 """
-Deep deterministic policy gradients.
+Deep deterministic policy gradients with hindsight experience replay.
 """
 import argparse
 import numpy as np
@@ -21,9 +21,15 @@ from collections import deque
 
 class DeepDeterministicPolicyGradients:
 
-    def __init__(self, num_inputs, num_actions, minibatch_size=4, gamma=0.99):
+    def __init__(self,
+                 num_inputs,
+                 num_actions,
+                 goal_dim,
+                 minibatch_size=64,
+                 gamma=0.99):
         self.num_inputs = num_inputs
         self.num_actions = num_actions
+        self.goal_dim = goal_dim
         self.minibatch_size = minibatch_size
         self.gamma = gamma
 
@@ -31,8 +37,9 @@ class DeepDeterministicPolicyGradients:
         self.sess = tf.Session()
 
         # Create actor network.
-        self.actor = ActorNetwork(self.sess, self.num_inputs, self.num_actions)
-        self.critic = CriticNetwork(self.sess, self.num_inputs,
+        self.actor = ActorNetwork(self.sess, self.num_inputs + self.goal_dim,
+                                  self.num_actions)
+        self.critic = CriticNetwork(self.sess, self.num_inputs + self.goal_dim,
                                     self.num_actions,
                                     self.actor.get_num_trainable_vars())
 
@@ -74,35 +81,70 @@ class DeepDeterministicPolicyGradients:
         replay_buffer = ReplayBuffer()
 
         for i in range(max_episodes):
-            state = env.Reset()
+            (state, goal) = env.Reset()
             ep_reward = 0.0
 
-            state_buffer = np.zeros((max_episode_len, self.num_inputs))
-            action_buffer = np.zeros((max_episode_len, self.num_actions))
-            reward_buffer = np.zeros((max_episode_len))
+            state_buffer = []
+            action_buffer = []
+            reward_buffer = []
             terminal_buffer = []
-            next_state_buffer = np.zeros((max_episode_len, self.num_inputs))
+            next_state_buffer = []
 
             for j in range(max_episode_len):
                 # Added exploration noise.
                 action = self.actor.predict(
-                    np.expand_dims(np.expand_dims(state, axis=0),
-                                   axis=0))[0][0] + actor_noise()
+                    np.expand_dims(
+                        np.expand_dims(
+                            np.concatenate([state, goal], axis=-1), axis=0),
+                        axis=0))[0][0] + actor_noise()
 
-                (next_state, reward, terminal) = env.Step(action)
+                next_state = env.Step(state, action, goal)
+                terminal = env.Terminal(next_state, action, goal)
+                reward = 1 if terminal else -1
 
                 # Add to episode buffer.
-                state_buffer[j, :] = state
-                action_buffer[j, :] = action
-                reward_buffer[j] = reward
+                state_buffer.append(np.concatenate([state, goal], axis=-1))
+                action_buffer.append(action)
+                reward_buffer.append(reward)
                 terminal_buffer.append(terminal)
-                next_state_buffer[j, :] = next_state
+                next_state_buffer.append(
+                    np.concatenate([next_state, goal], axis=-1))
 
                 state = next_state
                 ep_reward += reward
 
             replay_buffer.add(state_buffer, action_buffer, reward_buffer,
                               terminal_buffer, next_state_buffer)
+
+            # Hindsight experience replay.
+            for j in range(max_episode_len):
+                goal = next_state_buffer[j][:self.num_inputs]
+                her_state_buffer = []
+                her_action_buffer = []
+                her_reward_buffer = []
+                her_terminal_buffer = []
+                her_next_state_buffer = []
+                for k in range(max_episode_len):
+                    # Simulate step with hindsight goal.
+                    state = state_buffer[k][:self.num_inputs]
+                    action = action_buffer[k]
+                    next_state = next_state_buffer[k][:self.num_inputs]
+                    terminal = env.Terminal(next_state, action, goal)
+                    reward = 1 if terminal else -1
+
+                    # Add to hindersight buffers.
+                    her_state_buffer.append(
+                        np.concatenate([state, goal], axis=-1))
+                    her_action_buffer.append(action)
+                    her_reward_buffer.append(reward)
+                    her_terminal_buffer.append(terminal)
+                    her_next_state_buffer.append(
+                        np.concatenate([next_state, goal], axis=-1))
+
+                replay_buffer.add(her_state_buffer, her_action_buffer,
+                                  her_reward_buffer, her_terminal_buffer,
+                                  her_next_state_buffer)
+
             predicted_q_values = self.critic.predict(
                 np.expand_dims(state_buffer, axis=0),
                 np.expand_dims(action_buffer, axis=0))
@@ -156,15 +198,19 @@ class DeepDeterministicPolicyGradients:
 
 class Environment:
 
-    def __init__(self, reset, step):
+    def __init__(self, reset, step, terminal):
         self.reset = reset
         self.step = step
+        self.terminal = terminal
 
     def Reset(self):
         return self.reset()
 
-    def Step(self, action):
-        return self.step(action)
+    def Step(self, state, action, goal):
+        return self.step(state, action, goal)
+
+    def Terminal(self, state, action, goal):
+        return self.terminal(state, action, goal)
 
 
 class ReplayBuffer:
