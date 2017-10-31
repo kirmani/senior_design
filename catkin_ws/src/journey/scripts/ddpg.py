@@ -151,7 +151,7 @@ class DeepDeterministicPolicyGradients:
             ep_ave_max_q = np.amax(predicted_q_values)
 
             if replay_buffer.size() >= self.minibatch_size:
-                print("Finished epoch. Training minibatch with %s trajectories"
+                print("Finished epoch. Training minibatch with %s trajectories."
                       % replay_buffer.size())
 
                 (s_batch, a_batch, r_batch, t_batch,
