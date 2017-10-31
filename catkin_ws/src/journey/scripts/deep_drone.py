@@ -70,8 +70,9 @@ class DeepDronePlanner:
         # Set up policy search network.
         self.num_inputs = 3
         self.num_actions = 4
-        self.ddpg = DeepDeterministicPolicyGradients(self.num_inputs,
-                                                     self.num_actions)
+        self.goal_dim = 3
+        self.ddpg = DeepDeterministicPolicyGradients(
+            self.num_inputs, self.num_actions, self.goal_dim)
 
         # Initialize policy with heuristic.
         # self._InitializePolicy()
@@ -143,12 +144,11 @@ class DeepDronePlanner:
             self.goal_pose.position.x, self.goal_pose.position.y,
             self.goal_pose.position.z
         ])
-        x = np.array(
+        state = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
-        state = goal - x
-        return state
+        return (state, goal)
 
-    def step(self, action):
+    def step(self, state, action, goal):
         vel_msg = Twist()
         vel_msg.linear.x = action[0]
         vel_msg.linear.y = action[1]
@@ -160,26 +160,16 @@ class DeepDronePlanner:
         self.rate.sleep()
 
         # Get next state.
-        goal = np.array([
-            self.goal_pose.position.x, self.goal_pose.position.y,
-            self.goal_pose.position.z
-        ])
-        x = np.array(
+        next_state = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
-        next_state = goal - x
+        return next_state
 
-        # Get reward.
-        distance = np.linalg.norm(next_state)
-        terminal = (distance < self.distance_threshold)
-        if terminal:
-            reward = 100
-        else:
-            reward = np.exp(-distance)
-
-        return next_state, reward, terminal
+    def terminal(self, state, action, goal):
+        distance = np.linalg.norm(state - goal)
+        return (distance < self.distance_threshold)
 
     def Train(self):
-        env = Environment(self.reset, self.step)
+        env = Environment(self.reset, self.step, self.terminal)
         actor_noise = OrnsteinUhlenbeckActionNoise(
             mu=np.zeros(self.num_actions))
         logdir = os.path.join(
@@ -188,8 +178,8 @@ class DeepDronePlanner:
             env,
             actor_noise,
             logdir=logdir,
-            max_episodes=50,
-            max_episode_len=30)
+            max_episodes=200,
+            max_episode_len=50)
 
 
 def main(args):
