@@ -25,7 +25,7 @@ class DeepDeterministicPolicyGradients:
                  num_inputs,
                  num_actions,
                  goal_dim,
-                 minibatch_size=64,
+                 minibatch_size=800,
                  gamma=0.99):
         self.num_inputs = num_inputs
         self.num_actions = num_actions
@@ -151,6 +151,9 @@ class DeepDeterministicPolicyGradients:
             ep_ave_max_q = np.amax(predicted_q_values)
 
             if replay_buffer.size() >= self.minibatch_size:
+                print("Finished epoch. Training minibatch with %s trajectories"
+                      % replay_buffer.size())
+
                 (s_batch, a_batch, r_batch, t_batch,
                  s2_batch) = replay_buffer.sample_batch(self.minibatch_size)
 
@@ -180,6 +183,9 @@ class DeepDeterministicPolicyGradients:
                 # Update target networks
                 self.actor.update_target_network()
                 self.critic.update_target_network()
+
+                # Clearing replay buffer.
+                replay_buffer.clear()
 
             # Write episode summary statistics.
             summary_str = self.sess.run(
