@@ -25,8 +25,8 @@ class DeepDeterministicPolicyGradients:
                  num_inputs,
                  num_actions,
                  goal_dim,
-                 minibatch_size=800,
-                 gamma=0.99):
+                 minibatch_size=128,
+                 gamma=0.98):
         self.num_inputs = num_inputs
         self.num_actions = num_actions
         self.goal_dim = goal_dim
@@ -60,7 +60,9 @@ class DeepDeterministicPolicyGradients:
               env,
               actor_noise,
               logdir='log',
-              max_episodes=1000,
+              optimization_steps=40,
+              num_epochs=200,
+              episodes_in_epoch=16,
               max_episode_len=50):
         # Set up summary Ops
         summary_ops, summary_vars = self.build_summaries()
@@ -80,80 +82,93 @@ class DeepDeterministicPolicyGradients:
         # Initialize replay memory
         replay_buffer = ReplayBuffer()
 
-        for i in range(max_episodes):
-            (state, goal) = env.Reset()
-            ep_reward = 0.0
+        for epoch in range(num_epochs):
+            total_epoch_reward = 0.0
+            total_epoch_avg_max_q = 0.0
+            for i in range(episodes_in_epoch):
+                (state, goal) = env.Reset()
+                episode_reward = 0.0
 
-            state_buffer = []
-            action_buffer = []
-            reward_buffer = []
-            terminal_buffer = []
-            next_state_buffer = []
+                state_buffer = []
+                action_buffer = []
+                reward_buffer = []
+                terminal_buffer = []
+                next_state_buffer = []
 
-            for j in range(max_episode_len):
-                # Added exploration noise.
-                action = self.actor.predict(
-                    np.expand_dims(
+                for j in range(max_episode_len):
+                    # Added exploration noise.
+                    action = self.actor.predict(
                         np.expand_dims(
-                            np.concatenate([state, goal], axis=-1), axis=0),
-                        axis=0))[0][0] + actor_noise()
+                            np.expand_dims(
+                                np.concatenate([state, goal], axis=-1), axis=0),
+                            axis=0))[0][0] + actor_noise()
 
-                next_state = env.Step(state, action, goal)
-                terminal = env.Terminal(next_state, action, goal)
-                reward = 1 if terminal else -1
-
-                # Add to episode buffer.
-                state_buffer.append(np.concatenate([state, goal], axis=-1))
-                action_buffer.append(action)
-                reward_buffer.append(reward)
-                terminal_buffer.append(terminal)
-                next_state_buffer.append(
-                    np.concatenate([next_state, goal], axis=-1))
-
-                state = next_state
-                ep_reward += reward
-
-            replay_buffer.add(state_buffer, action_buffer, reward_buffer,
-                              terminal_buffer, next_state_buffer)
-
-            # Hindsight experience replay.
-            for j in range(max_episode_len):
-                goal = next_state_buffer[j][:self.num_inputs]
-                her_state_buffer = []
-                her_action_buffer = []
-                her_reward_buffer = []
-                her_terminal_buffer = []
-                her_next_state_buffer = []
-                for k in range(max_episode_len):
-                    # Simulate step with hindsight goal.
-                    state = state_buffer[k][:self.num_inputs]
-                    action = action_buffer[k]
-                    next_state = next_state_buffer[k][:self.num_inputs]
+                    next_state = env.Step(state, action, goal)
                     terminal = env.Terminal(next_state, action, goal)
                     reward = 1 if terminal else -1
 
-                    # Add to hindersight buffers.
-                    her_state_buffer.append(
-                        np.concatenate([state, goal], axis=-1))
-                    her_action_buffer.append(action)
-                    her_reward_buffer.append(reward)
-                    her_terminal_buffer.append(terminal)
-                    her_next_state_buffer.append(
+                    # Add to episode buffer.
+                    state_buffer.append(np.concatenate([state, goal], axis=-1))
+                    action_buffer.append(action)
+                    reward_buffer.append(reward)
+                    terminal_buffer.append(terminal)
+                    next_state_buffer.append(
                         np.concatenate([next_state, goal], axis=-1))
 
-                replay_buffer.add(her_state_buffer, her_action_buffer,
-                                  her_reward_buffer, her_terminal_buffer,
-                                  her_next_state_buffer)
+                    state = next_state
+                    episode_reward += reward
 
-            predicted_q_values = self.critic.predict(
-                np.expand_dims(state_buffer, axis=0),
-                np.expand_dims(action_buffer, axis=0))
-            ep_ave_max_q = np.amax(predicted_q_values)
+                replay_buffer.add(state_buffer, action_buffer, reward_buffer,
+                                  terminal_buffer, next_state_buffer)
 
-            if replay_buffer.size() >= self.minibatch_size:
-                print("Finished epoch. Training minibatch with %s trajectories."
-                      % replay_buffer.size())
+                # Hindsight experience replay.
+                for j in range(max_episode_len):
+                    goal = next_state_buffer[j][:self.num_inputs]
+                    her_state_buffer = []
+                    her_action_buffer = []
+                    her_reward_buffer = []
+                    her_terminal_buffer = []
+                    her_next_state_buffer = []
+                    for k in range(max_episode_len):
+                        # Simulate step with hindsight goal.
+                        state = state_buffer[k][:self.num_inputs]
+                        action = action_buffer[k]
+                        next_state = next_state_buffer[k][:self.num_inputs]
+                        terminal = env.Terminal(next_state, action, goal)
+                        reward = 1 if terminal else -1
 
+                        # Add to hindersight buffers.
+                        her_state_buffer.append(
+                            np.concatenate([state, goal], axis=-1))
+                        her_action_buffer.append(action)
+                        her_reward_buffer.append(reward)
+                        her_terminal_buffer.append(terminal)
+                        her_next_state_buffer.append(
+                            np.concatenate([next_state, goal], axis=-1))
+
+                    replay_buffer.add(her_state_buffer, her_action_buffer,
+                                      her_reward_buffer, her_terminal_buffer,
+                                      her_next_state_buffer)
+
+                predicted_q_values = self.critic.predict(
+                    np.expand_dims(state_buffer, axis=0),
+                    np.expand_dims(action_buffer, axis=0))
+                episode_max_q = np.amax(predicted_q_values)
+                episode_avg_max_q = episode_max_q / max_episode_len
+                total_epoch_reward += episode_reward
+                total_epoch_avg_max_q += episode_avg_max_q
+                average_epoch_reward = total_epoch_reward / (i + 1)
+                average_epoch_avg_max_q = total_epoch_avg_max_q / (i + 1)
+
+                print('| Reward: {:4f} | Episode: {:d} | Qmax: {:.4f} |'.format(
+                    episode_reward, i, episode_avg_max_q))
+
+            print("Finished data collection for epoch %d." % epoch)
+            print("Training minibatch with %s trajectories." %
+                  replay_buffer.size())
+            print("Starting policy optimization.")
+            average_epoch_avg_max_q = 0.0
+            for optimization_step in range(optimization_steps):
                 (s_batch, a_batch, r_batch, t_batch,
                  s2_batch) = replay_buffer.sample_batch(self.minibatch_size)
 
@@ -174,6 +189,10 @@ class DeepDeterministicPolicyGradients:
                 predicted_q_value = self.critic.train(
                     s_batch, a_batch,
                     np.reshape(y_i, (self.minibatch_size, max_episode_len, 1)))
+                average_epoch_avg_max_q += np.amax(predicted_q_value)
+                print("[%d] Qmax: %.4f" %
+                      (optimization_step,
+                       average_epoch_avg_max_q / (optimization_step + 1)))
 
                 # Update the actor policy using the sampled gradient
                 a_outs = self.actor.predict(s_batch)
@@ -183,23 +202,20 @@ class DeepDeterministicPolicyGradients:
                 # Update target networks
                 self.actor.update_target_network()
                 self.critic.update_target_network()
-
-                # Clearing replay buffer.
-                replay_buffer.clear()
+            average_epoch_avg_max_q /= optimization_steps
+            print('| Reward: {:4f} | Epoch: {:d} | Qmax: {:4f} |'.format(
+                average_epoch_reward, epoch, average_epoch_avg_max_q))
 
             # Write episode summary statistics.
             summary_str = self.sess.run(
                 summary_ops,
                 feed_dict={
-                    summary_vars[0]: ep_reward,
-                    summary_vars[1]: ep_ave_max_q / float(j + 1)
+                    summary_vars[0]: average_epoch_reward,
+                    summary_vars[1]: average_epoch_avg_max_q
                 })
 
-            writer.add_summary(summary_str, i)
+            writer.add_summary(summary_str, epoch)
             writer.flush()
-
-            print('| Reward: {:4f} | Episode: {:d} | Qmax: {:.4f}'.format(
-                ep_reward, i, (ep_ave_max_q / float(j + 1))))
 
 
 class Environment:
@@ -262,7 +278,7 @@ class ReplayBuffer:
         return s_batch, a_batch, r_batch, t_batch, s2_batch
 
     def clear(self):
-        self.deque.clear()
+        self.buffer.clear()
         self.count = 0
 
 
@@ -272,7 +288,7 @@ class ActorNetwork:
                  sess,
                  num_inputs,
                  num_actions,
-                 tau=0.001,
+                 tau=0.05,
                  learning_rate=0.0001):
         self.sess = sess
         self.num_inputs = num_inputs
@@ -359,7 +375,7 @@ class CriticNetwork:
                  num_inputs,
                  num_actions,
                  num_actor_vars,
-                 tau=0.001,
+                 tau=0.05,
                  learning_rate=0.001):
         self.sess = sess
         self.num_inputs = num_inputs
