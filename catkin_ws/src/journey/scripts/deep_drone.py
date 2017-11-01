@@ -40,13 +40,12 @@ class DeepDronePlanner:
         rospy.init_node('deep_drone_planner', anonymous=True)
 
         # Inputs.
-        # TODO(kirmani): Query the depth image instead of the RGB image.
-        self.image_subscriber = rospy.Subscriber('/ardrone/front/image_raw',
-                                                 Image, self._OnNewImage)
+        self.depth_subscriber = rospy.Subscriber(
+            '/ardrone/front/depth/image_raw', Image, self._OnNewDepth)
         self.pose_subscriber = rospy.Subscriber('/ardrone/predictedPose',
                                                 filter_state, self._OnNewPose)
         self.pose = Pose()
-        self.image_msg = None
+        self.depth_msg = None
 
         # Actions.
         self.velocity_publisher = rospy.Publisher(
@@ -94,8 +93,8 @@ class DeepDronePlanner:
         self.pose.position.y = round(data.y, 4)
         self.pose.position.z = round(data.z, 4)
 
-    def _OnNewImage(self, image):
-        self.image_msg = image
+    def _OnNewDepth(self, depth):
+        self.depth_msg = depth
 
     def FlyToGoal(self, req):
         self.goal_pose.position.x = self.pose.position.x + req.x
