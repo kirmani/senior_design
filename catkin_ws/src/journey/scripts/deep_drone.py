@@ -70,8 +70,11 @@ class DeepDronePlanner:
         self.num_inputs = 3
         self.num_actions = 4
         self.goal_dim = 3
+        self.image_width = 640
+        self.image_height = 360
         self.ddpg = DeepDeterministicPolicyGradients(
-            self.num_inputs, self.num_actions, self.goal_dim)
+            self.num_inputs, self.image_width, self.image_height,
+            self.num_actions, self.goal_dim)
 
         # Initialize policy with heuristic.
         # self._InitializePolicy()
@@ -143,8 +146,10 @@ class DeepDronePlanner:
             self.goal_pose.position.x, self.goal_pose.position.y,
             self.goal_pose.position.z
         ])
-        state = np.array(
+        position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
+        depth = ros_numpy.numpify(self.depth_msg).flatten()
+        state = np.concatenate([position, depth], axis=-1)
         return (state, goal)
 
     def step(self, state, action, goal):
@@ -159,8 +164,10 @@ class DeepDronePlanner:
         self.rate.sleep()
 
         # Get next state.
-        next_state = np.array(
+        position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
+        depth = ros_numpy.numpify(self.depth_msg).flatten()
+        next_state = np.concatenate([position, depth], axis=-1)
         return next_state
 
     def reward(self, state, action, goal):

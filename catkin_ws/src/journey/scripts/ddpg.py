@@ -23,11 +23,15 @@ class DeepDeterministicPolicyGradients:
 
     def __init__(self,
                  num_inputs,
+                 image_width,
+                 image_height,
                  num_actions,
                  goal_dim,
                  minibatch_size=128,
                  gamma=0.98):
         self.num_inputs = num_inputs
+        self.image_width = image_width
+        self.image_height = image_height
         self.num_actions = num_actions
         self.goal_dim = goal_dim
         self.minibatch_size = minibatch_size
@@ -37,10 +41,12 @@ class DeepDeterministicPolicyGradients:
         self.sess = tf.Session()
 
         # Create actor network.
-        self.actor = ActorNetwork(self.sess, self.num_inputs + self.goal_dim,
-                                  self.num_actions)
-        self.critic = CriticNetwork(self.sess, self.num_inputs + self.goal_dim,
-                                    self.num_actions,
+        self.actor = ActorNetwork(self.sess, self.num_inputs, self.image_width,
+                                  self.image_height, self.num_actions,
+                                  self.goal_dim)
+        self.critic = CriticNetwork(self.sess, self.num_inputs,
+                                    self.image_width, self.image_height,
+                                    self.num_actions, self.goal_dim,
                                     self.actor.get_num_trainable_vars())
 
         self.sess.run(tf.global_variables_initializer())
@@ -287,11 +293,14 @@ class ActorNetwork:
     def __init__(self,
                  sess,
                  num_inputs,
+                 image_width,
+                 image_height,
                  num_actions,
+                 goal_dim,
                  tau=0.05,
                  learning_rate=0.0001):
         self.sess = sess
-        self.num_inputs = num_inputs
+        self.num_inputs = image_width * image_height + num_inputs + goal_dim
         self.num_actions = num_actions
 
         # Actor network.
@@ -373,12 +382,15 @@ class CriticNetwork:
     def __init__(self,
                  sess,
                  num_inputs,
+                 image_width,
+                 image_height,
                  num_actions,
+                 goal_dim,
                  num_actor_vars,
                  tau=0.05,
                  learning_rate=0.001):
         self.sess = sess
-        self.num_inputs = num_inputs
+        self.num_inputs = image_width * image_height + num_inputs + goal_dim
         self.num_actions = num_actions
 
         # Critic network.
