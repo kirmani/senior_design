@@ -28,7 +28,8 @@ class DeepDeterministicPolicyGradients:
                  num_actions,
                  goal_dim,
                  minibatch_size=128,
-                 gamma=0.98):
+                 gamma=0.98,
+                 use_hindsight=False):
         self.num_inputs = num_inputs
         self.image_width = image_width
         self.image_height = image_height
@@ -36,6 +37,7 @@ class DeepDeterministicPolicyGradients:
         self.goal_dim = goal_dim
         self.minibatch_size = minibatch_size
         self.gamma = gamma
+        self.use_hindsight = use_hindsight
 
         # Start tensorflow session.
         self.sess = tf.Session()
@@ -128,33 +130,35 @@ class DeepDeterministicPolicyGradients:
                                   terminal_buffer, next_state_buffer)
 
                 # Hindsight experience replay.
-                for j in range(max_episode_len):
-                    goal = next_state_buffer[j][:self.num_inputs]
-                    her_state_buffer = []
-                    her_action_buffer = []
-                    her_reward_buffer = []
-                    her_terminal_buffer = []
-                    her_next_state_buffer = []
-                    for k in range(max_episode_len):
-                        # Simulate step with hindsight goal.
-                        state = state_buffer[k][:-self.goal_dim]
-                        action = action_buffer[k]
-                        next_state = next_state_buffer[k][:-self.goal_dim]
-                        terminal = False
-                        reward = env.Reward(next_state, action, goal)
+                if self.use_hindsight:
+                    for j in range(max_episode_len):
+                        goal = next_state_buffer[j][:self.num_inputs]
+                        her_state_buffer = []
+                        her_action_buffer = []
+                        her_reward_buffer = []
+                        her_terminal_buffer = []
+                        her_next_state_buffer = []
+                        for k in range(max_episode_len):
+                            # Simulate step with hindsight goal.
+                            state = state_buffer[k][:-self.goal_dim]
+                            action = action_buffer[k]
+                            next_state = next_state_buffer[k][:-self.goal_dim]
+                            terminal = False
+                            reward = env.Reward(next_state, action, goal)
 
-                        # Add to hindersight buffers.
-                        her_state_buffer.append(
-                            np.concatenate([state, goal], axis=-1))
-                        her_action_buffer.append(action)
-                        her_reward_buffer.append(reward)
-                        her_terminal_buffer.append(terminal)
-                        her_next_state_buffer.append(
-                            np.concatenate([next_state, goal], axis=-1))
+                            # Add to hindersight buffers.
+                            her_state_buffer.append(
+                                np.concatenate([state, goal], axis=-1))
+                            her_action_buffer.append(action)
+                            her_reward_buffer.append(reward)
+                            her_terminal_buffer.append(terminal)
+                            her_next_state_buffer.append(
+                                np.concatenate([next_state, goal], axis=-1))
 
-                    replay_buffer.add(her_state_buffer, her_action_buffer,
-                                      her_reward_buffer, her_terminal_buffer,
-                                      her_next_state_buffer)
+                        replay_buffer.add(her_state_buffer, her_action_buffer,
+                                          her_reward_buffer,
+                                          her_terminal_buffer,
+                                          her_next_state_buffer)
 
                 predicted_q_values = self.critic.predict(
                     np.expand_dims(state_buffer, axis=0),
