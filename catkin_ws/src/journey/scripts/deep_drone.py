@@ -149,7 +149,7 @@ class DeepDronePlanner:
         position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         depth = ros_numpy.numpify(self.depth_msg).flatten()
-        state = np.concatenate([position, depth], axis=-1)
+        state = np.concatenate([depth, position], axis=-1)
         return (state, goal)
 
     def step(self, state, action, goal):
@@ -167,7 +167,7 @@ class DeepDronePlanner:
         position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         depth = ros_numpy.numpify(self.depth_msg).flatten()
-        next_state = np.concatenate([position, depth], axis=-1)
+        next_state = np.concatenate([depth, position], axis=-1)
         return next_state
 
     def reward(self, state, action, goal):

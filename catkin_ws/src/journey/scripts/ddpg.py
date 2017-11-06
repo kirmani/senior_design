@@ -340,9 +340,10 @@ class ActorNetwork:
 
     def create_actor_network(self, scope):
         inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
-        position = inputs[:, :, :self.state_dim]
-        depth = tf.reshape(inputs[:, :, self.state_dim:],
-                           [-1, self.image_height, self.image_width, 1])
+        position = inputs[:, :, (self.image_width * self.image_height):]
+        depth = tf.reshape(
+            inputs[:, :, :(self.image_width * self.image_height)],
+            [-1, self.image_height, self.image_width, 1])
         depth = tf.image.resize_images(depth, [84, 84])
         depth = tf.contrib.layers.conv2d(
             depth,
@@ -457,9 +458,10 @@ class CriticNetwork:
     def create_critic_network(self, scope):
         inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
         actions = tf.placeholder(tf.float32, (None, None, self.action_dim))
-        position = inputs[:, :, :self.state_dim]
-        depth = tf.reshape(inputs[:, :, self.state_dim:],
-                           [-1, self.image_height, self.image_width, 1])
+        position = inputs[:, :, (self.image_width * self.image_height):]
+        depth = tf.reshape(
+            inputs[:, :, :(self.image_width * self.image_height)],
+            [-1, self.image_height, self.image_width, 1])
         depth = tf.image.resize_images(depth, [84, 84])
         depth = tf.contrib.layers.conv2d(
             depth,
