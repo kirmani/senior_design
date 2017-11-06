@@ -137,9 +137,9 @@ class DeepDeterministicPolicyGradients:
                     her_next_state_buffer = []
                     for k in range(max_episode_len):
                         # Simulate step with hindsight goal.
-                        state = state_buffer[k][:self.num_inputs]
+                        state = state_buffer[k][:-self.goal_dim]
                         action = action_buffer[k]
-                        next_state = next_state_buffer[k][:self.num_inputs]
+                        next_state = next_state_buffer[k][:-self.goal_dim]
                         terminal = False
                         reward = env.Reward(next_state, action, goal)
 
@@ -340,11 +340,12 @@ class ActorNetwork:
 
     def create_actor_network(self, scope):
         inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
-        position = inputs[:, :, (self.image_width * self.image_height):]
+        position = tf.reshape(
+            inputs[:, :, (self.image_width * self.image_height):],
+            [-1, self.state_dim + self.goal_dim])
         depth = tf.reshape(
             inputs[:, :, :(self.image_width * self.image_height)],
             [-1, self.image_height, self.image_width, 1])
-        depth = tf.image.resize_images(depth, [84, 84])
         depth = tf.contrib.layers.conv2d(
             depth,
             num_outputs=16,
@@ -361,18 +362,11 @@ class ActorNetwork:
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.flatten(depth)
         depth = tf.contrib.layers.fully_connected(depth, 64)
-        depth = tf.reshape(depth,
-                           [tf.shape(position)[0],
-                            tf.shape(position)[1], 64])
         position = tf.contrib.layers.fully_connected(position, 64)
         x = tf.concat([position, depth], axis=-1)
-        cell = tf.contrib.rnn.LSTMCell(128)
-        lstm_outputs, state = tf.nn.dynamic_rnn(
-            cell, x, dtype=tf.float32, scope=scope)
+        x = tf.contrib.layers.fully_connected(position, 64)
         actions = tf.contrib.layers.fully_connected(
-            inputs=lstm_outputs,
-            num_outputs=self.action_dim,
-            activation_fn=tf.tanh)
+            inputs=x, num_outputs=self.action_dim, activation_fn=tf.tanh)
         return inputs, actions
 
     def train(self, inputs, a_gradient):
@@ -458,11 +452,12 @@ class CriticNetwork:
     def create_critic_network(self, scope):
         inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
         actions = tf.placeholder(tf.float32, (None, None, self.action_dim))
-        position = inputs[:, :, (self.image_width * self.image_height):]
+        position = tf.reshape(
+            inputs[:, :, (self.image_width * self.image_height):],
+            [-1, self.state_dim + self.goal_dim])
         depth = tf.reshape(
             inputs[:, :, :(self.image_width * self.image_height)],
             [-1, self.image_height, self.image_width, 1])
-        depth = tf.image.resize_images(depth, [84, 84])
         depth = tf.contrib.layers.conv2d(
             depth,
             num_outputs=16,
@@ -479,17 +474,13 @@ class CriticNetwork:
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.flatten(depth)
         depth = tf.contrib.layers.fully_connected(depth, 64)
-        depth = tf.reshape(depth,
-                           [tf.shape(position)[0],
-                            tf.shape(position)[1], 64])
-        position = tf.contrib.layers.fully_connected(
-            tf.concat([position, actions], axis=-1), 64)
-        x = tf.concat([position, depth], axis=-1)
-        cell = tf.contrib.rnn.LSTMCell(128)
-        lstm_outputs, state = tf.nn.dynamic_rnn(
-            cell, x, dtype=tf.float32, scope=scope)
+        position = tf.contrib.layers.fully_connected(position, 64)
+        act = tf.reshape(actions, [-1, self.action_dim])
+        act = tf.contrib.layers.fully_connected(act, 64)
+        x = tf.concat([position, depth, act], axis=-1)
+        x = tf.contrib.layers.fully_connected(x, 64)
         out = tf.contrib.layers.fully_connected(
-            inputs=lstm_outputs, num_outputs=1, activation_fn=None)
+            inputs=x, num_outputs=1, activation_fn=None)
         return inputs, actions, out
 
     def train(self, inputs, actions, reward):

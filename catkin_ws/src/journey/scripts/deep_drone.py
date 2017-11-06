@@ -12,6 +12,7 @@ import argparse
 import numpy as np
 import rospy
 import ros_numpy
+import scipy
 import os
 import sys
 import traceback
@@ -70,8 +71,8 @@ class DeepDronePlanner:
         self.num_inputs = 3
         self.num_actions = 4
         self.goal_dim = 3
-        self.image_width = 640
-        self.image_height = 360
+        self.image_width = 84
+        self.image_height = 84
         self.ddpg = DeepDeterministicPolicyGradients(
             self.num_inputs, self.image_width, self.image_height,
             self.num_actions, self.goal_dim)
@@ -148,7 +149,9 @@ class DeepDronePlanner:
         ])
         position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
-        depth = ros_numpy.numpify(self.depth_msg).flatten()
+        depth = scipy.misc.imresize(
+            ros_numpy.numpify(self.depth_msg),
+            [self.image_height, self.image_width]).flatten()
         state = np.concatenate([depth, position], axis=-1)
         return (state, goal)
 
@@ -166,7 +169,9 @@ class DeepDronePlanner:
         # Get next state.
         position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
-        depth = ros_numpy.numpify(self.depth_msg).flatten()
+        depth = scipy.misc.imresize(
+            ros_numpy.numpify(self.depth_msg),
+            [self.image_height, self.image_width]).flatten()
         next_state = np.concatenate([depth, position], axis=-1)
         return next_state
 
