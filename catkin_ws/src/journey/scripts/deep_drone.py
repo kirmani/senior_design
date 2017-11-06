@@ -12,6 +12,7 @@ import argparse
 import numpy as np
 import rospy
 import ros_numpy
+import scipy
 import os
 import sys
 import traceback
@@ -70,8 +71,11 @@ class DeepDronePlanner:
         self.num_inputs = 3
         self.num_actions = 4
         self.goal_dim = 3
+        self.image_width = 84
+        self.image_height = 84
         self.ddpg = DeepDeterministicPolicyGradients(
-            self.num_inputs, self.num_actions, self.goal_dim)
+            self.num_inputs, self.image_width, self.image_height,
+            self.num_actions, self.goal_dim)
 
         # Initialize policy with heuristic.
         # self._InitializePolicy()
@@ -143,8 +147,12 @@ class DeepDronePlanner:
             self.goal_pose.position.x, self.goal_pose.position.y,
             self.goal_pose.position.z
         ])
-        state = np.array(
+        position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
+        depth = scipy.misc.imresize(
+            ros_numpy.numpify(self.depth_msg),
+            [self.image_height, self.image_width]).flatten()
+        state = np.concatenate([depth, position], axis=-1)
         return (state, goal)
 
     def step(self, state, action, goal):
@@ -159,12 +167,17 @@ class DeepDronePlanner:
         self.rate.sleep()
 
         # Get next state.
-        next_state = np.array(
+        position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
+        depth = scipy.misc.imresize(
+            ros_numpy.numpify(self.depth_msg),
+            [self.image_height, self.image_width]).flatten()
+        next_state = np.concatenate([depth, position], axis=-1)
         return next_state
 
     def reward(self, state, action, goal):
-        distance = np.linalg.norm(state - goal)
+        position = state[(self.image_width * self.image_height):]
+        distance = np.linalg.norm(position - goal)
         terminal = (distance < self.distance_threshold)
         reward = 1 if terminal else -1
         return reward
