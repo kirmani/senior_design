@@ -171,7 +171,8 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action, goal):
-        distance = np.linalg.norm(state - goal)
+        position = state[:3]
+        distance = np.linalg.norm(position - goal)
         terminal = (distance < self.distance_threshold)
         reward = 1 if terminal else -1
         return reward
