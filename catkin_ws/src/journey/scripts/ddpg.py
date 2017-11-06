@@ -179,15 +179,16 @@ class DeepDeterministicPolicyGradients:
             print("Starting policy optimization.")
             average_epoch_avg_max_q = 0.0
             for optimization_step in range(optimization_steps):
+                batch_size = min(self.minibatch_size, replay_buffer.size())
                 (s_batch, a_batch, r_batch, t_batch,
-                 s2_batch) = replay_buffer.sample_batch(self.minibatch_size)
+                 s2_batch) = replay_buffer.sample_batch(batch_size)
 
                 # Calculate targets
                 target_q = self.critic.predict_target(
                     s2_batch, self.actor.predict_target(s2_batch))
 
                 y_i = []
-                for k in range(self.minibatch_size):
+                for k in range(batch_size):
                     for l in range(max_episode_len):
                         if t_batch[k][l]:
                             y_i.append(r_batch[k][l])
@@ -198,7 +199,7 @@ class DeepDeterministicPolicyGradients:
                 # Update the critic given the targets
                 predicted_q_value = self.critic.train(
                     s_batch, a_batch,
-                    np.reshape(y_i, (self.minibatch_size, max_episode_len, 1)))
+                    np.reshape(y_i, (batch_size, max_episode_len, 1)))
                 average_epoch_avg_max_q += np.amax(predicted_q_value)
                 print("[%d] Qmax: %.4f" %
                       (optimization_step,
