@@ -104,8 +104,8 @@ class DeepDeterministicPolicyGradients:
                             axis=0))[0][0] + actor_noise()
 
                     next_state = env.Step(state, action, goal)
-                    terminal = env.Terminal(next_state, action, goal)
-                    reward = 1 if terminal else -1
+                    terminal = False
+                    reward = env.Reward(next_state, action, goal)
 
                     # Add to episode buffer.
                     state_buffer.append(np.concatenate([state, goal], axis=-1))
@@ -134,8 +134,8 @@ class DeepDeterministicPolicyGradients:
                         state = state_buffer[k][:self.num_inputs]
                         action = action_buffer[k]
                         next_state = next_state_buffer[k][:self.num_inputs]
-                        terminal = env.Terminal(next_state, action, goal)
-                        reward = 1 if terminal else -1
+                        terminal = False
+                        reward = env.Reward(next_state, action, goal)
 
                         # Add to hindersight buffers.
                         her_state_buffer.append(
@@ -220,10 +220,10 @@ class DeepDeterministicPolicyGradients:
 
 class Environment:
 
-    def __init__(self, reset, step, terminal):
+    def __init__(self, reset, step, reward):
         self.reset = reset
         self.step = step
-        self.terminal = terminal
+        self.reward = reward
 
     def Reset(self):
         return self.reset()
@@ -231,8 +231,8 @@ class Environment:
     def Step(self, state, action, goal):
         return self.step(state, action, goal)
 
-    def Terminal(self, state, action, goal):
-        return self.terminal(state, action, goal)
+    def Reward(self, state, action, goal):
+        return self.reward(state, action, goal)
 
 
 class ReplayBuffer:

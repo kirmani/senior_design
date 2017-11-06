@@ -163,12 +163,14 @@ class DeepDronePlanner:
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         return next_state
 
-    def terminal(self, state, action, goal):
+    def reward(self, state, action, goal):
         distance = np.linalg.norm(state - goal)
-        return (distance < self.distance_threshold)
+        terminal = (distance < self.distance_threshold)
+        reward = 1 if terminal else -1
+        return reward
 
     def Train(self):
-        env = Environment(self.reset, self.step, self.terminal)
+        env = Environment(self.reset, self.step, self.reward)
         actor_noise = OrnsteinUhlenbeckActionNoise(
             mu=np.zeros(self.num_actions))
         logdir = os.path.join(
