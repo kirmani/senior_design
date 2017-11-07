@@ -23,6 +23,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Empty as EmptyMessage
 from std_msgs.msg import String
 from std_srvs.srv import Empty as EmptyService
+from visualization_msgs.msg import Marker
 from tum_ardrone.msg import filter_state
 from journey.srv import FlyToGoal
 from journey.srv import FlyToGoalResponse
@@ -39,6 +40,53 @@ class DeepDronePlanner:
 
         # Initialize our ROS node.
         rospy.init_node('deep_drone_planner', anonymous=True)
+
+        # Initialize visualization markers.
+        self.drone_marker = Marker()
+        self.drone_marker.header.frame_id = "map"
+        self.drone_marker.header.stamp = rospy.get_rostime()
+        self.drone_marker.ns = "drone"
+        self.drone_marker.id = 1
+        self.drone_marker.type = Marker.SPHERE
+        self.drone_marker.action = Marker.ADD
+        self.drone_marker.pose.position.x = 0
+        self.drone_marker.pose.position.y = 0
+        self.drone_marker.pose.position.z = 0
+        self.drone_marker.pose.orientation.x = 0
+        self.drone_marker.pose.orientation.y = 0
+        self.drone_marker.pose.orientation.z = 0
+        self.drone_marker.pose.orientation.w = 0
+        self.drone_marker.scale.x = 0.5
+        self.drone_marker.scale.y = 0.5
+        self.drone_marker.scale.z = 0.5
+        self.drone_marker.color.r = 0
+        self.drone_marker.color.g = 1
+        self.drone_marker.color.b = 0
+        self.drone_marker.color.a = 1
+        self.drone_marker.lifetime = rospy.Duration(0)
+
+        self.goal_marker = Marker()
+        self.goal_marker.header.frame_id = "map"
+        self.goal_marker.header.stamp = rospy.get_rostime()
+        self.goal_marker.ns = "goal"
+        self.goal_marker.id = 0
+        self.goal_marker.type = Marker.SPHERE
+        self.goal_marker.action = Marker.ADD
+        self.goal_marker.pose.position.x = 2
+        self.goal_marker.pose.position.y = 0
+        self.goal_marker.pose.position.z = 0
+        self.goal_marker.pose.orientation.x = 0
+        self.goal_marker.pose.orientation.y = 0
+        self.goal_marker.pose.orientation.z = 0
+        self.goal_marker.pose.orientation.w = 0
+        self.goal_marker.scale.x = self.distance_threshold
+        self.goal_marker.scale.y = self.distance_threshold
+        self.goal_marker.scale.z = self.distance_threshold
+        self.goal_marker.color.r = 1
+        self.goal_marker.color.g = 0
+        self.goal_marker.color.b = 0
+        self.goal_marker.color.a = 1
+        self.goal_marker.lifetime = rospy.Duration(0)
 
         # Inputs.
         self.depth_subscriber = rospy.Subscriber(
@@ -58,6 +106,9 @@ class DeepDronePlanner:
         self.com_publisher = rospy.Publisher(
             '/tum_ardrone/com', String, queue_size=10)
 
+        # Visualization topics.
+        self.marker_publisher = rospy.Publisher(
+            'visualization_marker', Marker, queue_size=10)
         # Listen for new goal when planning at test time.
         s = rospy.Service('fly_to_goal', FlyToGoal, self.FlyToGoal)
 
@@ -66,6 +117,10 @@ class DeepDronePlanner:
 
         # Initialize goal.
         self.goal_pose = Pose()
+
+        # Initialize visualization.
+        self.marker_publisher.publish(self.drone_marker)
+        self.marker_publisher.publish(self.goal_marker)
 
         # Set up policy search network.
         self.num_inputs = 3
@@ -96,6 +151,11 @@ class DeepDronePlanner:
         self.pose.position.x = round(data.x, 4)
         self.pose.position.y = round(data.y, 4)
         self.pose.position.z = round(data.z, 4)
+        self.drone_marker.pose.position.x = self.pose.position.x
+        self.drone_marker.pose.position.y = self.pose.position.y
+        self.drone_marker.pose.position.z = self.pose.position.z
+        self.drone_marker.action = Marker.MODIFY
+        self.marker_publisher.publish(self.drone_marker)
 
     def _OnNewDepth(self, depth):
         self.depth_msg = depth
@@ -138,11 +198,16 @@ class DeepDronePlanner:
         bounds = 2
         xy = (np.random.uniform(size=(2)) - 0.5) * (2 * bounds)
         new_goal = np.array([xy[0], xy[1], 0])
-        # new_goal = [-2, 2, 1]
+        # new_goal = [-2, 0, 0]
         # print("New goal: %s" % new_goal)
         self.goal_pose.position.x = new_goal[0]
         self.goal_pose.position.y = new_goal[1]
         self.goal_pose.position.z = new_goal[2]
+        self.goal_marker.pose.position.x = self.goal_pose.position.x
+        self.goal_marker.pose.position.y = self.goal_pose.position.y
+        self.goal_marker.pose.position.z = self.goal_pose.position.z
+        self.goal_marker.action = Marker.MODIFY
+        self.marker_publisher.publish(self.goal_marker)
         goal = np.array([
             self.goal_pose.position.x, self.goal_pose.position.y,
             self.goal_pose.position.z
