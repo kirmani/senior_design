@@ -23,24 +23,32 @@ class DeepDeterministicPolicyGradients:
 
     def __init__(self,
                  num_inputs,
+                 image_width,
+                 image_height,
                  num_actions,
                  goal_dim,
                  minibatch_size=128,
-                 gamma=0.98):
+                 gamma=0.98,
+                 use_hindsight=False):
         self.num_inputs = num_inputs
+        self.image_width = image_width
+        self.image_height = image_height
         self.num_actions = num_actions
         self.goal_dim = goal_dim
         self.minibatch_size = minibatch_size
         self.gamma = gamma
+        self.use_hindsight = use_hindsight
 
         # Start tensorflow session.
         self.sess = tf.Session()
 
         # Create actor network.
-        self.actor = ActorNetwork(self.sess, self.num_inputs + self.goal_dim,
-                                  self.num_actions)
-        self.critic = CriticNetwork(self.sess, self.num_inputs + self.goal_dim,
-                                    self.num_actions,
+        self.actor = ActorNetwork(self.sess, self.num_inputs, self.image_width,
+                                  self.image_height, self.num_actions,
+                                  self.goal_dim)
+        self.critic = CriticNetwork(self.sess, self.num_inputs,
+                                    self.image_width, self.image_height,
+                                    self.num_actions, self.goal_dim,
                                     self.actor.get_num_trainable_vars())
 
         self.sess.run(tf.global_variables_initializer())
@@ -122,33 +130,35 @@ class DeepDeterministicPolicyGradients:
                                   terminal_buffer, next_state_buffer)
 
                 # Hindsight experience replay.
-                for j in range(max_episode_len):
-                    goal = next_state_buffer[j][:self.num_inputs]
-                    her_state_buffer = []
-                    her_action_buffer = []
-                    her_reward_buffer = []
-                    her_terminal_buffer = []
-                    her_next_state_buffer = []
-                    for k in range(max_episode_len):
-                        # Simulate step with hindsight goal.
-                        state = state_buffer[k][:self.num_inputs]
-                        action = action_buffer[k]
-                        next_state = next_state_buffer[k][:self.num_inputs]
-                        terminal = False
-                        reward = env.Reward(next_state, action, goal)
+                if self.use_hindsight:
+                    for j in range(max_episode_len):
+                        goal = next_state_buffer[j][:self.num_inputs]
+                        her_state_buffer = []
+                        her_action_buffer = []
+                        her_reward_buffer = []
+                        her_terminal_buffer = []
+                        her_next_state_buffer = []
+                        for k in range(max_episode_len):
+                            # Simulate step with hindsight goal.
+                            state = state_buffer[k][:-self.goal_dim]
+                            action = action_buffer[k]
+                            next_state = next_state_buffer[k][:-self.goal_dim]
+                            terminal = False
+                            reward = env.Reward(next_state, action, goal)
 
-                        # Add to hindersight buffers.
-                        her_state_buffer.append(
-                            np.concatenate([state, goal], axis=-1))
-                        her_action_buffer.append(action)
-                        her_reward_buffer.append(reward)
-                        her_terminal_buffer.append(terminal)
-                        her_next_state_buffer.append(
-                            np.concatenate([next_state, goal], axis=-1))
+                            # Add to hindersight buffers.
+                            her_state_buffer.append(
+                                np.concatenate([state, goal], axis=-1))
+                            her_action_buffer.append(action)
+                            her_reward_buffer.append(reward)
+                            her_terminal_buffer.append(terminal)
+                            her_next_state_buffer.append(
+                                np.concatenate([next_state, goal], axis=-1))
 
-                    replay_buffer.add(her_state_buffer, her_action_buffer,
-                                      her_reward_buffer, her_terminal_buffer,
-                                      her_next_state_buffer)
+                        replay_buffer.add(her_state_buffer, her_action_buffer,
+                                          her_reward_buffer,
+                                          her_terminal_buffer,
+                                          her_next_state_buffer)
 
                 predicted_q_values = self.critic.predict(
                     np.expand_dims(state_buffer, axis=0),
@@ -169,15 +179,16 @@ class DeepDeterministicPolicyGradients:
             print("Starting policy optimization.")
             average_epoch_avg_max_q = 0.0
             for optimization_step in range(optimization_steps):
+                batch_size = min(self.minibatch_size, replay_buffer.size())
                 (s_batch, a_batch, r_batch, t_batch,
-                 s2_batch) = replay_buffer.sample_batch(self.minibatch_size)
+                 s2_batch) = replay_buffer.sample_batch(batch_size)
 
                 # Calculate targets
                 target_q = self.critic.predict_target(
                     s2_batch, self.actor.predict_target(s2_batch))
 
                 y_i = []
-                for k in range(self.minibatch_size):
+                for k in range(batch_size):
                     for l in range(max_episode_len):
                         if t_batch[k][l]:
                             y_i.append(r_batch[k][l])
@@ -188,7 +199,7 @@ class DeepDeterministicPolicyGradients:
                 # Update the critic given the targets
                 predicted_q_value = self.critic.train(
                     s_batch, a_batch,
-                    np.reshape(y_i, (self.minibatch_size, max_episode_len, 1)))
+                    np.reshape(y_i, (batch_size, max_episode_len, 1)))
                 average_epoch_avg_max_q += np.amax(predicted_q_value)
                 print("[%d] Qmax: %.4f" %
                       (optimization_step,
@@ -286,13 +297,21 @@ class ActorNetwork:
 
     def __init__(self,
                  sess,
-                 num_inputs,
-                 num_actions,
+                 state_dim,
+                 image_width,
+                 image_height,
+                 action_dim,
+                 goal_dim,
                  tau=0.05,
                  learning_rate=0.0001):
         self.sess = sess
-        self.num_inputs = num_inputs
-        self.num_actions = num_actions
+        self.state_dim = state_dim
+        self.image_width = image_width
+        self.image_height = image_height
+        self.action_dim = action_dim
+        self.goal_dim = goal_dim
+        self.num_inputs = (self.image_width * self.image_height + self.state_dim
+                           + self.goal_dim)
 
         # Actor network.
         self.inputs, self.actions = self.create_actor_network("actor_source")
@@ -311,7 +330,7 @@ class ActorNetwork:
 
         # This gradient will be provided by the critic network
         self.action_gradient = tf.placeholder(tf.float32,
-                                              [None, None, num_actions])
+                                              [None, None, self.action_dim])
 
         # Combine the gradients here
         self.actor_gradients = tf.gradients(self.actions, network_params,
@@ -326,20 +345,33 @@ class ActorNetwork:
 
     def create_actor_network(self, scope):
         inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
-        x = tf.contrib.layers.fully_connected(inputs, 256, activation_fn=None)
-        x = tf.layers.batch_normalization(x)
-        x = tf.nn.relu(x)
-        x = tf.contrib.layers.fully_connected(x, 128, activation_fn=None)
-        x = tf.layers.batch_normalization(x)
-        x = tf.nn.relu(x)
-        cell = tf.contrib.rnn.LSTMCell(128)
-        lstm_outputs, state = tf.nn.dynamic_rnn(
-            cell, x, dtype=tf.float32, scope=scope)
-        lstm_outputs = tf.reshape(lstm_outputs, [-1, cell.output_size])
+        position = tf.reshape(
+            inputs[:, :, (self.image_width * self.image_height):],
+            [-1, self.state_dim + self.goal_dim])
+        depth = tf.reshape(
+            inputs[:, :, :(self.image_width * self.image_height)],
+            [-1, self.image_height, self.image_width, 1])
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=16,
+            activation_fn=tf.nn.relu,
+            kernel_size=(8, 8),
+            stride=(4, 4),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=32,
+            activation_fn=tf.nn.relu,
+            kernel_size=(5, 5),
+            stride=(2, 2),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.flatten(depth)
+        depth = tf.contrib.layers.fully_connected(depth, 64)
+        position = tf.contrib.layers.fully_connected(position, 64)
+        x = tf.concat([position, depth], axis=-1)
+        x = tf.contrib.layers.fully_connected(position, 64)
         actions = tf.contrib.layers.fully_connected(
-            inputs=lstm_outputs,
-            num_outputs=self.num_actions,
-            activation_fn=tf.tanh)
+            inputs=x, num_outputs=self.action_dim, activation_fn=tf.tanh)
         return inputs, actions
 
     def train(self, inputs, a_gradient):
@@ -351,14 +383,14 @@ class ActorNetwork:
     def predict(self, inputs):
         preds = self.sess.run(self.actions, feed_dict={self.inputs: inputs})
         preds = np.reshape(preds,
-                           [inputs.shape[0], inputs.shape[1], self.num_actions])
+                           [inputs.shape[0], inputs.shape[1], self.action_dim])
         return preds
 
     def predict_target(self, inputs):
         preds = self.sess.run(
             self.target_actions, feed_dict={self.target_inputs: inputs})
         preds = np.reshape(preds,
-                           [inputs.shape[0], inputs.shape[1], self.num_actions])
+                           [inputs.shape[0], inputs.shape[1], self.action_dim])
         return preds
 
     def update_target_network(self):
@@ -372,14 +404,22 @@ class CriticNetwork:
 
     def __init__(self,
                  sess,
-                 num_inputs,
-                 num_actions,
+                 state_dim,
+                 image_width,
+                 image_height,
+                 action_dim,
+                 goal_dim,
                  num_actor_vars,
                  tau=0.05,
                  learning_rate=0.001):
         self.sess = sess
-        self.num_inputs = num_inputs
-        self.num_actions = num_actions
+        self.state_dim = state_dim
+        self.image_width = image_width
+        self.image_height = image_height
+        self.action_dim = action_dim
+        self.goal_dim = goal_dim
+        self.num_inputs = (self.image_width * self.image_height + self.state_dim
+                           + self.goal_dim)
 
         # Critic network.
         (self.inputs, self.actions,
@@ -416,18 +456,36 @@ class CriticNetwork:
 
     def create_critic_network(self, scope):
         inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
-        actions = tf.placeholder(tf.float32, (None, None, self.num_actions))
-        x = tf.contrib.layers.fully_connected(inputs, 256, activation_fn=None)
-        x = tf.layers.batch_normalization(x)
-        x = tf.nn.relu(x)
-        x = tf.concat([x, actions], axis=-1)
-        x = tf.contrib.layers.fully_connected(x, 128)
-        cell = tf.contrib.rnn.LSTMCell(128)
-        lstm_outputs, state = tf.nn.dynamic_rnn(
-            cell, x, dtype=tf.float32, scope=scope)
-        lstm_outputs = tf.reshape(lstm_outputs, [-1, cell.output_size])
+        actions = tf.placeholder(tf.float32, (None, None, self.action_dim))
+        position = tf.reshape(
+            inputs[:, :, (self.image_width * self.image_height):],
+            [-1, self.state_dim + self.goal_dim])
+        depth = tf.reshape(
+            inputs[:, :, :(self.image_width * self.image_height)],
+            [-1, self.image_height, self.image_width, 1])
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=16,
+            activation_fn=tf.nn.relu,
+            kernel_size=(8, 8),
+            stride=(4, 4),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=32,
+            activation_fn=tf.nn.relu,
+            kernel_size=(5, 5),
+            stride=(2, 2),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.flatten(depth)
+        depth = tf.contrib.layers.fully_connected(depth, 64)
+        position = tf.contrib.layers.fully_connected(position, 64)
+        act = tf.reshape(actions, [-1, self.action_dim])
+        act = tf.contrib.layers.fully_connected(act, 64)
+        x = tf.concat([position, depth, act], axis=-1)
+        x = tf.contrib.layers.fully_connected(x, 64)
         out = tf.contrib.layers.fully_connected(
-            inputs=lstm_outputs, num_outputs=1, activation_fn=None)
+            inputs=x, num_outputs=1, activation_fn=None)
         return inputs, actions, out
 
     def train(self, inputs, actions, reward):
