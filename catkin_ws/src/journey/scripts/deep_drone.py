@@ -195,10 +195,10 @@ class DeepDronePlanner:
         # Take-off.
         self.takeoff_publisher.publish(EmptyMessage())
 
-        bounds = 2
-        xy = (np.random.uniform(size=(2)) - 0.5) * (2 * bounds)
-        new_goal = np.array([xy[0], xy[1], 0])
-        # new_goal = [-2, 0, 0]
+        # bounds = 2
+        # xy = (np.random.uniform(size=(2)) - 0.5) * (2 * bounds)
+        # new_goal = np.array([xy[0], xy[1], 0])
+        new_goal = [0, 4, 0]
         # print("New goal: %s" % new_goal)
         self.goal_pose.position.x = new_goal[0]
         self.goal_pose.position.y = new_goal[1]
@@ -243,9 +243,10 @@ class DeepDronePlanner:
     def reward(self, state, action, goal):
         position = state[(self.image_width * self.image_height):]
         distance = np.linalg.norm(position - goal)
-        terminal = (distance < self.distance_threshold)
-        reward = 1 if terminal else -1
-        return reward
+        return -distance
+        # terminal = (distance < self.distance_threshold)
+        # reward = 1 if terminal else -1
+        # return reward
 
     def Train(self):
         env = Environment(self.reset, self.step, self.reward)
