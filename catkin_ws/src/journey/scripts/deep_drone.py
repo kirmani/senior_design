@@ -109,9 +109,6 @@ class DeepDronePlanner:
         # Visualization topics.
         self.marker_publisher = rospy.Publisher(
             'visualization_marker', Marker, queue_size=10)
-        self.marker_publisher.publish(self.drone_marker)
-        self.marker_publisher.publish(self.goal_marker)
-
         # Listen for new goal when planning at test time.
         s = rospy.Service('fly_to_goal', FlyToGoal, self.FlyToGoal)
 
@@ -120,6 +117,10 @@ class DeepDronePlanner:
 
         # Initialize goal.
         self.goal_pose = Pose()
+
+        # Initialize visualization.
+        self.marker_publisher.publish(self.drone_marker)
+        self.marker_publisher.publish(self.goal_marker)
 
         # Set up policy search network.
         self.num_inputs = 3
