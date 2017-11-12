@@ -63,6 +63,24 @@ class DeepDeterministicPolicyGradients:
 
         return summary_ops, summary_vars
 
+    def RunModel(self, env, actor_noise, model_dir, num_attempts=1, max_episode_len=50):
+        saver = tf.train.Saver()
+        saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
+
+        for i in range(num_attempts):
+            (state, goal) = env.Reset()
+            for j in range(max_episode_len):
+                # Added exploration noise.
+                action = self.actor.predict(
+                    np.expand_dims(
+                        np.expand_dims(
+                            np.concatenate([state, goal], axis=-1), axis=0),
+                        axis=0))[0][0] + actor_noise()
+
+                next_state = env.Step(state, action, goal)
+                state = next_state
+
+
     def Train(self,
               env,
               actor_noise,

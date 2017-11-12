@@ -248,6 +248,14 @@ class DeepDronePlanner:
         # reward = 1 if terminal else -1
         # return reward
 
+    def RunModel(self, model_name, num_attempts):
+        env = Environment(self.reset, self.step, self.reward)
+        actor_noise = OrnsteinUhlenbeckActionNoise(
+            mu=np.zeros(self.num_actions))
+        modeldir = os.path.join(
+            os.path.dirname(__file__), '../../../learning/deep_drone/' + model_name)
+        self.ddpg.RunModel(env, actor_noise, modeldir, num_attempts=num_attempts)
+
     def Train(self):
         env = Environment(self.reset, self.step, self.reward)
         actor_noise = OrnsteinUhlenbeckActionNoise(
@@ -259,7 +267,13 @@ class DeepDronePlanner:
 
 def main(args):
     deep_drone_planner = DeepDronePlanner()
-    deep_drone_planner.Train()
+    if args.model:
+        attempts = 1
+        if args.num_attempts:
+            attempts = int(args.num_attempts)
+        deep_drone_planner.RunModel(args.model, num_attempts=attempts)
+    else:
+        deep_drone_planner.Train()
 
 
 if __name__ == '__main__':
@@ -272,6 +286,16 @@ if __name__ == '__main__':
             action='store_true',
             default=False,
             help='verbose output')
+        parser.add_argument(
+            '-m',
+            '--model',
+            action='store',
+            help='run specific model')
+        parser.add_argument(
+            '-n',
+            '--num_attempts',
+            action='store',
+            help='number of attempts to run model for')
         args = parser.parse_args()
         #if len(args) < 1:
         #    parser.error ('missing argument')
