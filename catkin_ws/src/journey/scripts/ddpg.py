@@ -51,7 +51,6 @@ class DeepDeterministicPolicyGradients:
                                     self.num_actions, self.goal_dim,
                                     self.actor.get_num_trainable_vars())
 
-        self.sess.run(tf.global_variables_initializer())
 
     def build_summaries(self):
         episode_reward = tf.Variable(0.)
@@ -83,6 +82,7 @@ class DeepDeterministicPolicyGradients:
                 break
         writer = tf.summary.FileWriter(summary_dir, self.sess.graph)
 
+        self.sess.run(tf.global_variables_initializer())
         # Initialize target network weights
         self.actor.update_target_network()
         self.critic.update_target_network()
