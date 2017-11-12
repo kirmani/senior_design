@@ -51,7 +51,6 @@ class DeepDeterministicPolicyGradients:
                                     self.num_actions, self.goal_dim,
                                     self.actor.get_num_trainable_vars())
 
-        self.sess.run(tf.global_variables_initializer())
 
     def build_summaries(self):
         episode_reward = tf.Variable(0.)
@@ -63,6 +62,24 @@ class DeepDeterministicPolicyGradients:
         summary_ops = tf.summary.merge_all()
 
         return summary_ops, summary_vars
+
+    def RunModel(self, env, actor_noise, model_dir, num_attempts=1, max_episode_len=50):
+        saver = tf.train.Saver()
+        saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
+
+        for i in range(num_attempts):
+            (state, goal) = env.Reset()
+            for j in range(max_episode_len):
+                # Added exploration noise.
+                action = self.actor.predict(
+                    np.expand_dims(
+                        np.expand_dims(
+                            np.concatenate([state, goal], axis=-1), axis=0),
+                        axis=0))[0][0] + actor_noise()
+
+                next_state = env.Step(state, action, goal)
+                state = next_state
+
 
     def Train(self,
               env,
@@ -83,12 +100,16 @@ class DeepDeterministicPolicyGradients:
                 break
         writer = tf.summary.FileWriter(summary_dir, self.sess.graph)
 
+        self.sess.run(tf.global_variables_initializer())
         # Initialize target network weights
         self.actor.update_target_network()
         self.critic.update_target_network()
 
         # Initialize replay memory
         replay_buffer = ReplayBuffer()
+
+        # Create a saver object which will save all the variables.
+        saver = tf.train.Saver()
 
         for epoch in range(num_epochs):
             total_epoch_reward = 0.0
@@ -227,6 +248,9 @@ class DeepDeterministicPolicyGradients:
 
             writer.add_summary(summary_str, epoch)
             writer.flush()
+
+            # Save model checkpoint.
+            saver.save(self.sess, summary_dir + '/model', global_step=epoch)
 
 
 class Environment:
