@@ -90,6 +90,9 @@ class DeepDeterministicPolicyGradients:
         # Initialize replay memory
         replay_buffer = ReplayBuffer()
 
+        # Create a saver object which will save all the variables.
+        saver = tf.train.Saver()
+
         for epoch in range(num_epochs):
             total_epoch_reward = 0.0
             total_epoch_avg_max_q = 0.0
@@ -227,6 +230,9 @@ class DeepDeterministicPolicyGradients:
 
             writer.add_summary(summary_str, epoch)
             writer.flush()
+
+            # Save model checkpoint.
+            saver.save(self.sess, summary_dir + '/model', global_step=epoch)
 
 
 class Environment:
