@@ -95,6 +95,8 @@ xmlns:interface="http://playerstage.sourceforge.net/gazebo/xmlschema/#interface"
       </sensor>
       -->
       <sensor type="depth" name="${name}_camera_sensor">
+        <always_on>1</always_on>
+        <visualize>true</visualize>
         <update_rate>${update_rate}</update_rate>
         <camera name="head">
           <horizontal_fov>${hfov}</horizontal_fov>
@@ -103,21 +105,24 @@ xmlns:interface="http://playerstage.sourceforge.net/gazebo/xmlschema/#interface"
             <height>${res_y}</height>
             <format>${image_format}</format>
           </image>
-          <clip>0.01
+          <clip>
 	          <near>0.01</near>
             <far>100</far>
           </clip>
         </camera>
         <plugin name="${name}_depth_camera_controller" filename="libgazebo_ros_depth_camera.so">
+          <sensing_mode>0</sensing_mode>
+          <baseline>0.2</baseline>
           <cameraName>/${sim_name}/${name}/depth</cameraName>
           <alwaysOn>true</alwaysOn>
-          <updateRate>${update_rate}</updateRate>
+          <updateRate>10.0</updateRate>
           <imageTopicName>/${sim_name}/${name}/image_raw</imageTopicName>
           <cameraInfoTopicName>/${sim_name}/${name}/camera_info</cameraInfoTopicName>
           <depthImageTopicName>/${sim_name}/${name}/depth/image_raw</depthImageTopicName>
           <depthImageInfoTopicName>/${sim_name}/${name}/depth/camera_info</depthImageInfoTopicName>
           <pointCloudTopicName>/${sim_name}/${name}/depth/points</pointCloudTopicName>
-          <pointCloudCutoff>0.05</pointCloudCutoff>
+          <pointCloudCutoff>0.4</pointCloudCutoff>
+          <hackBaseline>0.07</hackBaseline>
           <distortionK1>0</distortionK1>
           <distortionK2>0</distortionK2>
           <distortionK3>0</distortionK3>

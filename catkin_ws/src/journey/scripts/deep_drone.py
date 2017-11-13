@@ -212,11 +212,16 @@ class DeepDronePlanner:
             self.goal_pose.position.x, self.goal_pose.position.y,
             self.goal_pose.position.z
         ])
+
+
         position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
+        depth_data = ros_numpy.numpify(self.depth_msg)
+        depth_data[np.isnan(depth_data)] = 100
+
         depth = scipy.misc.imresize(
-            ros_numpy.numpify(self.depth_msg),
-            [self.image_height, self.image_width]).flatten()
+            depth_data,
+            [self.image_height, self.image_width], mode='F').flatten()
         state = np.concatenate([depth, position], axis=-1)
         return (state, goal)
 
