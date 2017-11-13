@@ -169,6 +169,18 @@ class DeepDronePlanner:
                self.goal_pose.position.z))
         return FlyToGoalResponse(True)
 
+    def get_current_state(self):
+        position = np.array(
+            [self.pose.position.x, self.pose.position.y, self.pose.position.z])
+        depth_data = ros_numpy.numpify(self.depth_msg)
+        depth_data[np.isnan(depth_data)] = 100
+
+        depth = scipy.misc.imresize(
+            depth_data,
+            [self.image_height, self.image_width], mode='F').flatten()
+        state = np.concatenate([depth, position], axis=-1)
+        return state
+
     def reset(self):
         # Stop moving our drone
         vel_msg = Twist()
@@ -213,16 +225,7 @@ class DeepDronePlanner:
             self.goal_pose.position.z
         ])
 
-
-        position = np.array(
-            [self.pose.position.x, self.pose.position.y, self.pose.position.z])
-        depth_data = ros_numpy.numpify(self.depth_msg)
-        depth_data[np.isnan(depth_data)] = 100
-
-        depth = scipy.misc.imresize(
-            depth_data,
-            [self.image_height, self.image_width], mode='F').flatten()
-        state = np.concatenate([depth, position], axis=-1)
+        state = self.get_current_state()
         return (state, goal)
 
     def step(self, state, action, goal):
@@ -236,13 +239,7 @@ class DeepDronePlanner:
         # Wait.
         self.rate.sleep()
 
-        # Get next state.
-        position = np.array(
-            [self.pose.position.x, self.pose.position.y, self.pose.position.z])
-        depth = scipy.misc.imresize(
-            ros_numpy.numpify(self.depth_msg),
-            [self.image_height, self.image_width]).flatten()
-        next_state = np.concatenate([depth, position], axis=-1)
+        next_state = self.get_current_state()
         return next_state
 
     def reward(self, state, action, goal):
