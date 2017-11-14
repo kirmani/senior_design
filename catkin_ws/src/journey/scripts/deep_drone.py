@@ -176,8 +176,8 @@ class DeepDronePlanner:
         depth_data[np.isnan(depth_data)] = 100
 
         depth = scipy.misc.imresize(
-            depth_data,
-            [self.image_height, self.image_width], mode='F').flatten()
+            depth_data, [self.image_height, self.image_width],
+            mode='F').flatten()
         state = np.concatenate([depth, position], axis=-1)
         return state
 
@@ -246,7 +246,7 @@ class DeepDronePlanner:
         position = state[(self.image_width * self.image_height):]
         distance = np.linalg.norm(position - goal)
         distance_reward = np.exp(-distance)
-        forward_reward = action[2]
+        forward_reward = action[0]
         reward_weights = np.array([1.0, 0.001])
         reward = np.array([distance_reward, forward_reward])
         return np.dot(reward_weights, reward)
