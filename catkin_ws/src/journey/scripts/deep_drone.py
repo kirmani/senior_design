@@ -19,6 +19,7 @@ import traceback
 import time
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
+from gazebo_msgs.msg import ContactsState
 from sensor_msgs.msg import Image
 from std_msgs.msg import Empty as EmptyMessage
 from std_msgs.msg import String
@@ -31,7 +32,6 @@ from ddpg import DeepDeterministicPolicyGradients
 from ddpg import OrnsteinUhlenbeckActionNoise
 from ddpg import Environment
 
-
 class DeepDronePlanner:
 
     def __init__(self, distance_threshold=0.5, rate=10):
@@ -40,6 +40,7 @@ class DeepDronePlanner:
 
         # Initialize our ROS node.
         rospy.init_node('deep_drone_planner', anonymous=True)
+
 
         # Initialize visualization markers.
         self.drone_marker = Marker()
@@ -91,9 +92,14 @@ class DeepDronePlanner:
         # Inputs.
         self.depth_subscriber = rospy.Subscriber(
             '/ardrone/front/depth/image_raw', Image, self._OnNewDepth)
+        
         self.pose_subscriber = rospy.Subscriber('/ardrone/predictedPose',
                                                 filter_state, self._OnNewPose)
         self.pose = Pose()
+
+        self.collision_subscriber = rospy.Subscriber('/ardrone/crash_sensor', ContactsState, self._OnNewContactData)
+        self.collided = False
+
         self.depth_msg = None
 
         # Actions.
@@ -161,6 +167,13 @@ class DeepDronePlanner:
 
     def _OnNewDepth(self, depth):
         self.depth_msg = depth
+
+    def _OnNewContactData(self, contact):
+        # Surprisingly, this works pretty well for collision detection
+        self.collided = len(contact.states) > 0
+        #if self.collided:
+            #print "COLLISION"
+
 
     def FlyToGoal(self, req):
         self.goal_pose.position.x = self.pose.position.x + req.x
@@ -254,8 +267,9 @@ class DeepDronePlanner:
         distance = np.linalg.norm(position - goal)
         distance_reward = np.exp(-distance)
         forward_reward = action[0]
-        reward_weights = np.array([1.0, 0.01])
-        reward = np.array([distance_reward, forward_reward])
+        collided_reward = -1 if self.collided else 0
+        reward_weights = np.array([1.0, 0.02, 0.5])
+        reward = np.array([distance_reward, forward_reward, collided_reward])
         return np.dot(reward_weights, reward)
 
     def RunModel(self, model_name, num_attempts):
