@@ -117,6 +117,7 @@ class DeepDronePlanner:
 
         # Initialize goal.
         self.goal_pose = Pose()
+        self.freshPose = False
 
         # Initialize visualization.
         self.marker_publisher.publish(self.drone_marker)
@@ -148,6 +149,7 @@ class DeepDronePlanner:
         print("Policy initialized.")
 
     def _OnNewPose(self, data):
+        self.freshPose = True
         self.pose.position.x = round(data.x, 4)
         self.pose.position.y = round(data.y, 4)
         self.pose.position.z = round(data.z, 4)
@@ -170,6 +172,11 @@ class DeepDronePlanner:
         return FlyToGoalResponse(True)
 
     def get_current_state(self):
+        while not self.freshPose:
+            print "Waiting for fresh pose..."
+            time.sleep(0.05)
+
+        self.freshPose = False
         position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         depth_data = ros_numpy.numpify(self.depth_msg)

@@ -11,5 +11,5 @@
   </include>
 
   <!-- Launch state estimation module -->
-  <node name="drone_stateestimation" pkg="tum_ardrone" type="drone_stateestimation"></node>
+  <node name="drone_stateestimation" respawn="true" pkg="tum_ardrone" type="drone_stateestimation"></node>
 </launch>
