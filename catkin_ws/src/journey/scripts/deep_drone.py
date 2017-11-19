@@ -176,8 +176,8 @@ class DeepDronePlanner:
         depth_data[np.isnan(depth_data)] = 100
 
         depth = scipy.misc.imresize(
-            depth_data,
-            [self.image_height, self.image_width], mode='F').flatten()
+            depth_data, [self.image_height, self.image_width],
+            mode='F').flatten()
         state = np.concatenate([depth, position], axis=-1)
         return state
 
@@ -245,18 +245,21 @@ class DeepDronePlanner:
     def reward(self, state, action, goal):
         position = state[(self.image_width * self.image_height):]
         distance = np.linalg.norm(position - goal)
-        return -distance
-        # terminal = (distance < self.distance_threshold)
-        # reward = 1 if terminal else -1
-        # return reward
+        distance_reward = np.exp(-distance)
+        forward_reward = action[0]
+        reward_weights = np.array([1.0, 0.01])
+        reward = np.array([distance_reward, forward_reward])
+        return np.dot(reward_weights, reward)
 
     def RunModel(self, model_name, num_attempts):
         env = Environment(self.reset, self.step, self.reward)
         actor_noise = OrnsteinUhlenbeckActionNoise(
             mu=np.zeros(self.num_actions))
         modeldir = os.path.join(
-            os.path.dirname(__file__), '../../../learning/deep_drone/' + model_name)
-        self.ddpg.RunModel(env, actor_noise, modeldir, num_attempts=num_attempts)
+            os.path.dirname(__file__),
+            '../../../learning/deep_drone/' + model_name)
+        self.ddpg.RunModel(
+            env, actor_noise, modeldir, num_attempts=num_attempts)
 
     def Train(self):
         env = Environment(self.reset, self.step, self.reward)
@@ -289,10 +292,7 @@ if __name__ == '__main__':
             default=False,
             help='verbose output')
         parser.add_argument(
-            '-m',
-            '--model',
-            action='store',
-            help='run specific model')
+            '-m', '--model', action='store', help='run specific model')
         parser.add_argument(
             '-n',
             '--num_attempts',
