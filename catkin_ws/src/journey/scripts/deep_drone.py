@@ -247,7 +247,7 @@ class DeepDronePlanner:
         distance = np.linalg.norm(position - goal)
         distance_reward = np.exp(-distance)
         forward_reward = action[0]
-        reward_weights = np.array([1.0, 0.1])
+        reward_weights = np.array([1.0, 0.01])
         reward = np.array([distance_reward, forward_reward])
         return np.dot(reward_weights, reward)
 
