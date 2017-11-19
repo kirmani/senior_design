@@ -202,6 +202,10 @@ class DeepDeterministicPolicyGradients:
                 average_epoch_reward = total_epoch_reward / (i + 1)
                 average_epoch_avg_max_q = total_epoch_avg_max_q / (i + 1)
 
+                if np.isnan(episode_reward) or np.isnan(episode_avg_max_q):
+                    print "Reward is NaN. Exiting..."
+                    sys.exit(0)
+
                 print('| Reward: {:4f} | Episode: {:d} | Qmax: {:.4f} |'.format(
                     episode_reward, i, episode_avg_max_q))
 
@@ -246,6 +250,9 @@ class DeepDeterministicPolicyGradients:
                 self.actor.update_target_network()
                 self.critic.update_target_network()
             average_epoch_avg_max_q /= optimization_steps
+            if np.isnan(average_epoch_reward) or np.isnan(average_epoch_avg_max_q):
+                print "Reward is NaN. Exiting..."
+                sys.exit(0)
             print('| Reward: {:4f} | Epoch: {:d} | Qmax: {:4f} |'.format(
                 average_epoch_reward, epoch, average_epoch_avg_max_q))
 
