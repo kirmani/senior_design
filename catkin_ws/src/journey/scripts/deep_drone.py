@@ -261,13 +261,19 @@ class DeepDronePlanner:
         self.ddpg.RunModel(
             env, actor_noise, modeldir, num_attempts=num_attempts)
 
-    def Train(self):
+    def Train(self, prev_model):
         env = Environment(self.reset, self.step, self.reward)
         actor_noise = OrnsteinUhlenbeckActionNoise(
             mu=np.zeros(self.num_actions))
+        modeldir = None
+        if prev_model != None:
+            modeldir = os.path.join(
+            os.path.dirname(__file__),
+            '../../../learning/deep_drone/' + prev_model)
+            print "modeldir is ", modeldir
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
-        self.ddpg.Train(env, actor_noise, logdir=logdir)
+        self.ddpg.Train(env, actor_noise, logdir=logdir, model_dir=modeldir)
 
 
 def main(args):
@@ -278,7 +284,7 @@ def main(args):
             attempts = int(args.num_attempts)
         deep_drone_planner.RunModel(args.model, num_attempts=attempts)
     else:
-        deep_drone_planner.Train()
+        deep_drone_planner.Train(args.prev_model)
 
 
 if __name__ == '__main__':
@@ -298,6 +304,11 @@ if __name__ == '__main__':
             '--num_attempts',
             action='store',
             help='number of attempts to run model for')
+        parser.add_argument(
+            '-t',
+            '--prev_model',
+            action='store',
+            help='name of existing model to start training with')
         args = parser.parse_args()
         #if len(args) < 1:
         #    parser.error ('missing argument')
