@@ -51,7 +51,6 @@ class DeepDeterministicPolicyGradients:
                                     self.num_actions, self.goal_dim,
                                     self.actor.get_num_trainable_vars())
 
-
     def build_summaries(self):
         episode_reward = tf.Variable(0.)
         tf.summary.scalar("Reward", episode_reward)
@@ -63,7 +62,12 @@ class DeepDeterministicPolicyGradients:
 
         return summary_ops, summary_vars
 
-    def RunModel(self, env, actor_noise, model_dir, num_attempts=1, max_episode_len=50):
+    def RunModel(self,
+                 env,
+                 actor_noise,
+                 model_dir,
+                 num_attempts=1,
+                 max_episode_len=50):
         saver = tf.train.Saver()
         saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
 
@@ -80,7 +84,6 @@ class DeepDeterministicPolicyGradients:
                 next_state = env.Step(state, action, goal)
                 state = next_state
 
-
     def Train(self,
               env,
               actor_noise,
@@ -95,11 +98,14 @@ class DeepDeterministicPolicyGradients:
         saver = tf.train.Saver(max_to_keep=20)
 
         global_step = tf.Variable(0, trainable=False, name='global_step')
-        increment_global_step = tf.assign_add(global_step, 1, name = 'increment_global_step')
+        increment_global_step = tf.assign_add(
+            global_step, 1, name='increment_global_step')
 
         if model_dir != None:
             saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
-            last_step = int(os.path.basename(tf.train.latest_checkpoint(model_dir)).split('-')[1])
+            last_step = int(
+                os.path.basename(tf.train.latest_checkpoint(model_dir)).split(
+                    '-')[1])
 
         # Set up summary Ops
         summary_ops, summary_vars = self.build_summaries()
@@ -119,7 +125,6 @@ class DeepDeterministicPolicyGradients:
 
         # Initialize replay memory
         replay_buffer = ReplayBuffer()
-
 
         while tf.train.global_step(self.sess, global_step) < num_epochs:
             epoch = tf.train.global_step(self.sess, global_step)
@@ -203,7 +208,7 @@ class DeepDeterministicPolicyGradients:
                 average_epoch_avg_max_q = total_epoch_avg_max_q / (i + 1)
 
                 if np.isnan(episode_reward) or np.isnan(episode_avg_max_q):
-                    print "Reward is NaN. Exiting..."
+                    print("Reward is NaN. Exiting...")
                     sys.exit(0)
 
                 print('| Reward: {:4f} | Episode: {:d} | Qmax: {:.4f} |'.format(
@@ -250,8 +255,9 @@ class DeepDeterministicPolicyGradients:
                 self.actor.update_target_network()
                 self.critic.update_target_network()
             average_epoch_avg_max_q /= optimization_steps
-            if np.isnan(average_epoch_reward) or np.isnan(average_epoch_avg_max_q):
-                print "Reward is NaN. Exiting..."
+            if np.isnan(average_epoch_reward) or np.isnan(
+                    average_epoch_avg_max_q):
+                print("Reward is NaN. Exiting...")
                 sys.exit(0)
             print('| Reward: {:4f} | Epoch: {:d} | Qmax: {:4f} |'.format(
                 average_epoch_reward, epoch, average_epoch_avg_max_q))
