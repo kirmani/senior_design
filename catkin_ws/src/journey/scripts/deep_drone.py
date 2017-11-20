@@ -32,6 +32,7 @@ from ddpg import DeepDeterministicPolicyGradients
 from ddpg import OrnsteinUhlenbeckActionNoise
 from ddpg import Environment
 
+
 class DeepDronePlanner:
 
     def __init__(self, distance_threshold=0.5, rate=10):
@@ -40,7 +41,6 @@ class DeepDronePlanner:
 
         # Initialize our ROS node.
         rospy.init_node('deep_drone_planner', anonymous=True)
-
 
         # Initialize visualization markers.
         self.drone_marker = Marker()
@@ -92,12 +92,13 @@ class DeepDronePlanner:
         # Inputs.
         self.depth_subscriber = rospy.Subscriber(
             '/ardrone/front/depth/image_raw', Image, self._OnNewDepth)
-        
+
         self.pose_subscriber = rospy.Subscriber('/ardrone/predictedPose',
                                                 filter_state, self._OnNewPose)
         self.pose = Pose()
 
-        self.collision_subscriber = rospy.Subscriber('/ardrone/crash_sensor', ContactsState, self._OnNewContactData)
+        self.collision_subscriber = rospy.Subscriber(
+            '/ardrone/crash_sensor', ContactsState, self._OnNewContactData)
         self.collided = False
 
         self.depth_msg = None
@@ -171,9 +172,6 @@ class DeepDronePlanner:
     def _OnNewContactData(self, contact):
         # Surprisingly, this works pretty well for collision detection
         self.collided = len(contact.states) > 0
-        #if self.collided:
-            #print "COLLISION"
-
 
     def FlyToGoal(self, req):
         self.goal_pose.position.x = self.pose.position.x + req.x
@@ -186,8 +184,8 @@ class DeepDronePlanner:
 
     def get_current_state(self):
         while not self.freshPose:
-            print "Waiting for fresh pose..."
-            time.sleep(0.05)
+            print("Waiting for fresh pose...")
+            rospy.sleep(0.05)
 
         self.freshPose = False
         position = np.array(
@@ -289,9 +287,9 @@ class DeepDronePlanner:
         modeldir = None
         if prev_model != None:
             modeldir = os.path.join(
-            os.path.dirname(__file__),
-            '../../../learning/deep_drone/' + prev_model)
-            print "modeldir is ", modeldir
+                os.path.dirname(__file__),
+                '../../../learning/deep_drone/' + prev_model)
+            print("modeldir is %s" % modeldir)
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
         self.ddpg.Train(env, actor_noise, logdir=logdir, model_dir=modeldir)
