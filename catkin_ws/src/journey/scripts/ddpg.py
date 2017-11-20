@@ -88,7 +88,19 @@ class DeepDeterministicPolicyGradients:
               optimization_steps=40,
               num_epochs=200,
               episodes_in_epoch=16,
-              max_episode_len=50):
+              max_episode_len=50,
+              model_dir=None):
+
+        # Create a saver object for saving and loading variables
+        saver = tf.train.Saver(max_to_keep=20)
+
+        global_step = tf.Variable(0, trainable=False, name='global_step')
+        increment_global_step = tf.assign_add(global_step, 1, name = 'increment_global_step')
+
+        if model_dir != None:
+            saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
+            last_step = int(os.path.basename(tf.train.latest_checkpoint(model_dir)).split('-')[1])
+
         # Set up summary Ops
         summary_ops, summary_vars = self.build_summaries()
 
@@ -108,10 +120,9 @@ class DeepDeterministicPolicyGradients:
         # Initialize replay memory
         replay_buffer = ReplayBuffer()
 
-        # Create a saver object which will save all the variables.
-        saver = tf.train.Saver()
 
-        for epoch in range(num_epochs):
+        while tf.train.global_step(self.sess, global_step) < num_epochs:
+            epoch = tf.train.global_step(self.sess, global_step)
             total_epoch_reward = 0.0
             total_epoch_avg_max_q = 0.0
             for i in range(episodes_in_epoch):
@@ -191,6 +202,10 @@ class DeepDeterministicPolicyGradients:
                 average_epoch_reward = total_epoch_reward / (i + 1)
                 average_epoch_avg_max_q = total_epoch_avg_max_q / (i + 1)
 
+                if np.isnan(episode_reward) or np.isnan(episode_avg_max_q):
+                    print "Reward is NaN. Exiting..."
+                    sys.exit(0)
+
                 print('| Reward: {:4f} | Episode: {:d} | Qmax: {:.4f} |'.format(
                     episode_reward, i, episode_avg_max_q))
 
@@ -235,6 +250,9 @@ class DeepDeterministicPolicyGradients:
                 self.actor.update_target_network()
                 self.critic.update_target_network()
             average_epoch_avg_max_q /= optimization_steps
+            if np.isnan(average_epoch_reward) or np.isnan(average_epoch_avg_max_q):
+                print "Reward is NaN. Exiting..."
+                sys.exit(0)
             print('| Reward: {:4f} | Epoch: {:d} | Qmax: {:4f} |'.format(
                 average_epoch_reward, epoch, average_epoch_avg_max_q))
 
@@ -251,6 +269,7 @@ class DeepDeterministicPolicyGradients:
 
             # Save model checkpoint.
             saver.save(self.sess, summary_dir + '/model', global_step=epoch)
+            self.sess.run(increment_global_step)
 
 
 class Environment:

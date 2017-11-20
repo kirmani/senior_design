@@ -19,6 +19,7 @@ import traceback
 import time
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
+from gazebo_msgs.msg import ContactsState
 from sensor_msgs.msg import Image
 from std_msgs.msg import Empty as EmptyMessage
 from std_msgs.msg import String
@@ -31,7 +32,6 @@ from ddpg import DeepDeterministicPolicyGradients
 from ddpg import OrnsteinUhlenbeckActionNoise
 from ddpg import Environment
 
-
 class DeepDronePlanner:
 
     def __init__(self, distance_threshold=0.5, rate=10):
@@ -40,6 +40,7 @@ class DeepDronePlanner:
 
         # Initialize our ROS node.
         rospy.init_node('deep_drone_planner', anonymous=True)
+
 
         # Initialize visualization markers.
         self.drone_marker = Marker()
@@ -91,9 +92,14 @@ class DeepDronePlanner:
         # Inputs.
         self.depth_subscriber = rospy.Subscriber(
             '/ardrone/front/depth/image_raw', Image, self._OnNewDepth)
+        
         self.pose_subscriber = rospy.Subscriber('/ardrone/predictedPose',
                                                 filter_state, self._OnNewPose)
         self.pose = Pose()
+
+        self.collision_subscriber = rospy.Subscriber('/ardrone/crash_sensor', ContactsState, self._OnNewContactData)
+        self.collided = False
+
         self.depth_msg = None
 
         # Actions.
@@ -117,6 +123,7 @@ class DeepDronePlanner:
 
         # Initialize goal.
         self.goal_pose = Pose()
+        self.freshPose = False
 
         # Initialize visualization.
         self.marker_publisher.publish(self.drone_marker)
@@ -148,6 +155,7 @@ class DeepDronePlanner:
         print("Policy initialized.")
 
     def _OnNewPose(self, data):
+        self.freshPose = True
         self.pose.position.x = round(data.x, 4)
         self.pose.position.y = round(data.y, 4)
         self.pose.position.z = round(data.z, 4)
@@ -160,6 +168,13 @@ class DeepDronePlanner:
     def _OnNewDepth(self, depth):
         self.depth_msg = depth
 
+    def _OnNewContactData(self, contact):
+        # Surprisingly, this works pretty well for collision detection
+        self.collided = len(contact.states) > 0
+        #if self.collided:
+            #print "COLLISION"
+
+
     def FlyToGoal(self, req):
         self.goal_pose.position.x = self.pose.position.x + req.x
         self.goal_pose.position.y = self.pose.position.y + req.y
@@ -170,6 +185,11 @@ class DeepDronePlanner:
         return FlyToGoalResponse(True)
 
     def get_current_state(self):
+        while not self.freshPose:
+            print "Waiting for fresh pose..."
+            time.sleep(0.05)
+
+        self.freshPose = False
         position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         depth_data = ros_numpy.numpify(self.depth_msg)
@@ -247,8 +267,9 @@ class DeepDronePlanner:
         distance = np.linalg.norm(position - goal)
         distance_reward = np.exp(-distance)
         forward_reward = action[0]
-        reward_weights = np.array([1.0, 0.01])
-        reward = np.array([distance_reward, forward_reward])
+        collided_reward = -1 if self.collided else 0
+        reward_weights = np.array([1.0, 0.02, 0.5])
+        reward = np.array([distance_reward, forward_reward, collided_reward])
         return np.dot(reward_weights, reward)
 
     def RunModel(self, model_name, num_attempts):
@@ -261,13 +282,19 @@ class DeepDronePlanner:
         self.ddpg.RunModel(
             env, actor_noise, modeldir, num_attempts=num_attempts)
 
-    def Train(self):
+    def Train(self, prev_model):
         env = Environment(self.reset, self.step, self.reward)
         actor_noise = OrnsteinUhlenbeckActionNoise(
             mu=np.zeros(self.num_actions))
+        modeldir = None
+        if prev_model != None:
+            modeldir = os.path.join(
+            os.path.dirname(__file__),
+            '../../../learning/deep_drone/' + prev_model)
+            print "modeldir is ", modeldir
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
-        self.ddpg.Train(env, actor_noise, logdir=logdir)
+        self.ddpg.Train(env, actor_noise, logdir=logdir, model_dir=modeldir)
 
 
 def main(args):
@@ -278,7 +305,7 @@ def main(args):
             attempts = int(args.num_attempts)
         deep_drone_planner.RunModel(args.model, num_attempts=attempts)
     else:
-        deep_drone_planner.Train()
+        deep_drone_planner.Train(args.prev_model)
 
 
 if __name__ == '__main__':
@@ -298,6 +325,11 @@ if __name__ == '__main__':
             '--num_attempts',
             action='store',
             help='number of attempts to run model for')
+        parser.add_argument(
+            '-t',
+            '--prev_model',
+            action='store',
+            help='name of existing model to start training with')
         args = parser.parse_args()
         #if len(args) < 1:
         #    parser.error ('missing argument')

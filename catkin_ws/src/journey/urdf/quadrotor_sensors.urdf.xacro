@@ -9,10 +9,10 @@ xmlns:xacro="http://playerstage.sourceforge.net/gazebo/xmlschema/#interface">
     <property name="M_PI" value="3.1415926535897931" />
     
     <!-- Included URDF Files -->
-    <xacro:include filename="$(find cvg_sim_gazebo)/urdf/quadrotor_base.urdf.xacro" />
+    <xacro:include filename="$(find journey)/urdf/quadrotor_base.urdf.xacro" />
     
     <!-- Instantiate quadrotor_base_macro once (has no parameters atm) -->
-    <quadrotor_base_macro />
+    <quadrotor_base_macro sim_name="ardrone"/>
     
 
     <!-- Sonar height sensor -->
