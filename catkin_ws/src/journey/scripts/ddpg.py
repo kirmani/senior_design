@@ -343,6 +343,8 @@ class ActorNetwork:
         # Actor network.
         self.inputs, self.actions = create_actor_network("actor_source")
         network_params = tf.trainable_variables()
+        print("Actor network has %s parameters." % np.sum(
+            [v.get_shape().num_elements() for v in network_params]))
 
         # Target network.
         self.target_inputs, self.target_actions = create_actor_network(
@@ -411,6 +413,8 @@ class CriticNetwork:
         (self.inputs, self.actions,
          self.out) = create_critic_network("critic_source")
         network_params = tf.trainable_variables()[num_actor_vars:]
+        print("Critic network has %s parameters." % np.sum(
+            [v.get_shape().num_elements() for v in network_params]))
 
         # Target network.
         (self.target_inputs, self.target_actions,
