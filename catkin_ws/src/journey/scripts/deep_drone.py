@@ -18,6 +18,7 @@ import sys
 import tensorflow as tf
 import traceback
 import time
+from collections import deque
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
 from gazebo_msgs.msg import ContactsState
@@ -137,8 +138,11 @@ class DeepDronePlanner:
         self.goal_dim = 3
         self.image_width = 84
         self.image_height = 84
-        self.num_inputs = (self.image_width * self.image_height + self.state_dim
-                           + self.goal_dim)
+        self.sequence_length = 4
+        self.frame_buffer = deque(maxlen=self.sequence_length)
+        self.num_inputs = (
+            (self.image_width * self.image_height + self.state_dim) *
+            self.sequence_length + self.goal_dim)
         self.ddpg = DeepDeterministicPolicyGradients(self.create_actor_network,
                                                      self.create_critic_network)
 
@@ -184,7 +188,7 @@ class DeepDronePlanner:
                self.goal_pose.position.z))
         return FlyToGoalResponse(True)
 
-    def get_current_state(self):
+    def get_current_frame(self):
         while not self.freshPose:
             print("Waiting for fresh pose...")
             rospy.sleep(0.05)
@@ -198,6 +202,19 @@ class DeepDronePlanner:
         depth = scipy.misc.imresize(
             depth_data, [self.image_height, self.image_width],
             mode='F').flatten()
+        frame = (depth, position)
+        return frame
+
+    def get_current_state(self):
+        frame = self.get_current_frame()
+        self.frame_buffer.append(frame)
+        while len(self.frame_buffer) < self.frame_buffer.maxlen:
+            frame = self.get_current_frame()
+            self.frame_buffer.append(frame)
+        depth = np.concatenate(
+            [frame[0] for frame in self.frame_buffer], axis=-1)
+        position = np.concatenate(
+            [frame[1] for frame in self.frame_buffer], axis=-1)
         state = np.concatenate([depth, position], axis=-1)
         return state
 
@@ -209,6 +226,9 @@ class DeepDronePlanner:
         vel_msg.linear.z = 0
         vel_msg.angular.z = 0
         self.velocity_publisher.publish(vel_msg)
+
+        # Clear our frame buffer.
+        self.frame_buffer.clear()
 
         # Reset our simulation.
         rospy.wait_for_service('/gazebo/reset_world')
@@ -263,7 +283,7 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action, goal):
-        position = state[(self.image_width * self.image_height):]
+        position = state[-3:]
         distance = np.linalg.norm(position - goal)
         distance_reward = np.exp(-distance)
         forward_reward = action[0]
@@ -274,12 +294,14 @@ class DeepDronePlanner:
 
     def create_actor_network(self, scope):
         inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
-        position = tf.reshape(
-            inputs[:, :, (self.image_width * self.image_height):],
-            [-1, self.state_dim + self.goal_dim])
-        depth = tf.reshape(
-            inputs[:, :, :(self.image_width * self.image_height)],
-            [-1, self.image_height, self.image_width, 1])
+        num_depth_inputs = (
+            self.image_width * self.image_height * self.sequence_length)
+        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
+            -1, self.state_dim * self.sequence_length + self.goal_dim
+        ])
+        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
+            -1, self.image_height, self.image_width, self.sequence_length
+        ])
         depth = tf.contrib.layers.conv2d(
             depth,
             num_outputs=16,
@@ -306,12 +328,14 @@ class DeepDronePlanner:
     def create_critic_network(self, scope):
         inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
         actions = tf.placeholder(tf.float32, (None, None, self.action_dim))
-        position = tf.reshape(
-            inputs[:, :, (self.image_width * self.image_height):],
-            [-1, self.state_dim + self.goal_dim])
-        depth = tf.reshape(
-            inputs[:, :, :(self.image_width * self.image_height)],
-            [-1, self.image_height, self.image_width, 1])
+        num_depth_inputs = (
+            self.image_width * self.image_height * self.sequence_length)
+        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
+            -1, self.state_dim * self.sequence_length + self.goal_dim
+        ])
+        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
+            -1, self.image_height, self.image_width, self.sequence_length
+        ])
         depth = tf.contrib.layers.conv2d(
             depth,
             num_outputs=16,
