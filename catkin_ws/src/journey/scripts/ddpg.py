@@ -24,11 +24,9 @@ class DeepDeterministicPolicyGradients:
     def __init__(self,
                  create_actor_network,
                  create_critic_network,
-                 num_actions,
                  minibatch_size=128,
                  gamma=0.98,
                  use_hindsight=False):
-        self.num_actions = num_actions
         self.minibatch_size = minibatch_size
         self.gamma = gamma
         self.use_hindsight = use_hindsight

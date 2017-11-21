@@ -140,8 +140,7 @@ class DeepDronePlanner:
         self.num_inputs = (self.image_width * self.image_height + self.state_dim
                            + self.goal_dim)
         self.ddpg = DeepDeterministicPolicyGradients(self.create_actor_network,
-                                                     self.create_critic_network,
-                                                     self.action_dim)
+                                                     self.create_critic_network)
 
         # Initialize policy with heuristic.
         # self._InitializePolicy()
