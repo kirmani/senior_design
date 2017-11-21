@@ -133,7 +133,7 @@ class DeepDronePlanner:
 
         # Set up policy search network.
         self.state_dim = 3
-        self.action_dim = 3
+        self.action_dim = 2
         self.goal_dim = 3
         self.image_width = 84
         self.image_height = 84
@@ -253,8 +253,8 @@ class DeepDronePlanner:
         vel_msg = Twist()
         vel_msg.linear.x = action[0]
         vel_msg.linear.y = 0
-        vel_msg.linear.z = action[1]
-        vel_msg.angular.z = action[2]
+        vel_msg.linear.z = 0
+        vel_msg.angular.z = action[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
