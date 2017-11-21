@@ -15,6 +15,7 @@ import ros_numpy
 import scipy
 import os
 import sys
+import tensorflow as tf
 import traceback
 import time
 from geometry_msgs.msg import Twist
@@ -131,14 +132,16 @@ class DeepDronePlanner:
         self.marker_publisher.publish(self.goal_marker)
 
         # Set up policy search network.
-        self.num_inputs = 3
-        self.num_actions = 3
+        self.state_dim = 3
+        self.action_dim = 3
         self.goal_dim = 3
         self.image_width = 84
         self.image_height = 84
-        self.ddpg = DeepDeterministicPolicyGradients(
-            self.num_inputs, self.image_width, self.image_height,
-            self.num_actions, self.goal_dim)
+        self.num_inputs = (self.image_width * self.image_height + self.state_dim
+                           + self.goal_dim)
+        self.ddpg = DeepDeterministicPolicyGradients(self.create_actor_network,
+                                                     self.create_critic_network,
+                                                     self.action_dim)
 
         # Initialize policy with heuristic.
         # self._InitializePolicy()
@@ -270,6 +273,71 @@ class DeepDronePlanner:
         reward = np.array([distance_reward, forward_reward, collided_reward])
         return np.dot(reward_weights, reward)
 
+    def create_actor_network(self, scope):
+        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
+        position = tf.reshape(
+            inputs[:, :, (self.image_width * self.image_height):],
+            [-1, self.state_dim + self.goal_dim])
+        depth = tf.reshape(
+            inputs[:, :, :(self.image_width * self.image_height)],
+            [-1, self.image_height, self.image_width, 1])
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=16,
+            activation_fn=tf.nn.relu,
+            kernel_size=(8, 8),
+            stride=(4, 4),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=32,
+            activation_fn=tf.nn.relu,
+            kernel_size=(5, 5),
+            stride=(2, 2),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.flatten(depth)
+        depth = tf.contrib.layers.fully_connected(depth, 64)
+        position = tf.contrib.layers.fully_connected(position, 64)
+        x = tf.concat([position, depth], axis=-1)
+        x = tf.contrib.layers.fully_connected(position, 64)
+        actions = tf.contrib.layers.fully_connected(
+            inputs=x, num_outputs=self.action_dim, activation_fn=tf.tanh)
+        return inputs, actions
+
+    def create_critic_network(self, scope):
+        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
+        actions = tf.placeholder(tf.float32, (None, None, self.action_dim))
+        position = tf.reshape(
+            inputs[:, :, (self.image_width * self.image_height):],
+            [-1, self.state_dim + self.goal_dim])
+        depth = tf.reshape(
+            inputs[:, :, :(self.image_width * self.image_height)],
+            [-1, self.image_height, self.image_width, 1])
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=16,
+            activation_fn=tf.nn.relu,
+            kernel_size=(8, 8),
+            stride=(4, 4),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=32,
+            activation_fn=tf.nn.relu,
+            kernel_size=(5, 5),
+            stride=(2, 2),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.flatten(depth)
+        depth = tf.contrib.layers.fully_connected(depth, 64)
+        position = tf.contrib.layers.fully_connected(position, 64)
+        act = tf.reshape(actions, [-1, self.action_dim])
+        act = tf.contrib.layers.fully_connected(act, 64)
+        x = tf.concat([position, depth, act], axis=-1)
+        x = tf.contrib.layers.fully_connected(x, 64)
+        out = tf.contrib.layers.fully_connected(
+            inputs=x, num_outputs=1, activation_fn=None)
+        return inputs, actions, out
+
     def RunModel(self, model_name, num_attempts):
         env = Environment(self.reset, self.step, self.reward)
         actor_noise = OrnsteinUhlenbeckActionNoise(
@@ -282,8 +350,7 @@ class DeepDronePlanner:
 
     def Train(self, prev_model):
         env = Environment(self.reset, self.step, self.reward)
-        actor_noise = OrnsteinUhlenbeckActionNoise(
-            mu=np.zeros(self.num_actions))
+        actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim))
         modeldir = None
         if prev_model != None:
             modeldir = os.path.join(
