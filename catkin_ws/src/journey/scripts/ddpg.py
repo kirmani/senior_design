@@ -24,10 +24,8 @@ class DeepDeterministicPolicyGradients:
     def __init__(self,
                  create_actor_network,
                  create_critic_network,
-                 minibatch_size=128,
                  gamma=0.98,
                  use_hindsight=False):
-        self.minibatch_size = minibatch_size
         self.gamma = gamma
         self.use_hindsight = use_hindsight
 
@@ -80,6 +78,7 @@ class DeepDeterministicPolicyGradients:
               num_epochs=200,
               episodes_in_epoch=16,
               max_episode_len=50,
+              minibatch_size=128,
               model_dir=None):
 
         # Create a saver object for saving and loading variables
@@ -209,7 +208,7 @@ class DeepDeterministicPolicyGradients:
             print("Starting policy optimization.")
             average_epoch_avg_max_q = 0.0
             for optimization_step in range(optimization_steps):
-                batch_size = min(self.minibatch_size, replay_buffer.size())
+                batch_size = min(minibatch_size, replay_buffer.size())
                 (s_batch, a_batch, r_batch, t_batch,
                  s2_batch) = replay_buffer.sample_batch(batch_size)
 
