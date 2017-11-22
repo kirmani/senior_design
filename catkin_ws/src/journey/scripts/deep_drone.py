@@ -285,10 +285,10 @@ class DeepDronePlanner:
     def reward(self, state, action, goal):
         position = state[-3:]
         distance = np.linalg.norm(position - goal)
-        distance_reward = np.exp(-distance)
+        distance_reward = -(distance * distance)
         forward_reward = action[0]
         collided_reward = -1 if self.collided else 0
-        reward_weights = np.array([1.0, 0.02, 0.5])
+        reward_weights = np.array([1.0, 0.01, 10.0])
         reward = np.array([distance_reward, forward_reward, collided_reward])
         return np.dot(reward_weights, reward)
 
@@ -382,7 +382,13 @@ class DeepDronePlanner:
             print("modeldir is %s" % modeldir)
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
-        self.ddpg.Train(env, actor_noise, logdir=logdir, model_dir=modeldir)
+        self.ddpg.Train(
+            env,
+            actor_noise,
+            logdir=logdir,
+            model_dir=modeldir,
+            episodes_in_epoch=4,
+            optimization_steps=10)
 
 
 def main(args):
