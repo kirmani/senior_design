@@ -135,7 +135,7 @@ class DeepDronePlanner:
 
         # Set up policy search network.
         self.state_dim = 3
-        self.action_dim = 2
+        self.action_dim = 3
         self.goal_dim = 3
         self.image_width = 84
         self.image_height = 84
@@ -219,7 +219,7 @@ class DeepDronePlanner:
         x = tf.concat([position, depth], axis=-1)
         x = tf.contrib.layers.fully_connected(position, 64)
         actions = tf.contrib.layers.fully_connected(
-            inputs=x, num_outputs=self.action_dim, activation_fn=tf.tanh)
+            inputs=x, num_outputs=self.action_dim, activation_fn=tf.nn.sigmoid)
         return inputs, actions
 
     def create_critic_network(self, scope):
@@ -344,10 +344,23 @@ class DeepDronePlanner:
 
     def step(self, state, action, goal):
         vel_msg = Twist()
-        vel_msg.linear.x = action[0]
-        vel_msg.linear.y = 0
-        vel_msg.linear.z = 0
-        vel_msg.angular.z = action[1]
+        left_prob = action[0]
+        right_prob = action[1]
+        straight_prob = action[2]
+
+        beta = 0.5
+        if straight_prob > beta:
+            vel_msg.linear.x = straight_prob
+            vel_msg.angular.z = (right_prob - left_prob) * 2
+            pass
+        else:
+            vel_msg.linear.x = 0
+            vel_msg.angular.z = (right_prob - left_prob) * 2
+
+        # vel_msg.linear.x = action[0]
+        # vel_msg.linear.y = 0
+        # vel_msg.linear.z = 0
+        # vel_msg.angular.z = action[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
