@@ -10,14 +10,15 @@ DeepDrone trajectory planner.
 """
 import argparse
 import numpy as np
+import matplotlib.pyplot as plt
+import os
 import rospy
 import ros_numpy
 import scipy
-import os
 import sys
 import tensorflow as tf
-import traceback
 import time
+import traceback
 from collections import deque
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
@@ -188,6 +189,75 @@ class DeepDronePlanner:
                self.goal_pose.position.z))
         return FlyToGoalResponse(True)
 
+    def create_actor_network(self, scope):
+        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
+        num_depth_inputs = (
+            self.image_width * self.image_height * self.sequence_length)
+        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
+            -1, self.state_dim * self.sequence_length + self.goal_dim
+        ])
+        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
+            -1, self.image_height, self.image_width, self.sequence_length
+        ])
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=16,
+            activation_fn=tf.nn.relu,
+            kernel_size=(8, 8),
+            stride=(4, 4),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=32,
+            activation_fn=tf.nn.relu,
+            kernel_size=(5, 5),
+            stride=(2, 2),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.flatten(depth)
+        depth = tf.contrib.layers.fully_connected(depth, 64)
+        position = tf.contrib.layers.fully_connected(position, 64)
+        x = tf.concat([position, depth], axis=-1)
+        x = tf.contrib.layers.fully_connected(position, 64)
+        actions = tf.contrib.layers.fully_connected(
+            inputs=x, num_outputs=self.action_dim, activation_fn=tf.tanh)
+        return inputs, actions
+
+    def create_critic_network(self, scope):
+        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
+        actions = tf.placeholder(tf.float32, (None, None, self.action_dim))
+        num_depth_inputs = (
+            self.image_width * self.image_height * self.sequence_length)
+        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
+            -1, self.state_dim * self.sequence_length + self.goal_dim
+        ])
+        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
+            -1, self.image_height, self.image_width, self.sequence_length
+        ])
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=16,
+            activation_fn=tf.nn.relu,
+            kernel_size=(8, 8),
+            stride=(4, 4),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=32,
+            activation_fn=tf.nn.relu,
+            kernel_size=(5, 5),
+            stride=(2, 2),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.flatten(depth)
+        depth = tf.contrib.layers.fully_connected(depth, 64)
+        position = tf.contrib.layers.fully_connected(position, 64)
+        act = tf.reshape(actions, [-1, self.action_dim])
+        act = tf.contrib.layers.fully_connected(act, 64)
+        x = tf.concat([position, depth, act], axis=-1)
+        x = tf.contrib.layers.fully_connected(x, 64)
+        out = tf.contrib.layers.fully_connected(
+            inputs=x, num_outputs=1, activation_fn=None)
+        return inputs, actions, out
+
     def get_current_frame(self):
         while not self.freshPose:
             print("Waiting for fresh pose...")
@@ -197,7 +267,11 @@ class DeepDronePlanner:
         position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         depth_data = ros_numpy.numpify(self.depth_msg)
-        depth_data[np.isnan(depth_data)] = 100
+        depth_data[np.isnan(depth_data)] = 0
+        # print(depth_data.shape)
+        # plt.imshow(depth_data)
+        # plt.show()
+        # exit()
 
         depth = scipy.misc.imresize(
             depth_data, [self.image_height, self.image_width],
@@ -288,78 +362,9 @@ class DeepDronePlanner:
         distance_reward = -(distance * distance)
         forward_reward = action[0]
         collided_reward = -1 if self.collided else 0
-        reward_weights = np.array([1.0, 0.01, 10.0])
+        reward_weights = np.array([1.0, 0.0, 0.0])
         reward = np.array([distance_reward, forward_reward, collided_reward])
         return np.dot(reward_weights, reward)
-
-    def create_actor_network(self, scope):
-        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
-        num_depth_inputs = (
-            self.image_width * self.image_height * self.sequence_length)
-        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
-            -1, self.state_dim * self.sequence_length + self.goal_dim
-        ])
-        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
-            -1, self.image_height, self.image_width, self.sequence_length
-        ])
-        depth = tf.contrib.layers.conv2d(
-            depth,
-            num_outputs=16,
-            activation_fn=tf.nn.relu,
-            kernel_size=(8, 8),
-            stride=(4, 4),
-            weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.conv2d(
-            depth,
-            num_outputs=32,
-            activation_fn=tf.nn.relu,
-            kernel_size=(5, 5),
-            stride=(2, 2),
-            weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.flatten(depth)
-        depth = tf.contrib.layers.fully_connected(depth, 64)
-        position = tf.contrib.layers.fully_connected(position, 64)
-        x = tf.concat([position, depth], axis=-1)
-        x = tf.contrib.layers.fully_connected(position, 64)
-        actions = tf.contrib.layers.fully_connected(
-            inputs=x, num_outputs=self.action_dim, activation_fn=tf.tanh)
-        return inputs, actions
-
-    def create_critic_network(self, scope):
-        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
-        actions = tf.placeholder(tf.float32, (None, None, self.action_dim))
-        num_depth_inputs = (
-            self.image_width * self.image_height * self.sequence_length)
-        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
-            -1, self.state_dim * self.sequence_length + self.goal_dim
-        ])
-        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
-            -1, self.image_height, self.image_width, self.sequence_length
-        ])
-        depth = tf.contrib.layers.conv2d(
-            depth,
-            num_outputs=16,
-            activation_fn=tf.nn.relu,
-            kernel_size=(8, 8),
-            stride=(4, 4),
-            weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.conv2d(
-            depth,
-            num_outputs=32,
-            activation_fn=tf.nn.relu,
-            kernel_size=(5, 5),
-            stride=(2, 2),
-            weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.flatten(depth)
-        depth = tf.contrib.layers.fully_connected(depth, 64)
-        position = tf.contrib.layers.fully_connected(position, 64)
-        act = tf.reshape(actions, [-1, self.action_dim])
-        act = tf.contrib.layers.fully_connected(act, 64)
-        x = tf.concat([position, depth, act], axis=-1)
-        x = tf.contrib.layers.fully_connected(x, 64)
-        out = tf.contrib.layers.fully_connected(
-            inputs=x, num_outputs=1, activation_fn=None)
-        return inputs, actions, out
 
     def RunModel(self, model_name, num_attempts):
         env = Environment(self.reset, self.step, self.reward)
