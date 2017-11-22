@@ -202,22 +202,35 @@ class DeepDronePlanner:
         depth = tf.contrib.layers.conv2d(
             depth,
             num_outputs=16,
-            activation_fn=tf.nn.relu,
+            activation_fn=None,
             kernel_size=(8, 8),
             stride=(4, 4),
             weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
         depth = tf.contrib.layers.conv2d(
             depth,
             num_outputs=32,
-            activation_fn=tf.nn.relu,
+            activation_fn=None,
             kernel_size=(5, 5),
             stride=(2, 2),
             weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
         depth = tf.contrib.layers.flatten(depth)
-        depth = tf.contrib.layers.fully_connected(depth, 16)
-        position = tf.contrib.layers.fully_connected(position, 16)
+        depth = tf.contrib.layers.fully_connected(
+            depth, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
+        position = tf.contrib.layers.fully_connected(
+            position, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        position = tf.contrib.layers.batch_norm(position)
+        position = tf.nn.relu(position)
         x = tf.concat([position, depth], axis=-1)
-        x = tf.contrib.layers.fully_connected(position, 16)
+        x = tf.contrib.layers.fully_connected(
+            x, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        x = tf.contrib.layers.batch_norm(x)
+        x = tf.nn.relu(x)
         actions = tf.contrib.layers.fully_connected(
             inputs=x, num_outputs=self.action_dim, activation_fn=tf.nn.sigmoid)
         return inputs, actions
@@ -236,24 +249,40 @@ class DeepDronePlanner:
         depth = tf.contrib.layers.conv2d(
             depth,
             num_outputs=16,
-            activation_fn=tf.nn.relu,
+            activation_fn=None,
             kernel_size=(8, 8),
             stride=(4, 4),
             weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
         depth = tf.contrib.layers.conv2d(
             depth,
             num_outputs=32,
-            activation_fn=tf.nn.relu,
+            activation_fn=None,
             kernel_size=(5, 5),
             stride=(2, 2),
             weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
         depth = tf.contrib.layers.flatten(depth)
-        depth = tf.contrib.layers.fully_connected(depth, 16)
-        position = tf.contrib.layers.fully_connected(position, 16)
+        depth = tf.contrib.layers.fully_connected(
+            depth, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
+        position = tf.contrib.layers.fully_connected(
+            position, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        position = tf.contrib.layers.batch_norm(position)
+        position = tf.nn.relu(position)
         act = tf.reshape(actions, [-1, self.action_dim])
-        act = tf.contrib.layers.fully_connected(act, 16)
+        act = tf.contrib.layers.fully_connected(
+            act, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        act = tf.contrib.layers.batch_norm(act)
+        act = tf.nn.relu(act)
         x = tf.concat([position, depth, act], axis=-1)
-        x = tf.contrib.layers.fully_connected(x, 16)
+        x = tf.contrib.layers.fully_connected(
+            x, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        x = tf.contrib.layers.batch_norm(x)
+        x = tf.nn.relu(x)
         out = tf.contrib.layers.fully_connected(
             inputs=x, num_outputs=1, activation_fn=None)
         return inputs, actions, out
