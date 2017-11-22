@@ -8,6 +8,9 @@
 .githooks/*                 @kirmani
 scripts/*                   @kirmani
 
+# Catkin workspace.
+catkin_ws/src/journey/*     @patil215
+
 # Experimental directories
 experimental/armandb/*      @armandb
 experimental/alioup/*       @alioup
