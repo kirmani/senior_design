@@ -366,8 +366,10 @@ class ActorNetwork:
                                             -self.action_gradient)
 
         # Optimization Op
-        self.optimize = tf.train.AdamOptimizer(learning_rate).\
-            apply_gradients(zip(self.actor_gradients, network_params))
+        with tf.control_dependencies(
+                tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+            self.optimize = tf.train.AdamOptimizer(learning_rate).\
+                apply_gradients(zip(self.actor_gradients, network_params))
 
         self.num_trainable_vars = len(network_params) + len(
             target_network_params)
@@ -434,8 +436,10 @@ class CriticNetwork:
         # Define loss and optimization Op
         shaped_labels = tf.reshape(self.predicted_q_value, [-1, 1])
         self.loss = tf.reduce_mean((self.out - shaped_labels)**2)
-        self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
-            self.loss)
+        with tf.control_dependencies(
+                tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+            self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
+                self.loss)
 
         # Get the gradient of the net w.r.t. the action
         shaped_out = tf.reshape(

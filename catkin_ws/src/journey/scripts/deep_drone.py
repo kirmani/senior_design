@@ -214,10 +214,10 @@ class DeepDronePlanner:
             stride=(2, 2),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.flatten(depth)
-        depth = tf.contrib.layers.fully_connected(depth, 64)
-        position = tf.contrib.layers.fully_connected(position, 64)
+        depth = tf.contrib.layers.fully_connected(depth, 16)
+        position = tf.contrib.layers.fully_connected(position, 16)
         x = tf.concat([position, depth], axis=-1)
-        x = tf.contrib.layers.fully_connected(position, 64)
+        x = tf.contrib.layers.fully_connected(position, 16)
         actions = tf.contrib.layers.fully_connected(
             inputs=x, num_outputs=self.action_dim, activation_fn=tf.nn.sigmoid)
         return inputs, actions
@@ -248,12 +248,12 @@ class DeepDronePlanner:
             stride=(2, 2),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.flatten(depth)
-        depth = tf.contrib.layers.fully_connected(depth, 64)
-        position = tf.contrib.layers.fully_connected(position, 64)
+        depth = tf.contrib.layers.fully_connected(depth, 16)
+        position = tf.contrib.layers.fully_connected(position, 16)
         act = tf.reshape(actions, [-1, self.action_dim])
-        act = tf.contrib.layers.fully_connected(act, 64)
+        act = tf.contrib.layers.fully_connected(act, 16)
         x = tf.concat([position, depth, act], axis=-1)
-        x = tf.contrib.layers.fully_connected(x, 64)
+        x = tf.contrib.layers.fully_connected(x, 16)
         out = tf.contrib.layers.fully_connected(
             inputs=x, num_outputs=1, activation_fn=None)
         return inputs, actions, out
@@ -348,13 +348,18 @@ class DeepDronePlanner:
         right_prob = action[1]
         straight_prob = action[2]
 
-        beta = 0.5
-        if straight_prob > beta:
-            vel_msg.linear.x = straight_prob
+        alpha = 0.5
+        beta = 1.0
+        if straight_prob > alpha:
+            vel_msg.linear.x = beta
             vel_msg.angular.z = (right_prob - left_prob) * 2
             pass
         else:
-            vel_msg.linear.x = 0
+            vel_msg.linear.x = 0.0
+            if right_prob > left_prob:
+                vel_msg.angular.z = beta
+            else:
+                vel_msg.angular.z = beta
             vel_msg.angular.z = (right_prob - left_prob) * 2
 
         # vel_msg.linear.x = action[0]
