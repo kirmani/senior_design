@@ -330,9 +330,6 @@ class DeepDronePlanner:
         vel_msg.angular.z = 0
         self.velocity_publisher.publish(vel_msg)
 
-        # Clear our frame buffer.
-        self.frame_buffer.clear()
-
         # Reset our simulation.
         rospy.wait_for_service('/gazebo/reset_world')
         try:
@@ -367,6 +364,9 @@ class DeepDronePlanner:
             self.goal_pose.position.x, self.goal_pose.position.y,
             self.goal_pose.position.z
         ])
+
+        # Clear our frame buffer.
+        self.frame_buffer.clear()
 
         state = self.get_current_state()
         return (state, goal)
