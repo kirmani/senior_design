@@ -10,14 +10,15 @@ DeepDrone trajectory planner.
 """
 import argparse
 import numpy as np
+import matplotlib.pyplot as plt
+import os
 import rospy
 import ros_numpy
 import scipy
-import os
 import sys
 import tensorflow as tf
-import traceback
 import time
+import traceback
 from collections import deque
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
@@ -134,7 +135,7 @@ class DeepDronePlanner:
 
         # Set up policy search network.
         self.state_dim = 3
-        self.action_dim = 2
+        self.action_dim = 3
         self.goal_dim = 3
         self.image_width = 84
         self.image_height = 84
@@ -188,6 +189,104 @@ class DeepDronePlanner:
                self.goal_pose.position.z))
         return FlyToGoalResponse(True)
 
+    def create_actor_network(self, scope):
+        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
+        num_depth_inputs = (
+            self.image_width * self.image_height * self.sequence_length)
+        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
+            -1, self.state_dim * self.sequence_length + self.goal_dim
+        ])
+        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
+            -1, self.image_height, self.image_width, self.sequence_length
+        ])
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=16,
+            activation_fn=None,
+            kernel_size=(8, 8),
+            stride=(4, 4),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=32,
+            activation_fn=None,
+            kernel_size=(5, 5),
+            stride=(2, 2),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
+        depth = tf.contrib.layers.flatten(depth)
+        depth = tf.contrib.layers.fully_connected(
+            depth, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
+        position = tf.contrib.layers.fully_connected(
+            position, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        position = tf.contrib.layers.batch_norm(position)
+        position = tf.nn.relu(position)
+        x = tf.concat([position, depth], axis=-1)
+        x = tf.contrib.layers.fully_connected(
+            x, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        x = tf.contrib.layers.batch_norm(x)
+        x = tf.nn.relu(x)
+        actions = tf.contrib.layers.fully_connected(
+            inputs=x, num_outputs=self.action_dim, activation_fn=tf.nn.sigmoid)
+        return inputs, actions
+
+    def create_critic_network(self, scope):
+        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
+        actions = tf.placeholder(tf.float32, (None, None, self.action_dim))
+        num_depth_inputs = (
+            self.image_width * self.image_height * self.sequence_length)
+        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
+            -1, self.state_dim * self.sequence_length + self.goal_dim
+        ])
+        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
+            -1, self.image_height, self.image_width, self.sequence_length
+        ])
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=16,
+            activation_fn=None,
+            kernel_size=(8, 8),
+            stride=(4, 4),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
+        depth = tf.contrib.layers.conv2d(
+            depth,
+            num_outputs=32,
+            activation_fn=None,
+            kernel_size=(5, 5),
+            stride=(2, 2),
+            weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
+        depth = tf.contrib.layers.flatten(depth)
+        depth = tf.contrib.layers.fully_connected(
+            depth, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        depth = tf.contrib.layers.batch_norm(depth)
+        depth = tf.nn.relu(depth)
+        position = tf.contrib.layers.fully_connected(
+            position, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        position = tf.contrib.layers.batch_norm(position)
+        position = tf.nn.relu(position)
+        act = tf.reshape(actions, [-1, self.action_dim])
+        act = tf.contrib.layers.fully_connected(
+            act, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        act = tf.contrib.layers.batch_norm(act)
+        act = tf.nn.relu(act)
+        x = tf.concat([position, depth, act], axis=-1)
+        x = tf.contrib.layers.fully_connected(
+            x, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        x = tf.contrib.layers.batch_norm(x)
+        x = tf.nn.relu(x)
+        out = tf.contrib.layers.fully_connected(
+            inputs=x, num_outputs=1, activation_fn=None)
+        return inputs, actions, out
+
     def get_current_frame(self):
         while not self.freshPose:
             print("Waiting for fresh pose...")
@@ -197,7 +296,11 @@ class DeepDronePlanner:
         position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         depth_data = ros_numpy.numpify(self.depth_msg)
-        depth_data[np.isnan(depth_data)] = 100
+        depth_data[np.isnan(depth_data)] = 0
+        # print(depth_data.shape)
+        # plt.imshow(depth_data)
+        # plt.show()
+        # exit()
 
         depth = scipy.misc.imresize(
             depth_data, [self.image_height, self.image_width],
@@ -226,9 +329,6 @@ class DeepDronePlanner:
         vel_msg.linear.z = 0
         vel_msg.angular.z = 0
         self.velocity_publisher.publish(vel_msg)
-
-        # Clear our frame buffer.
-        self.frame_buffer.clear()
 
         # Reset our simulation.
         rospy.wait_for_service('/gazebo/reset_world')
@@ -265,15 +365,36 @@ class DeepDronePlanner:
             self.goal_pose.position.z
         ])
 
+        # Clear our frame buffer.
+        self.frame_buffer.clear()
+
         state = self.get_current_state()
         return (state, goal)
 
     def step(self, state, action, goal):
         vel_msg = Twist()
-        vel_msg.linear.x = action[0]
-        vel_msg.linear.y = 0
-        vel_msg.linear.z = 0
-        vel_msg.angular.z = action[1]
+        left_prob = action[0]
+        right_prob = action[1]
+        straight_prob = action[2]
+
+        alpha = 0.5
+        beta = 1.0
+        if straight_prob > alpha:
+            vel_msg.linear.x = beta
+            vel_msg.angular.z = (right_prob - left_prob) * 2
+            pass
+        else:
+            vel_msg.linear.x = 0.0
+            if right_prob > left_prob:
+                vel_msg.angular.z = beta
+            else:
+                vel_msg.angular.z = beta
+            vel_msg.angular.z = (right_prob - left_prob) * 2
+
+        # vel_msg.linear.x = action[0]
+        # vel_msg.linear.y = 0
+        # vel_msg.linear.z = 0
+        # vel_msg.angular.z = action[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -285,81 +406,12 @@ class DeepDronePlanner:
     def reward(self, state, action, goal):
         position = state[-3:]
         distance = np.linalg.norm(position - goal)
-        distance_reward = np.exp(-distance)
+        distance_reward = -(distance * distance)
         forward_reward = action[0]
         collided_reward = -1 if self.collided else 0
-        reward_weights = np.array([1.0, 0.02, 0.5])
+        reward_weights = np.array([1.0, 0.0, 0.0])
         reward = np.array([distance_reward, forward_reward, collided_reward])
         return np.dot(reward_weights, reward)
-
-    def create_actor_network(self, scope):
-        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
-        num_depth_inputs = (
-            self.image_width * self.image_height * self.sequence_length)
-        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
-            -1, self.state_dim * self.sequence_length + self.goal_dim
-        ])
-        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
-            -1, self.image_height, self.image_width, self.sequence_length
-        ])
-        depth = tf.contrib.layers.conv2d(
-            depth,
-            num_outputs=16,
-            activation_fn=tf.nn.relu,
-            kernel_size=(8, 8),
-            stride=(4, 4),
-            weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.conv2d(
-            depth,
-            num_outputs=32,
-            activation_fn=tf.nn.relu,
-            kernel_size=(5, 5),
-            stride=(2, 2),
-            weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.flatten(depth)
-        depth = tf.contrib.layers.fully_connected(depth, 64)
-        position = tf.contrib.layers.fully_connected(position, 64)
-        x = tf.concat([position, depth], axis=-1)
-        x = tf.contrib.layers.fully_connected(position, 64)
-        actions = tf.contrib.layers.fully_connected(
-            inputs=x, num_outputs=self.action_dim, activation_fn=tf.tanh)
-        return inputs, actions
-
-    def create_critic_network(self, scope):
-        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
-        actions = tf.placeholder(tf.float32, (None, None, self.action_dim))
-        num_depth_inputs = (
-            self.image_width * self.image_height * self.sequence_length)
-        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
-            -1, self.state_dim * self.sequence_length + self.goal_dim
-        ])
-        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
-            -1, self.image_height, self.image_width, self.sequence_length
-        ])
-        depth = tf.contrib.layers.conv2d(
-            depth,
-            num_outputs=16,
-            activation_fn=tf.nn.relu,
-            kernel_size=(8, 8),
-            stride=(4, 4),
-            weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.conv2d(
-            depth,
-            num_outputs=32,
-            activation_fn=tf.nn.relu,
-            kernel_size=(5, 5),
-            stride=(2, 2),
-            weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.flatten(depth)
-        depth = tf.contrib.layers.fully_connected(depth, 64)
-        position = tf.contrib.layers.fully_connected(position, 64)
-        act = tf.reshape(actions, [-1, self.action_dim])
-        act = tf.contrib.layers.fully_connected(act, 64)
-        x = tf.concat([position, depth, act], axis=-1)
-        x = tf.contrib.layers.fully_connected(x, 64)
-        out = tf.contrib.layers.fully_connected(
-            inputs=x, num_outputs=1, activation_fn=None)
-        return inputs, actions, out
 
     def RunModel(self, model_name, num_attempts):
         env = Environment(self.reset, self.step, self.reward)
@@ -369,7 +421,7 @@ class DeepDronePlanner:
             os.path.dirname(__file__),
             '../../../learning/deep_drone/' + model_name)
         self.ddpg.RunModel(
-            env, actor_noise, modeldir, num_attempts=num_attempts)
+            env, modeldir, actor_noise=None, num_attempts=num_attempts)
 
     def Train(self, prev_model):
         env = Environment(self.reset, self.step, self.reward)
@@ -382,7 +434,8 @@ class DeepDronePlanner:
             print("modeldir is %s" % modeldir)
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
-        self.ddpg.Train(env, actor_noise, logdir=logdir, model_dir=modeldir)
+        self.ddpg.Train(
+            env, logdir=logdir, actor_noise=None, model_dir=modeldir)
 
 
 def main(args):
