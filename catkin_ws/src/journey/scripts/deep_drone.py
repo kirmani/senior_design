@@ -421,7 +421,7 @@ class DeepDronePlanner:
             os.path.dirname(__file__),
             '../../../learning/deep_drone/' + model_name)
         self.ddpg.RunModel(
-            env, actor_noise, modeldir, num_attempts=num_attempts)
+            env, modeldir, actor_noise=None, num_attempts=num_attempts)
 
     def Train(self, prev_model):
         env = Environment(self.reset, self.step, self.reward)
@@ -436,8 +436,8 @@ class DeepDronePlanner:
             os.path.dirname(__file__), '../../../learning/deep_drone/')
         self.ddpg.Train(
             env,
-            actor_noise,
             logdir=logdir,
+            actor_noise=None,
             model_dir=modeldir,
             episodes_in_epoch=4,
             optimization_steps=10)

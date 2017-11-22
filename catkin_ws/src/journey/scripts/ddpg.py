@@ -50,8 +50,8 @@ class DeepDeterministicPolicyGradients:
 
     def RunModel(self,
                  env,
-                 actor_noise,
                  model_dir,
+                 actor_noise=None,
                  num_attempts=1,
                  max_episode_len=50):
         saver = tf.train.Saver()
@@ -60,19 +60,21 @@ class DeepDeterministicPolicyGradients:
         for i in range(num_attempts):
             (state, goal) = env.Reset()
             for j in range(max_episode_len):
-                # Added exploration noise.
                 action = self.actor.predict(
                     np.expand_dims(
                         np.expand_dims(
                             np.concatenate([state, goal], axis=-1), axis=0),
-                        axis=0))[0][0] + actor_noise()
+                        axis=0))[0][0]
+                # Added exploration noise.
+                if actor_noise != None:
+                    action += actor_noise()
 
                 next_state = env.Step(state, action, goal)
                 state = next_state
 
     def Train(self,
               env,
-              actor_noise,
+              actor_noise=None,
               logdir='log',
               optimization_steps=40,
               num_epochs=200,
@@ -128,12 +130,14 @@ class DeepDeterministicPolicyGradients:
                 next_state_buffer = []
 
                 for j in range(max_episode_len):
-                    # Added exploration noise.
                     action = self.actor.predict(
                         np.expand_dims(
                             np.expand_dims(
                                 np.concatenate([state, goal], axis=-1), axis=0),
-                            axis=0))[0][0] + actor_noise()
+                            axis=0))[0][0]
+                    # Added exploration noise.
+                    if actor_noise != None:
+                        action += actor_noise()
 
                     next_state = env.Step(state, action, goal)
                     terminal = False
@@ -366,10 +370,8 @@ class ActorNetwork:
                                             -self.action_gradient)
 
         # Optimization Op
-        with tf.control_dependencies(
-                tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            self.optimize = tf.train.AdamOptimizer(learning_rate).\
-                apply_gradients(zip(self.actor_gradients, network_params))
+        self.optimize = tf.train.AdamOptimizer(learning_rate).\
+            apply_gradients(zip(self.actor_gradients, network_params))
 
         self.num_trainable_vars = len(network_params) + len(
             target_network_params)
@@ -436,10 +438,8 @@ class CriticNetwork:
         # Define loss and optimization Op
         shaped_labels = tf.reshape(self.predicted_q_value, [-1, 1])
         self.loss = tf.reduce_mean((self.out - shaped_labels)**2)
-        with tf.control_dependencies(
-                tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-            self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
-                self.loss)
+        self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
+            self.loss)
 
         # Get the gradient of the net w.r.t. the action
         shaped_out = tf.reshape(
