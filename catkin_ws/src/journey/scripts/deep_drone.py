@@ -190,13 +190,13 @@ class DeepDronePlanner:
         return FlyToGoalResponse(True)
 
     def create_actor_network(self, scope):
-        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
+        inputs = tf.placeholder(tf.float32, (None, self.num_inputs))
         num_depth_inputs = (
             self.image_width * self.image_height * self.sequence_length)
-        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
+        position = tf.reshape(inputs[:, num_depth_inputs:], [
             -1, self.state_dim * self.sequence_length + self.goal_dim
         ])
-        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
+        depth = tf.reshape(inputs[:, :num_depth_inputs], [
             -1, self.image_height, self.image_width, self.sequence_length
         ])
         depth = tf.contrib.layers.conv2d(
@@ -236,14 +236,14 @@ class DeepDronePlanner:
         return inputs, actions
 
     def create_critic_network(self, scope):
-        inputs = tf.placeholder(tf.float32, (None, None, self.num_inputs))
-        actions = tf.placeholder(tf.float32, (None, None, self.action_dim))
+        inputs = tf.placeholder(tf.float32, (None, self.num_inputs))
+        actions = tf.placeholder(tf.float32, (None, self.action_dim))
         num_depth_inputs = (
             self.image_width * self.image_height * self.sequence_length)
-        position = tf.reshape(inputs[:, :, num_depth_inputs:], [
+        position = tf.reshape(inputs[:, num_depth_inputs:], [
             -1, self.state_dim * self.sequence_length + self.goal_dim
         ])
-        depth = tf.reshape(inputs[:, :, :num_depth_inputs], [
+        depth = tf.reshape(inputs[:, :num_depth_inputs], [
             -1, self.image_height, self.image_width, self.sequence_length
         ])
         depth = tf.contrib.layers.conv2d(
@@ -413,6 +413,9 @@ class DeepDronePlanner:
         reward = np.array([distance_reward, forward_reward, collided_reward])
         return np.dot(reward_weights, reward)
 
+    def terminal(self, state, action, goal):
+        return self.collided
+
     def RunModel(self, model_name, num_attempts):
         env = Environment(self.reset, self.step, self.reward)
         actor_noise = OrnsteinUhlenbeckActionNoise(
@@ -424,7 +427,7 @@ class DeepDronePlanner:
             env, modeldir, actor_noise=None, num_attempts=num_attempts)
 
     def Train(self, prev_model):
-        env = Environment(self.reset, self.step, self.reward)
+        env = Environment(self.reset, self.step, self.reward, self.terminal)
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim))
         modeldir = None
         if prev_model != None:
