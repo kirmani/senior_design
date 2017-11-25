@@ -438,7 +438,7 @@ class DeepDronePlanner:
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
         self.ddpg.Train(
-            env, logdir=logdir, actor_noise=None, model_dir=modeldir)
+            env, logdir=logdir, actor_noise=actor_noise, model_dir=modeldir)
 
 
 def main(args):
