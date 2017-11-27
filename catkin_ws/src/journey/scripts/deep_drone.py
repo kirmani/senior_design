@@ -403,42 +403,47 @@ class DeepDronePlanner:
         next_state = self.get_current_state()
         return next_state
 
-    def reward(self, state, action, goal):
-        position = state[-3:]
-        distance = np.linalg.norm(position - goal)
-        distance_reward = -(distance * distance)
-        forward_reward = action[0]
-        collided_reward = -1 if self.collided else 0
-        reward_weights = np.array([1.0, 0.0, 0.0])
-        reward = np.array([distance_reward, forward_reward, collided_reward])
-        return np.dot(reward_weights, reward)
+    def reward(self, state, action, goal, episode=0, max_episode_length=0, type=0):
+        if type == 0:
+            position = state[-3:]
+            distance = np.linalg.norm(position - goal)
+            distance_reward = -(distance * distance)
+            forward_reward = action[2]
+            collided_reward = -1 if self.collided else 0
+            reward_weights = np.array([1.0, 0.0, 0.0])
+            reward = np.array([distance_reward, forward_reward, collided_reward])
+            return np.dot(reward_weights, reward)
+        elif type == 1:
+            frac_completed = float(episode) / max_episode_length
+            forward_reward = action[2]
+
+            reward = np.array([frac_completed, forward_reward])
+            reward_weights = np.array([1.0, 3.0])
+
+            result = np.dot(reward_weights, reward)
+            return result
 
     def terminal(self, state, action, goal):
         return self.collided
 
     def RunModel(self, model_name, num_attempts):
-        env = Environment(self.reset, self.step, self.reward)
+        env = Environment(self.reset, self.step, self.reward, self.terminal)
         actor_noise = OrnsteinUhlenbeckActionNoise(
-            mu=np.zeros(self.num_actions))
+            mu=np.zeros(self.action_dim))
         modeldir = os.path.join(
             os.path.dirname(__file__),
             '../../../learning/deep_drone/' + model_name)
         self.ddpg.RunModel(
-            env, modeldir, actor_noise=None, num_attempts=num_attempts)
+            env, modeldir, num_attempts=num_attempts)
 
-    def Train(self, prev_model):
-        env = Environment(self.reset, self.step, self.reward, self.terminal)
+    def Train(self, prev_model, reward_type):
+        env = Environment(self.reset, self.step, self.reward, self.terminal, reward_type)
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim))
         modeldir = None
         if prev_model != None:
-            modeldir = os.path.join(
-                os.path.dirname(__file__),
-                '../../../learning/deep_drone/' + prev_model)
-            print("modeldir is %s" % modeldir)
-        logdir = os.path.join(
-            os.path.dirname(__file__), '../../../learning/deep_drone/')
-        self.ddpg.Train(
-            env, logdir=logdir, actor_noise=actor_noise, model_dir=modeldir)
+            modeldir = os.path.join(os.path.dirname(__file__), '../../../learning/deep_drone/' + prev_model)
+        logdir = os.path.join(os.path.dirname(__file__), '../../../learning/deep_drone/')
+        self.ddpg.Train(env, logdir=logdir, actor_noise=actor_noise, model_dir=modeldir)
 
 
 def main(args):
@@ -449,7 +454,7 @@ def main(args):
             attempts = int(args.num_attempts)
         deep_drone_planner.RunModel(args.model, num_attempts=attempts)
     else:
-        deep_drone_planner.Train(args.prev_model)
+        deep_drone_planner.Train(args.prev_model, int(args.reward_type))
 
 
 if __name__ == '__main__':
@@ -474,6 +479,13 @@ if __name__ == '__main__':
             '--prev_model',
             action='store',
             help='name of existing model to start training with')
+        parser.add_argument(
+            '-r',
+            '--reward_type',
+            default='0',
+            action='store',
+            help='type of reward function to use. Reference Reward() to check what number corresponds to what logic')
+
         args = parser.parse_args()
         #if len(args) < 1:
         #    parser.error ('missing argument')
