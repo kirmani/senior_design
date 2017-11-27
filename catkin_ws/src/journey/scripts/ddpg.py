@@ -61,7 +61,7 @@ class DeepDeterministicPolicyGradients:
 
                 next_state = env.Step(state, action, goal)
                 terminal = env.Terminal(state, action, goal)
-                reward = env.Reward(next_state, action, goal)
+                reward = env.Reward(next_state, action, goal, episode=j, max_episode_length=max_episode_len)
                 state = next_state
 
                 if terminal:
@@ -78,7 +78,7 @@ class DeepDeterministicPolicyGradients:
               optimization_steps=40,
               num_epochs=200,
               episodes_in_epoch=16,
-              max_episode_len=50,
+              max_episode_len=200,
               minibatch_size=128,
               model_dir=None):
 
@@ -148,7 +148,7 @@ class DeepDeterministicPolicyGradients:
 
                     next_state = env.Step(state, action, goal)
                     terminal = env.Terminal(state, action, goal)
-                    reward = env.Reward(next_state, action, goal)
+                    reward = env.Reward(next_state, action, goal, episode=j, max_episode_length=max_episode_len)
 
                     # Add to episode buffer.
                     state_buffer.append(np.concatenate([state, goal], axis=-1))
@@ -284,11 +284,12 @@ class DeepDeterministicPolicyGradients:
 
 class Environment:
 
-    def __init__(self, reset, step, reward, terminal):
+    def __init__(self, reset, step, reward, terminal, reward_type=0):
         self.reset = reset
         self.step = step
         self.reward = reward
         self.terminal = terminal
+        self.reward_type = reward_type
 
     def Reset(self):
         return self.reset()
@@ -296,8 +297,8 @@ class Environment:
     def Step(self, state, action, goal):
         return self.step(state, action, goal)
 
-    def Reward(self, state, action, goal):
-        return self.reward(state, action, goal)
+    def Reward(self, state, action, goal, episode=0, max_episode_length=0):
+        return self.reward(state, action, goal, episode=episode, max_episode_length=max_episode_length, type=self.reward_type)
 
     def Terminal(self, state, action, goal):
         return self.terminal(state, action, goal)
