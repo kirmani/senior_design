@@ -427,14 +427,14 @@ class DeepDronePlanner:
         return self.collided
 
     def RunModel(self, model_name, num_attempts):
-        env = Environment(self.reset, self.step, self.reward)
+        env = Environment(self.reset, self.step, self.reward, self.terminal)
         actor_noise = OrnsteinUhlenbeckActionNoise(
-            mu=np.zeros(self.num_actions))
+            mu=np.zeros(self.action_dim))
         modeldir = os.path.join(
             os.path.dirname(__file__),
             '../../../learning/deep_drone/' + model_name)
         self.ddpg.RunModel(
-            env, modeldir, actor_noise=None, num_attempts=num_attempts)
+            env, modeldir, num_attempts=num_attempts)
 
     def Train(self, prev_model, reward_type):
         env = Environment(self.reset, self.step, self.reward, self.terminal, reward_type)
