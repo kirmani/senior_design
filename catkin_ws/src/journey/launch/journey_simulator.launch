@@ -2,7 +2,7 @@
 <launch>
   <!-- We resume the logic in empty_world.launch, changing only the name of the world to be launched -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" value="$(find journey)/worlds/single_cylinder.world"/>
+    <arg name="world_name" value="$(find journey)/worlds/single_cylinder_in_building.world"/>
   </include>
 
 
@@ -12,4 +12,9 @@
 
   <!-- Launch state estimation module -->
   <node name="drone_stateestimation" respawn="true" pkg="tum_ardrone" type="drone_stateestimation"></node>
+  <!--
+  <node name="image_view" pkg="image_view" type="image_view" output="screen">
+    <remap from="image" to="/ardrone/front/depth/image_view" />
+  </node>
+  -->
 </launch>

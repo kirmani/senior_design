@@ -103,6 +103,10 @@ class DeepDronePlanner:
         self.collision_subscriber = rospy.Subscriber(
             '/ardrone/crash_sensor', ContactsState, self._OnNewContactData)
         self.collided = False
+        self.last_position = None
+
+        self.start = None
+
 
         self.depth_msg = None
 
@@ -135,10 +139,11 @@ class DeepDronePlanner:
 
         # Set up policy search network.
         self.state_dim = 3
-        self.action_dim = 3
+        self.action_dim = 2
         self.goal_dim = 3
-        self.image_width = 84
-        self.image_height = 84
+        scale = 0.05
+        self.image_width = int(640 * scale)
+        self.image_height = int(360 * scale)
         self.sequence_length = 4
         self.frame_buffer = deque(maxlen=self.sequence_length)
         self.num_inputs = (
@@ -227,12 +232,12 @@ class DeepDronePlanner:
         position = tf.contrib.layers.batch_norm(position)
         position = tf.nn.relu(position)
         x = tf.concat([position, depth], axis=-1)
-        x = tf.contrib.layers.fully_connected(
-            x, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        x = tf.contrib.layers.batch_norm(x)
-        x = tf.nn.relu(x)
+        # x = tf.contrib.layers.fully_connected(
+        #     x, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        # x = tf.contrib.layers.batch_norm(x)
+        # x = tf.nn.relu(x)
         actions = tf.contrib.layers.fully_connected(
-            inputs=x, num_outputs=self.action_dim, activation_fn=tf.nn.sigmoid)
+            inputs=x, num_outputs=self.action_dim, activation_fn=tf.tanh)
         return inputs, actions
 
     def create_critic_network(self, scope):
@@ -279,10 +284,10 @@ class DeepDronePlanner:
         act = tf.contrib.layers.batch_norm(act)
         act = tf.nn.relu(act)
         x = tf.concat([position, depth, act], axis=-1)
-        x = tf.contrib.layers.fully_connected(
-            x, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        x = tf.contrib.layers.batch_norm(x)
-        x = tf.nn.relu(x)
+        # x = tf.contrib.layers.fully_connected(
+        #     x, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        # x = tf.contrib.layers.batch_norm(x)
+        # x = tf.nn.relu(x)
         out = tf.contrib.layers.fully_connected(
             inputs=x, num_outputs=1, activation_fn=None)
         return inputs, actions, out
@@ -296,15 +301,16 @@ class DeepDronePlanner:
         position = np.array(
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         depth_data = ros_numpy.numpify(self.depth_msg)
-        depth_data[np.isnan(depth_data)] = 0
-        # print(depth_data.shape)
-        # plt.imshow(depth_data)
-        # plt.show()
-        # exit()
+        depth_data[np.isnan(depth_data)] = 0.0
+        print(depth_data.shape)
 
         depth = scipy.misc.imresize(
             depth_data, [self.image_height, self.image_width],
-            mode='F').flatten()
+            mode='F')
+        # plt.imshow(depth)
+        # plt.show()
+        # exit()
+        depth = depth.flatten()
         frame = (depth, position)
         return frame
 
@@ -336,6 +342,7 @@ class DeepDronePlanner:
             reset_world = rospy.ServiceProxy('/gazebo/reset_world',
                                              EmptyService)
             reset_world()
+            rospy.sleep(1.)
         except rospy.ServiceException:
             print("Failed to reset simulator.")
 
@@ -368,33 +375,38 @@ class DeepDronePlanner:
         # Clear our frame buffer.
         self.frame_buffer.clear()
 
+
         state = self.get_current_state()
+
+        self.start = state[-3:]
+        self.last_position = self.start
+
         return (state, goal)
 
     def step(self, state, action, goal):
         vel_msg = Twist()
-        left_prob = action[0]
-        right_prob = action[1]
-        straight_prob = action[2]
+        # left_prob = action[0]
+        # right_prob = action[1]
+        # straight_prob = action[2]
 
-        alpha = 0.5
-        beta = 1.0
-        if straight_prob > alpha:
-            vel_msg.linear.x = beta
-            vel_msg.angular.z = (right_prob - left_prob) * 2
-            pass
-        else:
-            vel_msg.linear.x = 0.0
-            if right_prob > left_prob:
-                vel_msg.angular.z = beta
-            else:
-                vel_msg.angular.z = beta
-            vel_msg.angular.z = (right_prob - left_prob) * 2
+        # alpha = 0.5
+        # beta = 1.0
+        # if straight_prob > alpha:
+        #     vel_msg.linear.x = beta
+        #     vel_msg.angular.z = (right_prob - left_prob) * 2
+        #     pass
+        # else:
+        #     vel_msg.linear.x = 0.0
+        #     if right_prob > left_prob:
+        #         vel_msg.angular.z = beta
+        #     else:
+        #         vel_msg.angular.z = beta
+        #     vel_msg.angular.z = (right_prob - left_prob) * 2
 
-        # vel_msg.linear.x = action[0]
-        # vel_msg.linear.y = 0
-        # vel_msg.linear.z = 0
-        # vel_msg.angular.z = action[1]
+        vel_msg.linear.x = action[0]
+        vel_msg.linear.y = 0
+        vel_msg.linear.z = 0
+        vel_msg.angular.z = action[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -404,17 +416,25 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action, goal):
-        position = state[-3:]
-        distance = np.linalg.norm(position - goal)
-        distance_reward = -(distance * distance)
-        forward_reward = action[0]
-        collided_reward = -1 if self.collided else 0
-        reward_weights = np.array([1.0, 0.0, 0.0])
-        reward = np.array([distance_reward, forward_reward, collided_reward])
-        return np.dot(reward_weights, reward)
+        #position = state[-3:]
+        #distance = np.linalg.norm(position - goal)
+        #distance_reward = -(distance * distance)
+        #forward_reward = action[0]
+        #collided_reward = -1 if self.collided else 0
+        #reward_weights = np.array([1.0, 0.0, 0.0])
+        #reward = np.array([distance_reward, forward_reward, collided_reward])
+        #return np.dot(reward_weights, reward)
+
+        start_to_goal = np.linalg.norm(goal - self.start)
+        start_to_pos = np.linalg.norm(state[-3:] - self.start)
+
+        return (start_to_pos / start_to_goal)
 
     def terminal(self, state, action, goal):
-        return self.collided
+        current_position = state[-3:]
+        moved_backward = (self.last_position is not None and np.linalg.norm(current_position - goal) > np.linalg.norm(self.last_position - goal))
+        self.last_position = current_position
+        return self.collided or moved_backward
 
     def RunModel(self, model_name, num_attempts):
         env = Environment(self.reset, self.step, self.reward)
@@ -438,7 +458,7 @@ class DeepDronePlanner:
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
         self.ddpg.Train(
-            env, logdir=logdir, actor_noise=actor_noise, model_dir=modeldir)
+            env, logdir=logdir, actor_noise=actor_noise, model_dir=modeldir, max_episode_len=1000)
 
 
 def main(args):
