@@ -53,6 +53,7 @@ class DeepDeterministicPolicyGradients:
         saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
 
         for i in range(num_attempts):
+            total_reward = 0.0
             (state, goal) = env.Reset()
             for j in range(max_episode_len):
                 action = self.actor.predict(
@@ -64,11 +65,12 @@ class DeepDeterministicPolicyGradients:
                 reward = env.Reward(next_state, action, goal)
                 state = next_state
 
+                total_reward += reward
                 if terminal:
                     break
 
             print("Episode over.")
-            print("Reward: %.4f" % reward)
+            print("Reward: %.4f" % total_reward)
 
     def Train(self,
               env,
@@ -240,13 +242,10 @@ class DeepDeterministicPolicyGradients:
                         y_i.append(r_batch[k] + self.gamma * target_q[k])
 
                 # Update the critic given the targets
-                predicted_q_value = self.critic.train(s_batch, a_batch,
+                (predicted_q_value, critic_loss) = self.critic.train(s_batch, a_batch,
                                                       np.reshape(
                                                           y_i, (batch_size, 1)))
                 average_epoch_avg_max_q += np.amax(predicted_q_value)
-                print("[%d] Qmax: %.4f" %
-                      (optimization_step,
-                       average_epoch_avg_max_q / (optimization_step + 1)))
 
                 # Update the actor policy using the sampled gradient
                 a_outs = self.actor.predict(s_batch)
@@ -256,6 +255,12 @@ class DeepDeterministicPolicyGradients:
                 # Update target networks
                 self.actor.update_target_network()
                 self.critic.update_target_network()
+
+                # Output training statistics.
+                print("[%d] Qmax: %.4f, Critic Loss: %.4f" %
+                      (optimization_step,
+                       average_epoch_avg_max_q / (optimization_step + 1), critic_loss))
+
             average_epoch_avg_max_q /= optimization_steps
             if np.isnan(average_epoch_reward) or np.isnan(
                     average_epoch_avg_max_q):
@@ -460,14 +465,14 @@ class CriticNetwork:
         self.action_grads = tf.gradients(shaped_out, self.actions)
 
     def train(self, inputs, actions, reward):
-        preds, _ = self.sess.run(
-            [self.out, self.optimize],
+        preds, loss, _ = self.sess.run(
+            [self.out, self.loss, self.optimize],
             feed_dict={
                 self.inputs: inputs,
                 self.actions: actions,
                 self.predicted_q_value: reward
             })
-        return preds
+        return (preds, loss)
 
     def predict(self, inputs, actions):
         preds = self.sess.run(
