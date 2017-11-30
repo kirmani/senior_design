@@ -302,11 +302,11 @@ class DeepDronePlanner:
             [self.pose.position.x, self.pose.position.y, self.pose.position.z])
         depth_data = ros_numpy.numpify(self.depth_msg)
         depth_data[np.isnan(depth_data)] = 0.0
-        print(depth_data.shape)
 
         depth = scipy.misc.imresize(
             depth_data, [self.image_height, self.image_width],
             mode='F')
+        # print(depth_data.shape)
         # plt.imshow(depth)
         # plt.show()
         # exit()
