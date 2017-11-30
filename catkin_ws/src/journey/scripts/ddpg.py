@@ -24,7 +24,7 @@ class DeepDeterministicPolicyGradients:
     def __init__(self,
                  create_actor_network,
                  create_critic_network,
-                 gamma=0.98,
+                 gamma=0.99,
                  use_hindsight=False):
         self.gamma = gamma
         self.use_hindsight = use_hindsight
@@ -33,7 +33,7 @@ class DeepDeterministicPolicyGradients:
         self.sess = tf.Session()
 
         # Create actor network.
-        self.actor = ActorNetwork(self.sess, create_actor_network)
+        self.actor = ActorNetwork(self.sess, create_actor_network, 128)
         self.critic = CriticNetwork(self.sess, create_critic_network,
                                     self.actor.get_num_trainable_vars())
 
@@ -360,7 +360,8 @@ class ActorNetwork:
     def __init__(self,
                  sess,
                  create_actor_network,
-                 tau=0.05,
+                 batch_size,
+                 tau=0.001,
                  learning_rate=0.0001):
         self.sess = sess
 
@@ -387,8 +388,9 @@ class ActorNetwork:
                                               [None, self.action_dim])
 
         # Combine the gradients here
-        self.actor_gradients = tf.gradients(self.actions, network_params,
+        unnormalized_actor_gradients = tf.gradients(self.actions, network_params,
                                             -self.action_gradient)
+        self.actor_gradients = list(map(lambda x: tf.div(x, batch_size), unnormalized_actor_gradients))
 
         # Optimization Op
         self.optimize = tf.train.AdamOptimizer(learning_rate).\
@@ -427,7 +429,7 @@ class CriticNetwork:
                  sess,
                  create_critic_network,
                  num_actor_vars,
-                 tau=0.05,
+                 tau=0.001,
                  learning_rate=0.001):
         self.sess = sess
 

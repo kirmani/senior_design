@@ -139,7 +139,7 @@ class DeepDronePlanner:
 
         # Set up policy search network.
         self.state_dim = 3
-        self.action_dim = 3
+        self.action_dim = 2
         self.goal_dim = 3
         scale = 0.05
         self.image_width = int(640 * scale)
@@ -239,7 +239,7 @@ class DeepDronePlanner:
         # x = tf.nn.relu(x)
         # x = depth
         actions = tf.contrib.layers.fully_connected(
-            inputs=x, num_outputs=self.action_dim, activation_fn=tf.nn.sigmoid)
+            inputs=x, num_outputs=self.action_dim, activation_fn=tf.nn.tanh)
         return inputs, actions
 
     def create_critic_network(self, scope):
@@ -281,10 +281,10 @@ class DeepDronePlanner:
         # position = tf.contrib.layers.batch_norm(position)
         # position = tf.nn.relu(position)
         act = tf.reshape(actions, [-1, self.action_dim])
-        # act = tf.contrib.layers.fully_connected(
-        #     act, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # act = tf.contrib.layers.batch_norm(act)
-        # act = tf.nn.relu(act)
+        act = tf.contrib.layers.fully_connected(
+            act, 32, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        act = tf.contrib.layers.batch_norm(act)
+        act = tf.nn.relu(act)
         # x = tf.concat([depth, position, act], axis=-1)
         x = tf.concat([depth, act], axis=-1)
         # x = tf.contrib.layers.fully_connected(
@@ -388,27 +388,27 @@ class DeepDronePlanner:
 
     def step(self, state, action, goal):
         vel_msg = Twist()
-        left_prob = action[0]
-        right_prob = action[1]
-        straight_prob = action[2]
+        # left_prob = action[0]
+        # right_prob = action[1]
+        # straight_prob = action[2]
 
-        alpha = 0.5
-        beta = 1.0
-        if straight_prob > alpha:
-            vel_msg.linear.x = beta
-            vel_msg.angular.z = (left_prob - right_prob)
-        else:
-            vel_msg.linear.x = 0.0
-            if left_prob > right_prob:
-                vel_msg.angular.z = beta
-            else:
-                vel_msg.angular.z = -beta
-            # vel_msg.angular.z = (right_prob - left_prob) * 2
+        # alpha = 0.5
+        # beta = 1.0
+        # if straight_prob > alpha:
+        #     vel_msg.linear.x = beta
+        #     vel_msg.angular.z = (left_prob - right_prob)
+        # else:
+        #     vel_msg.linear.x = 0.0
+        #     if left_prob > right_prob:
+        #         vel_msg.angular.z = beta
+        #     else:
+        #         vel_msg.angular.z = -beta
+        #     # vel_msg.angular.z = (right_prob - left_prob) * 2
 
-        # vel_msg.linear.x = action[0]
-        # vel_msg.linear.y = 0
-        # vel_msg.linear.z = 0
-        # vel_msg.angular.z = action[1]
+        vel_msg.linear.x = action[0] * action[0]
+        vel_msg.linear.y = 0
+        vel_msg.linear.z = 0
+        vel_msg.angular.z = action[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -466,7 +466,7 @@ class DeepDronePlanner:
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
         self.ddpg.Train(
-            env, logdir=logdir, actor_noise=actor_noise, model_dir=modeldir, max_episode_len=100)
+            env, logdir=logdir, episodes_in_epoch=16, actor_noise=actor_noise, model_dir=modeldir, max_episode_len=100)
 
 
 def main(args):
