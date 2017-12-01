@@ -45,53 +45,6 @@ class DeepDronePlanner:
         # Initialize our ROS node.
         rospy.init_node('deep_drone_planner', anonymous=True)
 
-        # Initialize visualization markers.
-        self.drone_marker = Marker()
-        self.drone_marker.header.frame_id = "map"
-        self.drone_marker.header.stamp = rospy.get_rostime()
-        self.drone_marker.ns = "drone"
-        self.drone_marker.id = 1
-        self.drone_marker.type = Marker.SPHERE
-        self.drone_marker.action = Marker.ADD
-        self.drone_marker.pose.position.x = 0
-        self.drone_marker.pose.position.y = 0
-        self.drone_marker.pose.position.z = 0
-        self.drone_marker.pose.orientation.x = 0
-        self.drone_marker.pose.orientation.y = 0
-        self.drone_marker.pose.orientation.z = 0
-        self.drone_marker.pose.orientation.w = 0
-        self.drone_marker.scale.x = 0.5
-        self.drone_marker.scale.y = 0.5
-        self.drone_marker.scale.z = 0.5
-        self.drone_marker.color.r = 0
-        self.drone_marker.color.g = 1
-        self.drone_marker.color.b = 0
-        self.drone_marker.color.a = 1
-        self.drone_marker.lifetime = rospy.Duration(0)
-
-        self.goal_marker = Marker()
-        self.goal_marker.header.frame_id = "map"
-        self.goal_marker.header.stamp = rospy.get_rostime()
-        self.goal_marker.ns = "goal"
-        self.goal_marker.id = 0
-        self.goal_marker.type = Marker.SPHERE
-        self.goal_marker.action = Marker.ADD
-        self.goal_marker.pose.position.x = 2
-        self.goal_marker.pose.position.y = 0
-        self.goal_marker.pose.position.z = 0
-        self.goal_marker.pose.orientation.x = 0
-        self.goal_marker.pose.orientation.y = 0
-        self.goal_marker.pose.orientation.z = 0
-        self.goal_marker.pose.orientation.w = 0
-        self.goal_marker.scale.x = self.distance_threshold
-        self.goal_marker.scale.y = self.distance_threshold
-        self.goal_marker.scale.z = self.distance_threshold
-        self.goal_marker.color.r = 1
-        self.goal_marker.color.g = 0
-        self.goal_marker.color.b = 0
-        self.goal_marker.color.a = 1
-        self.goal_marker.lifetime = rospy.Duration(0)
-
         # Inputs.
         self.depth_subscriber = rospy.Subscriber(
             '/ardrone/front/depth/image_raw', Image, self._OnNewDepth)
@@ -120,9 +73,6 @@ class DeepDronePlanner:
         self.com_publisher = rospy.Publisher(
             '/tum_ardrone/com', String, queue_size=10)
 
-        # Visualization topics.
-        self.marker_publisher = rospy.Publisher(
-            'visualization_marker', Marker, queue_size=10)
         # Listen for new goal when planning at test time.
         s = rospy.Service('fly_to_goal', FlyToGoal, self.FlyToGoal)
 
@@ -132,10 +82,6 @@ class DeepDronePlanner:
         # Initialize goal.
         self.goal_pose = Pose()
         self.freshPose = False
-
-        # Initialize visualization.
-        self.marker_publisher.publish(self.drone_marker)
-        self.marker_publisher.publish(self.goal_marker)
 
         # Set up policy search network.
         self.state_dim = 3
@@ -152,31 +98,13 @@ class DeepDronePlanner:
         self.ddpg = DeepDeterministicPolicyGradients(self.create_actor_network,
                                                      self.create_critic_network)
 
-        # Initialize policy with heuristic.
-        # self._InitializePolicy()
-
         print("Deep drone planner initialized.")
-
-    def _InitializePolicy(self, num_samples=10000, bounds=5.0, num_epochs=100):
-        delta = (np.random.uniform(size=(num_samples, 3)) - 0.5) * (2 * bounds)
-        actions = np.zeros((num_samples, 4))
-        actions[:, 0:3] = delta / bounds
-        rewards = np.linalg.norm(delta, axis=1, keepdims=True)
-        for epoch in range(num_epochs):
-            self.critic.train(delta, actions, rewards)
-            self.actor.train(delta, actions)
-        print("Policy initialized.")
 
     def _OnNewPose(self, data):
         self.freshPose = True
         self.pose.position.x = round(data.x, 4)
         self.pose.position.y = round(data.y, 4)
         self.pose.position.z = round(data.z, 4)
-        self.drone_marker.pose.position.x = self.pose.position.x
-        self.drone_marker.pose.position.y = self.pose.position.y
-        self.drone_marker.pose.position.z = self.pose.position.z
-        self.drone_marker.action = Marker.MODIFY
-        self.marker_publisher.publish(self.drone_marker)
 
     def _OnNewDepth(self, depth):
         self.depth_msg = depth
@@ -240,21 +168,6 @@ class DeepDronePlanner:
             depth, 200, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
-        # depth = tf.contrib.layers.fully_connected(
-        #     depth, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # depth = tf.contrib.layers.batch_norm(depth)
-        # depth = tf.nn.relu(depth)
-        # position = tf.contrib.layers.fully_connected(
-        #     position, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # position = tf.contrib.layers.batch_norm(position)
-        # position = tf.nn.relu(position)
-        # x = tf.concat([position, depth], axis=-1)
-        # x = depth
-        # x = tf.contrib.layers.fully_connected(
-        #     x, 32, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # x = tf.contrib.layers.batch_norm(x)
-        # x = tf.nn.relu(x)
-        # x = depth
         action_weights = tf.Variable(tf.random_uniform([200, self.action_dim], -3e-4, 3e-4))
         action_bias = tf.Variable(tf.random_uniform([self.action_dim], -3e-4, 3e-4))
         actions = tf.matmul(depth, action_weights) + action_bias
@@ -309,25 +222,6 @@ class DeepDronePlanner:
             depth, 200, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
-        # depth = tf.contrib.layers.fully_connected(
-        #     depth, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # depth = tf.contrib.layers.batch_norm(depth)
-        # depth = tf.nn.relu(depth)
-        # position = tf.contrib.layers.fully_connected(
-        #     position, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # position = tf.contrib.layers.batch_norm(position)
-        # position = tf.nn.relu(position)
-        # act = tf.reshape(actions, [-1, self.action_dim])
-        # act = tf.contrib.layers.fully_connected(
-        #     act, 64, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # act = tf.contrib.layers.batch_norm(act)
-        # act = tf.nn.relu(act)
-        # x = tf.concat([depth, position, act], axis=-1)
-        # x = tf.concat([depth, act], axis=-1)
-        # x = tf.contrib.layers.fully_connected(
-        #     x, 32, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # x = tf.contrib.layers.batch_norm(x)
-        # x = tf.nn.relu(x)
         out_weights = tf.Variable(tf.random_uniform([200, 1], -3e-4, 3e-4))
         out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
         out = tf.matmul(depth, out_weights) + out_bias
@@ -403,11 +297,6 @@ class DeepDronePlanner:
         self.goal_pose.position.x = new_goal[0]
         self.goal_pose.position.y = new_goal[1]
         self.goal_pose.position.z = new_goal[2]
-        self.goal_marker.pose.position.x = self.goal_pose.position.x
-        self.goal_marker.pose.position.y = self.goal_pose.position.y
-        self.goal_marker.pose.position.z = self.goal_pose.position.z
-        self.goal_marker.action = Marker.MODIFY
-        self.marker_publisher.publish(self.goal_marker)
         goal = np.array([
             self.goal_pose.position.x, self.goal_pose.position.y,
             self.goal_pose.position.z
@@ -504,7 +393,7 @@ class DeepDronePlanner:
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
         self.ddpg.Train(
-            env, logdir=logdir, episodes_in_epoch=16, actor_noise=actor_noise, model_dir=modeldir, max_episode_len=100)
+            env, logdir=logdir, episodes_in_epoch=16, actor_noise=actor_noise, model_dir=modeldir, max_episode_len=1000)
 
 
 def main(args):
