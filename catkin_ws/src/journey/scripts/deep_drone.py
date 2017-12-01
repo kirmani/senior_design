@@ -85,7 +85,7 @@ class DeepDronePlanner:
 
         # Set up policy search network.
         self.state_dim = 3
-        self.action_dim = 3
+        self.action_dim = 1
         self.goal_dim = 3
         scale = 0.05
         self.image_width = int(640 * scale)
@@ -333,10 +333,10 @@ class DeepDronePlanner:
         #         vel_msg.angular.z = -beta
         #     # vel_msg.angular.z = (right_prob - left_prob) * 2
 
-        vel_msg.linear.x = max(action[0], 0)
-        vel_msg.linear.y = action[1]
+        vel_msg.linear.x = 0.5
+        vel_msg.linear.y = 0
         vel_msg.linear.z = 0
-        vel_msg.angular.z = action[2]
+        vel_msg.angular.z = action[0]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -346,7 +346,7 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action, goal):
-        return max(action[0], 0)
+        return 1
         # position = state[-3:]
         # velocity_magnitude = np.linalg.norm(position - self.last_position)
         # self.last_position = position
