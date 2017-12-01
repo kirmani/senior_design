@@ -38,7 +38,7 @@ from ddpg import Environment
 
 class DeepDronePlanner:
 
-    def __init__(self, distance_threshold=0.5, rate=10):
+    def __init__(self, distance_threshold=0.5, rate=5):
         self.distance_threshold = distance_threshold  # meters
         self.rate = rate  # Hz
 
@@ -253,6 +253,7 @@ class DeepDronePlanner:
         frame = self.get_current_frame()
         self.frame_buffer.append(frame)
         while len(self.frame_buffer) < self.frame_buffer.maxlen:
+            self.rate.sleep()
             frame = self.get_current_frame()
             self.frame_buffer.append(frame)
         depth = np.concatenate(
