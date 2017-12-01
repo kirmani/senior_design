@@ -333,7 +333,7 @@ class DeepDronePlanner:
         #         vel_msg.angular.z = -beta
         #     # vel_msg.angular.z = (right_prob - left_prob) * 2
 
-        vel_msg.linear.x = 0.5 if action[0] > 0 else 0
+        vel_msg.linear.x = max(action[0], 0)
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
         vel_msg.angular.z = action[1]
@@ -346,7 +346,7 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action, goal):
-        return 1 if action[0] > 0 else 0
+        return max(action[0], 0)
         # position = state[-3:]
         # velocity_magnitude = np.linalg.norm(position - self.last_position)
         # self.last_position = position
@@ -395,7 +395,7 @@ class DeepDronePlanner:
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
         self.ddpg.Train(
-            env, logdir=logdir, episodes_in_epoch=16, actor_noise=actor_noise, model_dir=modeldir, max_episode_len=1000)
+            env, logdir=logdir, episodes_in_epoch=4, actor_noise=actor_noise, model_dir=modeldir, max_episode_len=1000)
 
 
 def main(args):
