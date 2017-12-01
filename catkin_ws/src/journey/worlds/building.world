@@ -80,9 +80,9 @@
       <heading_deg>0</heading_deg>
     </spherical_coordinates>
     <state world_name='default'>
-      <sim_time>515 715000000</sim_time>
-      <real_time>42 138196834</real_time>
-      <wall_time>1512079999 925297240</wall_time>
+      <sim_time>581 294000000</sim_time>
+      <real_time>65 813874965</real_time>
+      <wall_time>1512094689 472365752</wall_time>
       <model name='ground_plane'>
         <pose>0 0 0 0 -0 0</pose>
         <link name='link'>
@@ -93,9 +93,9 @@
         </link>
       </model>
       <model name='willowgarage'>
-        <pose>-17.9736 -4.0767 0 0 -0 0</pose>
+        <pose>-17.983 -3.84005 0 0 -0 0</pose>
         <link name='walls'>
-          <pose>-17.9736 -4.0767 0 0 -0 0</pose>
+          <pose>-17.983 -3.84005 0 0 -0 0</pose>
           <velocity>0 0 0 0 -0 0</velocity>
           <acceleration>0 0 0 0 -0 0</acceleration>
           <wrench>0 0 0 0 -0 0</wrench>
@@ -104,7 +104,7 @@
     </state>
     <gui fullscreen='0'>
       <camera name='user_camera'>
-        <pose>1.18053 -0.160515 10.5382 -5.60245e-17 1.05248 2.75581</pose>
+        <pose>6.00398 0.895214 36.384 0 1.24048 3.07581</pose>
         <view_controller>orbit</view_controller>
       </camera>
     </gui>

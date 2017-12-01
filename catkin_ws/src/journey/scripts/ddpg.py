@@ -119,7 +119,7 @@ class DeepDeterministicPolicyGradients:
 
         while tf.train.global_step(self.sess, global_step) < num_epochs:
             epoch = tf.train.global_step(self.sess, global_step)
-            total_epoch_reward = 0.0
+            epoch_rewards = []
             total_epoch_avg_max_q = 0.0
             greedy_eps = epsilon_zero * (1.0 - epoch / num_epochs)
             if greedy_eps > 0.0:
@@ -209,9 +209,8 @@ class DeepDeterministicPolicyGradients:
                     np.array(state_buffer), np.array(action_buffer))
                 episode_max_q = np.amax(predicted_q_values)
                 episode_avg_max_q = episode_max_q / max_episode_len
-                total_epoch_reward += episode_reward
+                epoch_rewards.append(episode_reward)
                 total_epoch_avg_max_q += episode_avg_max_q
-                average_epoch_reward = total_epoch_reward / (i + 1)
                 average_epoch_avg_max_q = total_epoch_avg_max_q / (i + 1)
 
                 if np.isnan(episode_reward) or np.isnan(episode_avg_max_q):
@@ -262,12 +261,14 @@ class DeepDeterministicPolicyGradients:
                        average_epoch_avg_max_q / (optimization_step + 1), critic_loss))
 
             average_epoch_avg_max_q /= optimization_steps
+            average_epoch_reward = np.mean(epoch_rewards)
+            epoch_reward_stddev = np.std(epoch_rewards)
             if np.isnan(average_epoch_reward) or np.isnan(
                     average_epoch_avg_max_q):
                 print("Reward is NaN. Exiting...")
                 sys.exit(0)
-            print('| Reward: {:4f} | Epoch: {:d} | Qmax: {:4f} |'.format(
-                average_epoch_reward, epoch, average_epoch_avg_max_q))
+            print('| Reward: {:4f} ({:4f})| Epoch: {:d} | Qmax: {:4f} |'.format(
+                average_epoch_reward, epoch_reward_stddev, epoch, average_epoch_avg_max_q))
 
             # Write episode summary statistics.
             summary_str = self.sess.run(
