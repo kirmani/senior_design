@@ -345,10 +345,11 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action, goal):
-        position = state[-3:]
-        velocity_magnitude = np.linalg.norm(position - self.last_position)
-        self.last_position = position
-        return velocity_magnitude
+        return action[0] * action[0]
+        # position = state[-3:]
+        # velocity_magnitude = np.linalg.norm(position - self.last_position)
+        # self.last_position = position
+        # return velocity_magnitude
         # distance = np.linalg.norm(position - goal)
         # reward = -(distance * distance)
         # if self.collided:
