@@ -71,7 +71,7 @@ class DeepDronePlanner:
         self.rate = rospy.Rate(self.rate)
 
         # Set up policy search network.
-        self.action_dim = 1
+        self.action_dim = 2
         scale = 0.05
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
@@ -104,8 +104,8 @@ class DeepDronePlanner:
             inputs,
             num_outputs=32,
             activation_fn=None,
-            kernel_size=(8, 8),
-            stride=(4, 4),
+            kernel_size=(5, 5),
+            stride=(1, 1),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
@@ -114,7 +114,7 @@ class DeepDronePlanner:
             num_outputs=32,
             activation_fn=None,
             kernel_size=(5, 5),
-            stride=(2, 2),
+            stride=(1, 1),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
@@ -123,7 +123,7 @@ class DeepDronePlanner:
             num_outputs=32,
             activation_fn=None,
             kernel_size=(5, 5),
-            stride=(2, 2),
+            stride=(1, 1),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
@@ -149,8 +149,8 @@ class DeepDronePlanner:
             inputs,
             num_outputs=32,
             activation_fn=None,
-            kernel_size=(8, 8),
-            stride=(4, 4),
+            kernel_size=(5, 5),
+            stride=(1, 1),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
@@ -159,7 +159,7 @@ class DeepDronePlanner:
             num_outputs=32,
             activation_fn=None,
             kernel_size=(5, 5),
-            stride=(2, 2),
+            stride=(1, 1),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
@@ -168,7 +168,7 @@ class DeepDronePlanner:
             num_outputs=32,
             activation_fn=None,
             kernel_size=(5, 5),
-            stride=(2, 2),
+            stride=(1, 1),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
@@ -238,10 +238,10 @@ class DeepDronePlanner:
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = 0.5
+        vel_msg.linear.x = max(action[0], 0)
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
-        vel_msg.angular.z = action[0]
+        vel_msg.angular.z = action[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -263,7 +263,10 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action):
-        return 1
+        linear_velocity = max(action[0], 0)
+        angular_velocity = action[1]
+        return (linear_velocity * np.cos(angular_velocity * np.pi)
+                if not self.collided else -10)
 
     def terminal(self, state, action):
         return self.collided
@@ -288,7 +291,7 @@ class DeepDronePlanner:
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
         self.ddpg.Train(
-            env, logdir=logdir, episodes_in_epoch=16, actor_noise=actor_noise, model_dir=modeldir, max_episode_len=1000)
+            env, logdir=logdir, episodes_in_epoch=16, actor_noise=actor_noise, model_dir=modeldir, max_episode_len=500)
 
 
 def main(args):
