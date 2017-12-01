@@ -373,7 +373,7 @@ class DeepDronePlanner:
         # self.reward_velocity = (1 - alpha) * self.reward_velocity + alpha * reward_velocity
         # print(self.reward_velocity)
         # moved_backward = self.reward_velocity < 0
-        return self.collided # or moved_backward
+        return self.collided or action[0] < 0 # or moved_backward
 
     def RunModel(self, model_name, num_attempts):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
