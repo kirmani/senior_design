@@ -333,7 +333,7 @@ class DeepDronePlanner:
         #         vel_msg.angular.z = -beta
         #     # vel_msg.angular.z = (right_prob - left_prob) * 2
 
-        vel_msg.linear.x = action[0]
+        vel_msg.linear.x = max(action[0], 0)
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
         vel_msg.angular.z = action[1]
@@ -346,7 +346,7 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action, goal):
-        return action[0]
+        return max(action[0], 0)
         # position = state[-3:]
         # velocity_magnitude = np.linalg.norm(position - self.last_position)
         # self.last_position = position
@@ -373,7 +373,7 @@ class DeepDronePlanner:
         # self.reward_velocity = (1 - alpha) * self.reward_velocity + alpha * reward_velocity
         # print(self.reward_velocity)
         # moved_backward = self.reward_velocity < 0
-        return self.collided or action[0] < 0 # or moved_backward
+        return self.collided # or moved_backward
 
     def RunModel(self, model_name, num_attempts):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
