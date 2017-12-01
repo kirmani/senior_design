@@ -90,7 +90,7 @@ class DeepDronePlanner:
         scale = 0.05
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
-        self.sequence_length = 1
+        self.sequence_length = 4
         self.frame_buffer = deque(maxlen=self.sequence_length)
         self.num_inputs = (
             (self.image_width * self.image_height + self.state_dim) *
