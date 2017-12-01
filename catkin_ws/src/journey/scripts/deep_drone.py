@@ -38,7 +38,7 @@ from ddpg import Environment
 
 class DeepDronePlanner:
 
-    def __init__(self, distance_threshold=0.5, rate=5):
+    def __init__(self, distance_threshold=0.5, rate=10):
         self.distance_threshold = distance_threshold  # meters
         self.rate = rate  # Hz
 
