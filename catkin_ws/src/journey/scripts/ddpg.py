@@ -9,6 +9,7 @@
 Deep deterministic policy gradients with hindsight experience replay.
 """
 import argparse
+import matplotlib.pyplot as plt
 import numpy as np
 import random
 import os
@@ -54,15 +55,14 @@ class DeepDeterministicPolicyGradients:
 
         for i in range(num_attempts):
             total_reward = 0.0
-            (state, goal) = env.Reset()
+            state = env.Reset()
             for j in range(max_episode_len):
                 action = self.actor.predict(
-                    np.expand_dims(
-                        np.concatenate([state, goal], axis=-1), axis=0))[0]
+                    np.expand_dims(state, axis=0))[0]
 
-                next_state = env.Step(state, action, goal)
-                terminal = env.Terminal(state, action, goal)
-                reward = env.Reward(next_state, action, goal)
+                next_state = env.Step(state, action)
+                terminal = env.Terminal(state, action)
+                reward = env.Reward(next_state, action)
                 state = next_state
 
                 total_reward += reward
@@ -126,7 +126,7 @@ class DeepDeterministicPolicyGradients:
                 print("Start training epoch %d with e-greedy (%.4f)" %
                       (epoch, greedy_eps))
             for i in range(episodes_in_epoch):
-                (state, goal) = env.Reset()
+                state = env.Reset()
                 episode_reward = 0.0
 
                 state_buffer = []
@@ -140,25 +140,23 @@ class DeepDeterministicPolicyGradients:
 
                 for j in range(max_episode_len):
                     action = self.actor.predict(
-                        np.expand_dims(
-                            np.concatenate([state, goal], axis=-1), axis=0))[0]
+                        np.expand_dims(state, axis=0))[0]
                     # Added exploration noise.
                     if actor_noise != None:
                         action += actor_noise()
                     if np.random.random() < greedy_eps:
                         action = np.random.random(action.shape)
 
-                    next_state = env.Step(state, action, goal)
-                    terminal = env.Terminal(state, action, goal)
-                    reward = env.Reward(next_state, action, goal)
+                    next_state = env.Step(state, action)
+                    terminal = env.Terminal(state, action)
+                    reward = env.Reward(next_state, action)
 
                     # Add to episode buffer.
-                    state_buffer.append(np.concatenate([state, goal], axis=-1))
+                    state_buffer.append(state)
                     action_buffer.append(action)
                     reward_buffer.append(reward)
                     terminal_buffer.append(terminal)
-                    next_state_buffer.append(
-                        np.concatenate([next_state, goal], axis=-1))
+                    next_state_buffer.append(next_state)
 
                     state = next_state
                     episode_reward += reward
@@ -299,14 +297,14 @@ class Environment:
     def Reset(self):
         return self.reset()
 
-    def Step(self, state, action, goal):
-        return self.step(state, action, goal)
+    def Step(self, state, action):
+        return self.step(state, action)
 
-    def Reward(self, state, action, goal):
-        return self.reward(state, action, goal)
+    def Reward(self, state, action):
+        return self.reward(state, action)
 
-    def Terminal(self, state, action, goal):
-        return self.terminal(state, action, goal)
+    def Terminal(self, state, action):
+        return self.terminal(state, action)
 
 
 class ReplayBuffer:
