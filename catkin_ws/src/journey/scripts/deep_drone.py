@@ -238,7 +238,7 @@ class DeepDronePlanner:
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = max(action[0], 0.1)
+        vel_msg.linear.x = action[0]
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
         vel_msg.angular.z = action[1]
@@ -263,7 +263,7 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action):
-        linear_velocity = max(action[0], 0.1)
+        linear_velocity = action[0]
         angular_velocity = action[1]
         return (linear_velocity * np.cos(angular_velocity * np.pi / 2.0)
                 if not self.collided else -10)

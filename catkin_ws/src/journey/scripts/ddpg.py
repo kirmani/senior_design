@@ -146,6 +146,8 @@ class DeepDeterministicPolicyGradients:
                         action += actor_noise()
                     if np.random.random() < greedy_eps:
                         action = np.random.random(action.shape)
+                    # Bias drone to go a little bit forward.
+                    action[0] = max(action[0], 0.1)
 
                     next_state = env.Step(state, action)
                     terminal = env.Terminal(state, action)
