@@ -271,7 +271,7 @@ class DeepDronePlanner:
         threshold = 4.0
         distance_reward = min(1, (farthest_obstacle - radius) / (threshold - radius))
         print(distance_reward)
-        return (linear_velocity * np.cos(angular_velocity * np.pi / 2) + distance_reward
+        return (linear_velocity * np.cos(angular_velocity * np.pi / 4) + distance_reward
                 if not self.collided else - 100)
 
     def terminal(self, state, action):
