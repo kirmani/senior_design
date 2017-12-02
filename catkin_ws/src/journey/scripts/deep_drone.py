@@ -267,7 +267,7 @@ class DeepDronePlanner:
         angular_velocity = action[1]
         farthest_obstacle = np.amax(state[:, :, -1])
         farthest_obstacle_weight = 0.1
-        threshold = 0.5
+        threshold = 1.0
         distance_reward = farthest_obstacle_weight * (farthest_obstacle - threshold)
         # print(distance_reward)
         return (linear_velocity * np.cos(angular_velocity * np.pi / 2) + distance_reward
