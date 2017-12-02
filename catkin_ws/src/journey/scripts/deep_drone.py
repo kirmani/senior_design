@@ -269,7 +269,7 @@ class DeepDronePlanner:
         farthest_obstacle_weight = 0.1
         threshold = 0.5
         distance_reward = farthest_obstacle_weight * (farthest_obstacle - threshold)
-        print(distance_reward)
+        # print(distance_reward)
         return (linear_velocity * np.cos(angular_velocity * np.pi / 2) + distance_reward
                 if not self.collided else - 100)
 
