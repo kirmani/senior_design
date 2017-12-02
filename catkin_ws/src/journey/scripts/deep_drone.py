@@ -50,7 +50,6 @@ class DeepDronePlanner:
             '/ardrone/front/depth/image_raw', Image, self._OnNewDepth)
         self.depth_msg = None
 
-
         self.collision_subscriber = rospy.Subscriber(
             '/ardrone/crash_sensor', ContactsState, self._OnNewContactData)
         self.collided = False
@@ -80,6 +79,7 @@ class DeepDronePlanner:
         self.ddpg = DeepDeterministicPolicyGradients(self.create_actor_network,
                                                      self.create_critic_network)
 
+
         print("Deep drone planner initialized.")
 
     def _OnNewDepth(self, depth):
@@ -106,7 +106,7 @@ class DeepDronePlanner:
             num_outputs=32,
             activation_fn=None,
             kernel_size=(5, 5),
-            stride=(2, 2),
+            stride=(4, 4),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
@@ -124,7 +124,7 @@ class DeepDronePlanner:
             num_outputs=32,
             activation_fn=None,
             kernel_size=(5, 5),
-            stride=(1, 1),
+            stride=(2, 2),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
@@ -151,7 +151,7 @@ class DeepDronePlanner:
             num_outputs=32,
             activation_fn=None,
             kernel_size=(5, 5),
-            stride=(2, 2),
+            stride=(4, 4),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
@@ -169,7 +169,7 @@ class DeepDronePlanner:
             num_outputs=32,
             activation_fn=None,
             kernel_size=(5, 5),
-            stride=(1, 1),
+            stride=(2, 2),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
@@ -191,6 +191,12 @@ class DeepDronePlanner:
     def get_current_frame(self):
         depth_data = ros_numpy.numpify(self.depth_msg)
         depth_data[np.isnan(depth_data)] = 0.0
+        # print(depth_data.shape)
+        # r, g, b = depth_data[:, :, 0], depth_data[:, :, 1], depth_data[:, :, 2]
+        # depth_data = 0.2989 * r + 0.5870 * g + 0.1140 * b
+        # plt.imshow(depth_data, cmap="gray")
+        # plt.show()
+        # exit()
 
         depth = scipy.misc.imresize(
             depth_data, [self.image_height, self.image_width],
@@ -210,7 +216,7 @@ class DeepDronePlanner:
         return state
 
     def reset(self):
-        # Stop moving our drone
+        # Stop moving our drone.
         vel_msg = Twist()
         vel_msg.linear.x = 0
         vel_msg.linear.y = 0
@@ -256,10 +262,10 @@ class DeepDronePlanner:
         # DEBUG.
         # for i in range(4):
         #     plt.subplot(2, 4, i + 1)
-        #     plt.imshow(state[:, :, i])
+        #     plt.imshow(state[:, :, i], cmap="gray")
         #     plt.title('state_%d' % i)
         #     plt.subplot(2, 4, i + 5)
-        #     plt.imshow(next_state[:, :, i])
+        #     plt.imshow(next_state[:, :, i], cmap="gray")
         #     plt.title('next_state_%d' % i)
         # plt.show()
         # exit()
@@ -270,6 +276,16 @@ class DeepDronePlanner:
         return  1 if not self.collided else 0
 
     def terminal(self, state, action):
+        vel_msg = Twist()
+        if self.collided:
+            vel_msg.linear.x = -0.2
+            vel_msg.linear.y = 0
+            vel_msg.linear.z = 0
+            vel_msg.angular.z = 0
+            self.velocity_publisher.publish(vel_msg)
+            rospy.sleep(2)
+        vel_msg.linear.x = 0.0
+        self.velocity_publisher.publish(vel_msg)
         return self.collided
 
     def RunModel(self, model_name, num_attempts):

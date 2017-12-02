@@ -230,6 +230,8 @@ class DeepDeterministicPolicyGradients:
                 # Calculate targets
                 target_q = self.critic.predict_target(
                     s2_batch, self.actor.predict_target(s2_batch))
+                # print(np.amin(target_q))
+                # print(np.amax(target_q))
 
                 y_i = []
                 for k in range(batch_size):
@@ -237,6 +239,9 @@ class DeepDeterministicPolicyGradients:
                         y_i.append(r_batch[k])
                     else:
                         y_i.append(r_batch[k] + self.gamma * target_q[k])
+                y_i = (np.array(y_i) > 0).astype(np.float32)
+                # print(np.amin(y_i))
+                # print(np.amax(y_i))
 
                 # Update the critic given the targets
                 (predicted_q_value, critic_loss) = self.critic.train(s_batch, a_batch,
@@ -457,6 +462,7 @@ class CriticNetwork:
 
         # Define loss and optimization Op
         self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.predicted_q_value, logits=self.out))
+        # self.loss = tf.reduce_mean((self.predicted_q_value - self.out)**2)
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
 
