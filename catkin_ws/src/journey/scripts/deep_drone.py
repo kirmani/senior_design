@@ -265,7 +265,7 @@ class DeepDronePlanner:
     def reward(self, state, action):
         linear_velocity = max(action[0], 0)
         angular_velocity = action[1]
-        return (linear_velocity * np.cos(angular_velocity * np.pi)
+        return (linear_velocity * np.cos(angular_velocity * np.pi / 2.0)
                 if not self.collided else -10)
 
     def terminal(self, state, action):
