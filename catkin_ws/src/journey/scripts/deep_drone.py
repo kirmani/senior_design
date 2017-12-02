@@ -38,7 +38,7 @@ from ddpg import Environment
 
 class DeepDronePlanner:
 
-    def __init__(self, distance_threshold=0.5, rate=10):
+    def __init__(self, distance_threshold=0.5, rate=4):
         self.distance_threshold = distance_threshold  # meters
         self.rate = rate  # Hz
 
@@ -71,7 +71,7 @@ class DeepDronePlanner:
         self.rate = rospy.Rate(self.rate)
 
         # Set up policy search network.
-        self.action_dim = 2
+        self.action_dim = 1
         scale = 0.05
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
@@ -87,7 +87,8 @@ class DeepDronePlanner:
 
     def _OnNewContactData(self, contact):
         # Surprisingly, this works pretty well for collision detection
-        self.collided = len(contact.states) > 0
+        if len(contact.states) > 0:
+            self.collided = True
 
     def FlyToGoal(self, req):
         self.goal_pose.position.x = self.pose.position.x + req.x
@@ -234,14 +235,17 @@ class DeepDronePlanner:
         self.frame_buffer.clear()
         state = self.get_current_state()
 
+        # Reset collision state.
+        self.collided = False
+
         return state
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = action[0]
+        vel_msg.linear.x = 0.2
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
-        vel_msg.angular.z = action[1]
+        vel_msg.angular.z = action[0]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -263,16 +267,7 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action):
-        linear_velocity = action[0] if action[0] > 0 else -1
-        angular_velocity = action[1]
-        farthest_obstacle = np.amax(state[:, :, -1])
-        distance_weight = 0.1
-        radius = 1.0
-        threshold = 4.0
-        distance_reward = min(1, (farthest_obstacle - radius) / (threshold - radius))
-        print(distance_reward)
-        return (linear_velocity * np.cos(angular_velocity * np.pi / 4) + distance_reward
-                if not self.collided else - 100)
+        return  1 if not self.collided else 0
 
     def terminal(self, state, action):
         return self.collided

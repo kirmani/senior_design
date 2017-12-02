@@ -146,8 +146,6 @@ class DeepDeterministicPolicyGradients:
                         action += actor_noise()
                     if np.random.random() < greedy_eps:
                         action = np.random.random(action.shape) - 0.5
-                    # Bias drone to go a little bit forward.
-                    action[0] = min(max(action[0], 0.1), 0.2)
 
                     next_state = env.Step(state, action)
                     terminal = env.Terminal(state, action)
@@ -458,8 +456,7 @@ class CriticNetwork:
         self.predicted_q_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
-        shaped_labels = tf.reshape(self.predicted_q_value, [-1, 1])
-        self.loss = tf.reduce_mean((self.out - shaped_labels)**2)
+        self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.predicted_q_value, logits=self.out))
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
 
