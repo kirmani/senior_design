@@ -266,10 +266,11 @@ class DeepDronePlanner:
         linear_velocity = action[0] if action[0] > 0 else -1
         angular_velocity = action[1]
         farthest_obstacle = np.amax(state[:, :, -1])
-        farthest_obstacle_weight = 0.1
-        threshold = 1.0
-        distance_reward = farthest_obstacle_weight * (farthest_obstacle - threshold)
-        # print(distance_reward)
+        distance_weight = 0.1
+        radius = 1.0
+        threshold = 4.0
+        distance_reward = min(1, (farthest_obstacle - radius) / (threshold - radius))
+        print(distance_reward)
         return (linear_velocity * np.cos(angular_velocity * np.pi / 2) + distance_reward
                 if not self.collided else - 100)
 
