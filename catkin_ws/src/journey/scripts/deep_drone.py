@@ -263,10 +263,15 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action):
-        linear_velocity = action[0]
+        linear_velocity = action[0] if action[0] > 0 else -1
         angular_velocity = action[1]
-        return (linear_velocity * np.cos(angular_velocity * np.pi / 2.0)
-                if not self.collided else -10)
+        farthest_obstacle = np.amax(state[:, :, -1])
+        farthest_obstacle_weight = 0.1
+        threshold = 0.5
+        distance_reward = farthest_obstacle_weight * (farthest_obstacle - threshold)
+        print(distance_reward)
+        return (linear_velocity * np.cos(angular_velocity * np.pi / 2) + distance_reward
+                if not self.collided else - 100)
 
     def terminal(self, state, action):
         return self.collided
@@ -277,7 +282,7 @@ class DeepDronePlanner:
             os.path.dirname(__file__),
             '../../../learning/deep_drone/' + model_name)
         self.ddpg.RunModel(
-            env, modeldir, num_attempts=num_attempts)
+            env, modeldir, num_attempts=num_attempts, max_episode_len=1000)
 
     def Train(self, prev_model):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
@@ -291,7 +296,7 @@ class DeepDronePlanner:
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
         self.ddpg.Train(
-            env, logdir=logdir, episodes_in_epoch=1, num_epochs=(16 * 200), actor_noise=actor_noise, model_dir=modeldir, max_episode_len=1000)
+            env, logdir=logdir, episodes_in_epoch=1, num_epochs=(16 * 200), actor_noise=actor_noise, epsilon_zero=0, model_dir=modeldir, max_episode_len=1000)
 
 
 def main(args):
