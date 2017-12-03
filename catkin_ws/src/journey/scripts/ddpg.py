@@ -164,11 +164,11 @@ class DeepDeterministicPolicyGradients:
                     episode_reward += reward
 
                     # Collision probability output.
-                    collision_logits = self.critic.predict(
-                        np.expand_dims(state, axis=0), np.expand_dims(action, axis=0))
-                    collision_probs = 1.0 / (1.0 + np.exp(-collision_logits))
-                    print("Probability of short-term collision: %.4f" % (1 - collision_probs[0]))
-                    print("Probability of long-term collision: %.4f" % (1 - collision_probs[1]))
+                    # collision_logits = self.critic.predict(
+                    #     np.expand_dims(state, axis=0), np.expand_dims(action, axis=0))
+                    # collision_probs = 1.0 / (1.0 + np.exp(-collision_logits))
+                    # print("Probability of short-term collision: %.4f" % (1 - collision_probs[0]))
+                    # print("Probability of long-term collision: %.4f" % (1 - collision_probs[1]))
 
                     if terminal:
                         break
@@ -178,6 +178,7 @@ class DeepDeterministicPolicyGradients:
                 critic_logits = self.critic.predict(
                     state_buffer, self.actor.predict(np.array(state_buffer)))
                 critic_probs = 1.0 / (1.0 + np.exp(-critic_logits))
+                b_buffer = []
                 for j in range(len(state_buffer)):
                     # B is the expectation over the horizon of not colliding.
                     b = 0.0
@@ -185,13 +186,15 @@ class DeepDeterministicPolicyGradients:
                         if j + k < len(state_buffer):
                           b += critic_probs[j + k][0]
                     b = b / self.horizon
-                    # b = np.round(b)
+                    b_buffer.append(b)
                     # print(b)
                     # exit()
                     replay_buffer.add(state_buffer[j], action_buffer[j],
                                       (reward_buffer[j], b), terminal_buffer[j],
                                       next_state_buffer[j])
-                # exit()
+                print("Expectation of short-term success: %.4f" % np.mean(critic_probs[:, 0]))
+                print("Expectation of expectation of long-term success: %.4f" % np.mean(critic_probs[:, 1]))
+                print("Actual of expectation of long-term success: %.4f" % np.mean(b_buffer))
 
                 # Hindsight experience replay.
                 # TODO(kirmani): Fix this.
