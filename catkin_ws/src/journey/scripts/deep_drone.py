@@ -194,21 +194,21 @@ class DeepDronePlanner:
             lstm, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         y = tf.contrib.layers.batch_norm(y)
         y = tf.nn.relu(y)
-        y = tf.contrib.layers.fully_connected(
-            y, self.horizon, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # y_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
-        # y_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
-        # y = tf.matmul(y, y_out_weights) + y_out_bias
+        # y = tf.contrib.layers.fully_connected(
+        #     y, self.horizon, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        y_out_weights = tf.Variable(tf.random_uniform([16, self.horizon], -3e-4, 3e-4))
+        y_out_bias = tf.Variable(tf.random_uniform([self.horizon], -3e-4, 3e-4))
+        y = tf.matmul(y, y_out_weights) + y_out_bias
 
         b = tf.contrib.layers.fully_connected(
             lstm, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         b = tf.contrib.layers.batch_norm(b)
         b = tf.nn.relu(b)
-        b = tf.contrib.layers.fully_connected(
-            b, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # b_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
-        # b_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
-        # b = tf.matmul(b, b_out_weights) + b_out_bias
+        # b = tf.contrib.layers.fully_connected(
+        #     b, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        b_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
+        b_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
+        b = tf.matmul(b, b_out_weights) + b_out_bias
         return inputs, actions, y, b
 
     def get_current_frame(self):
