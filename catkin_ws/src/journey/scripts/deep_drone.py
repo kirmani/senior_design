@@ -75,7 +75,7 @@ class DeepDronePlanner:
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
         self.sequence_length = 4
-        self.horizon = 12
+        self.horizon = 16
         self.frame_buffer = deque(maxlen=self.sequence_length)
         self.ddpg = DeepDeterministicPolicyGradients(self.create_actor_network,
                                                      self.create_critic_network,
