@@ -71,7 +71,7 @@ class DeepDronePlanner:
 
         # Set up policy search network.
         self.action_dim = 1
-        scale = 0.05
+        scale = 0.1
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
         self.sequence_length = 4
@@ -105,7 +105,7 @@ class DeepDronePlanner:
             inputs,
             num_outputs=32,
             activation_fn=None,
-            kernel_size=(5, 5),
+            kernel_size=(8, 8),
             stride=(4, 4),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
@@ -114,7 +114,7 @@ class DeepDronePlanner:
             depth,
             num_outputs=32,
             activation_fn=None,
-            kernel_size=(5, 5),
+            kernel_size=(4, 4),
             stride=(2, 2),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
@@ -123,21 +123,17 @@ class DeepDronePlanner:
             depth,
             num_outputs=32,
             activation_fn=None,
-            kernel_size=(5, 5),
-            stride=(2, 2),
+            kernel_size=(3, 3),
+            stride=(1, 1),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
         depth = tf.contrib.layers.flatten(depth)
         depth = tf.contrib.layers.fully_connected(
-            depth, 200, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+            depth, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
-        depth = tf.contrib.layers.fully_connected(
-            depth, 200, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.batch_norm(depth)
-        depth = tf.nn.relu(depth)
-        action_weights = tf.Variable(tf.random_uniform([200, self.action_dim], -3e-4, 3e-4))
+        action_weights = tf.Variable(tf.random_uniform([256, self.action_dim], -3e-4, 3e-4))
         action_bias = tf.Variable(tf.random_uniform([self.action_dim], -3e-4, 3e-4))
         actions = tf.matmul(depth, action_weights) + action_bias
         actions = tf.nn.tanh(actions)
@@ -150,7 +146,7 @@ class DeepDronePlanner:
             inputs,
             num_outputs=32,
             activation_fn=None,
-            kernel_size=(5, 5),
+            kernel_size=(8, 8),
             stride=(4, 4),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
@@ -159,7 +155,7 @@ class DeepDronePlanner:
             depth,
             num_outputs=32,
             activation_fn=None,
-            kernel_size=(5, 5),
+            kernel_size=(4, 4),
             stride=(2, 2),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
@@ -168,22 +164,18 @@ class DeepDronePlanner:
             depth,
             num_outputs=32,
             activation_fn=None,
-            kernel_size=(5, 5),
-            stride=(2, 2),
+            kernel_size=(3, 3),
+            stride=(1, 1),
             weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
         depth = tf.contrib.layers.flatten(depth)
         depth = tf.concat([depth, actions], axis=-1)
         depth = tf.contrib.layers.fully_connected(
-            depth, 200, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+            depth, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
-        depth = tf.contrib.layers.fully_connected(
-            depth, 200, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.batch_norm(depth)
-        depth = tf.nn.relu(depth)
-        out_weights = tf.Variable(tf.random_uniform([200, 1], -3e-4, 3e-4))
+        out_weights = tf.Variable(tf.random_uniform([256, 1], -3e-4, 3e-4))
         out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
         out = tf.matmul(depth, out_weights) + out_bias
         return inputs, actions, out
@@ -248,7 +240,7 @@ class DeepDronePlanner:
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = 0.2
+        vel_msg.linear.x = 1.0
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
         vel_msg.angular.z = action[0]
