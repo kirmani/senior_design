@@ -26,8 +26,10 @@ class DeepDeterministicPolicyGradients:
                  create_actor_network,
                  create_critic_network,
                  gamma=0.99,
+                 horizon=16,
                  use_hindsight=False):
         self.gamma = gamma
+        self.horizon = horizon
         self.use_hindsight = use_hindsight
 
         # Start tensorflow session.
@@ -161,14 +163,28 @@ class DeepDeterministicPolicyGradients:
                     state = next_state
                     episode_reward += reward
 
+                    # Collision probability output.
+                    collision_logits = self.critic.predict(
+                        np.expand_dims(state, axis=0), np.expand_dims(action, axis=0))
+                    collision_probs = 1.0 / (1.0 + np.exp(-collision_logits))
+                    print("Probability of short-term collision: %.4f" % (1 - collision_probs[0]))
+                    print("Probability of long-term collision: %.4f" % (1 - collision_probs[1]))
+
                     if terminal:
                         break
 
                 # replay_buffer.add(state_buffer, action_buffer, reward_buffer,
                 #                   terminal_buffer, next_state_buffer)
                 for j in range(len(state_buffer)):
+                    b = 0.0
+                    for k in range(self.horizon):
+                        if j + k < len(state_buffer):
+                          b += reward_buffer[j + k]
+                    b = b / self.horizon
+                    # b = np.round(b)
+                    # print(b)
                     replay_buffer.add(state_buffer[j], action_buffer[j],
-                                      reward_buffer[j], terminal_buffer[j],
+                                      (reward_buffer[j], b), terminal_buffer[j],
                                       next_state_buffer[j])
 
                 # Hindsight experience replay.
@@ -203,23 +219,20 @@ class DeepDeterministicPolicyGradients:
                                           her_terminal_buffer,
                                           her_next_state_buffer)
 
-                predicted_q_values = self.critic.predict(
-                    np.array(state_buffer), np.array(action_buffer))
-                episode_max_q = np.amax(predicted_q_values)
-                episode_avg_max_q = episode_max_q / max_episode_len
                 epoch_rewards.append(episode_reward)
-                total_epoch_avg_max_q += episode_avg_max_q
-                average_epoch_avg_max_q = total_epoch_avg_max_q / (i + 1)
 
-                if np.isnan(episode_reward) or np.isnan(episode_avg_max_q):
+                if np.isnan(episode_reward):
                     print("Reward is NaN. Exiting...")
                     sys.exit(0)
 
-                print('| Reward: {:4f} | Episode: {:d} | Qmax: {:.4f} |'.format(
-                    episode_reward, i, episode_avg_max_q))
+                print('| Reward: {:4f} | Episode: {:d} |'.format(
+                    episode_reward, i))
 
             print("Finished data collection for epoch %d." % epoch)
             print("Experience buffer size: %s" % replay_buffer.size())
+            if replay_buffer.size() < minibatch_size:
+              continue
+
             print("Starting policy optimization.")
             average_epoch_avg_max_q = 0.0
             for optimization_step in range(optimization_steps):
@@ -233,24 +246,40 @@ class DeepDeterministicPolicyGradients:
                 # print(np.amin(target_q))
                 # print(np.amax(target_q))
 
+                # print(target_q.shape)
+                # exit()
+
                 y_i = []
+                b_i = []
                 for k in range(batch_size):
                     if t_batch[k]:
-                        y_i.append(r_batch[k])
+                        y_i.append(r_batch[k][0])
+                        b_i.append(r_batch[k][1])
                     else:
-                        y_i.append(r_batch[k] + self.gamma * target_q[k])
-                y_i = (np.array(y_i) > 0).astype(np.float32)
+                        y_i.append(r_batch[k][0] + self.gamma * target_q[k][0])
+                        b_i.append(r_batch[k][1] + self.gamma * target_q[k][1])
+                # y_i = (np.array(y_i) > 0).astype(np.float32)
+                # b_i = (np.array(b_i) > 0).astype(np.float32)
+                y_i = 1.0 / (1.0 + np.exp(-np.array(y_i)))
+                b_i = 1.0 / (1.0 + np.exp(-np.array(b_i)))
+                # print(y_i)
+                # print(b_i)
+                # exit()
                 # print(np.amin(y_i))
                 # print(np.amax(y_i))
 
                 # Update the critic given the targets
                 (predicted_q_value, critic_loss) = self.critic.train(s_batch, a_batch,
                                                       np.reshape(
-                                                          y_i, (batch_size, 1)))
+                                                          y_i, (batch_size, 1)),
+                                                      np.reshape(
+                                                          b_i, (batch_size, 1)))
                 average_epoch_avg_max_q += np.amax(predicted_q_value)
 
                 # Update the actor policy using the sampled gradient
                 a_outs = self.actor.predict(s_batch)
+                # print(1.0 / (1.0 + np.exp(-a_outs)))
+                # exit()
                 grads = self.critic.action_gradients(s_batch, a_outs)
                 self.actor.train(s_batch, grads[0])
 
@@ -439,14 +468,14 @@ class CriticNetwork:
 
         # Critic network.
         (self.inputs, self.actions,
-         self.out) = create_critic_network("critic_source")
+         self.y_out, self.b_out) = create_critic_network("critic_source")
         network_params = tf.trainable_variables()[num_actor_vars:]
         print("Critic network has %s parameters." % np.sum(
             [v.get_shape().num_elements() for v in network_params]))
 
         # Target network.
         (self.target_inputs, self.target_actions,
-         self.target_out) = create_critic_network("critic_target")
+         self.target_y_out, self.target_b_out) = create_critic_network("critic_target")
         target_network_params = tf.trainable_variables()[(
             len(network_params) + num_actor_vars):]
 
@@ -458,44 +487,46 @@ class CriticNetwork:
 
         # Network target (y_i)
         # Obtained from the target networks
-        self.predicted_q_value = tf.placeholder(tf.float32, (None, 1))
+        self.predicted_y_value = tf.placeholder(tf.float32, (None, 1))
+        self.predicted_b_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
-        self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.predicted_q_value, logits=self.out))
-        # self.loss = tf.reduce_mean((self.predicted_q_value - self.out)**2)
+        y_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.predicted_y_value, logits=self.y_out)
+        b_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.predicted_b_value, logits=self.b_out)
+        self.loss = tf.reduce_mean(y_loss + b_loss)
+        # self.loss = tf.reduce_mean((self.predicted_q_value - self.y_out)**2)
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
 
         # Get the gradient of the net w.r.t. the action
-        shaped_out = tf.reshape(self.out, [tf.shape(self.inputs)[0], 1])
+        shaped_out = tf.reshape(self.y_out, [tf.shape(self.inputs)[0], 1])
         self.action_grads = tf.gradients(shaped_out, self.actions)
 
-    def train(self, inputs, actions, reward):
+    def train(self, inputs, actions, y, b):
         preds, loss, _ = self.sess.run(
-            [self.out, self.loss, self.optimize],
+            [self.y_out, self.loss, self.optimize],
             feed_dict={
                 self.inputs: inputs,
                 self.actions: actions,
-                self.predicted_q_value: reward
+                self.predicted_y_value: y,
+                self.predicted_b_value: b
             })
         return (preds, loss)
 
     def predict(self, inputs, actions):
         preds = self.sess.run(
-            self.out, feed_dict={self.inputs: inputs,
+            [self.y_out, self.b_out], feed_dict={self.inputs: inputs,
                                  self.actions: actions})
-        preds = np.reshape(preds, [inputs.shape[0], 1])
-        return preds
+        return np.squeeze(np.array(preds)).T
 
     def predict_target(self, inputs, actions):
         preds = self.sess.run(
-            self.target_out,
+            [self.target_y_out, self.target_b_out],
             feed_dict={
                 self.target_inputs: inputs,
                 self.target_actions: actions
             })
-        preds = np.reshape(preds, [inputs.shape[0], 1])
-        return preds
+        return np.squeeze(np.array(preds)).T
 
     def update_target_network(self):
         self.sess.run(self.update_target_network_params)
