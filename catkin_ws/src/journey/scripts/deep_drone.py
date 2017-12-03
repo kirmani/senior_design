@@ -75,9 +75,11 @@ class DeepDronePlanner:
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
         self.sequence_length = 4
+        self.horizon = 12
         self.frame_buffer = deque(maxlen=self.sequence_length)
         self.ddpg = DeepDeterministicPolicyGradients(self.create_actor_network,
-                                                     self.create_critic_network)
+                                                     self.create_critic_network,
+                                                     horizon=self.horizon)
 
 
         print("Deep drone planner initialized.")
@@ -192,17 +194,21 @@ class DeepDronePlanner:
             lstm, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         y = tf.contrib.layers.batch_norm(y)
         y = tf.nn.relu(y)
-        y_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
-        y_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
-        y = tf.matmul(y, y_out_weights) + y_out_bias
+        y = tf.contrib.layers.fully_connected(
+            y, self.horizon, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        # y_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
+        # y_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
+        # y = tf.matmul(y, y_out_weights) + y_out_bias
 
         b = tf.contrib.layers.fully_connected(
             lstm, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         b = tf.contrib.layers.batch_norm(b)
         b = tf.nn.relu(b)
-        b_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
-        b_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
-        b = tf.matmul(b, b_out_weights) + b_out_bias
+        b = tf.contrib.layers.fully_connected(
+            b, self.horizon, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        # b_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
+        # b_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
+        # b = tf.matmul(b, b_out_weights) + b_out_bias
         return inputs, actions, y, b
 
     def get_current_frame(self):
