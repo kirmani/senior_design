@@ -38,7 +38,7 @@ from multiplicative_integration_lstm import MultiplicativeIntegrationLSTMCell
 
 class DeepDronePlanner:
 
-    def __init__(self, distance_threshold=0.5, rate=4):
+    def __init__(self, distance_threshold=0.5, rate=4, episodes_before_position_reset=5):
         self.distance_threshold = distance_threshold  # meters
         self.rate = rate  # Hz
 
@@ -61,6 +61,13 @@ class DeepDronePlanner:
         # Reset topics.
         self.takeoff_publisher = rospy.Publisher(
             '/ardrone/takeoff', EmptyMessage, queue_size=10)
+
+        self.land_publisher = rospy.Publisher(
+            '/ardrone/land', EmptyMessage, queue_size=10)
+
+        # Whether to reset positions of drone
+        self.episodes_before_position_reset = episodes_before_position_reset
+        self.episodes_without_resetting = episodes_before_position_reset # Reset on first run
 
         # Listen for new goal when planning at test time.
         s = rospy.Service('fly_to_goal', FlyToGoal, self.FlyToGoal)
@@ -263,18 +270,29 @@ class DeepDronePlanner:
         vel_msg.angular.z = 0
         self.velocity_publisher.publish(vel_msg)
 
-        # Reset our simulation.
-        rospy.wait_for_service('/gazebo/reset_world')
-        try:
-            reset_world = rospy.ServiceProxy('/gazebo/reset_world',
-                                             EmptyService)
-            reset_world()
-            rospy.sleep(1.)
-        except rospy.ServiceException:
-            print("Failed to reset simulator.")
+        # Increment episodes without resetting
+        self.episodes_without_resetting += 1
+        # Completely reset after some number of episodes
+        if self.episodes_without_resetting >= self.episodes_before_position_reset:
+            # Reset our simulation.
+            rospy.wait_for_service('/gazebo/reset_world')
+            try:
+                reset_world = rospy.ServiceProxy('/gazebo/reset_world',
+                                                 EmptyService)
+                reset_world()
+                rospy.sleep(1.)
+                self.episodes_without_resetting = 0
+            except rospy.ServiceException:
+                print("Failed to reset simulator.")
+
+
+        # Land first, then take off again. This makes sure our height is good
+        self.land_publisher.publish(EmptyMessage())
+        rospy.sleep(2)
 
         # Take-off.
         self.takeoff_publisher.publish(EmptyMessage())
+        rospy.sleep(2)
 
         # Clear our frame buffer.
         self.frame_buffer.clear()
@@ -322,7 +340,8 @@ class DeepDronePlanner:
             vel_msg.linear.z = 0
             vel_msg.angular.z = 0
             self.velocity_publisher.publish(vel_msg)
-            rospy.sleep(2)
+            rospy.sleep(3)
+
         vel_msg.linear.x = 0.0
         self.velocity_publisher.publish(vel_msg)
         return self.collided
