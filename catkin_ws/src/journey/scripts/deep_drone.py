@@ -143,11 +143,25 @@ class DeepDronePlanner:
             depth, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
-        action_weights = tf.Variable(
-            tf.random_uniform([256, self.action_dim], -3e-4, 3e-4))
-        action_bias = tf.Variable(
-            tf.random_uniform([self.action_dim], -3e-4, 3e-4))
-        actions = tf.matmul(depth, action_weights) + action_bias
+        depth = tf.stack([depth for _ in range(self.horizon)], axis=1)
+        lstm_inputs = depth
+        lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
+        lstm_outputs, lstm_states = tf.nn.dynamic_rnn(lstm_cell, lstm_inputs,
+                dtype=tf.float32, scope=scope)
+
+
+
+        actions = tf.contrib.layers.fully_connected(
+            lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        actions = tf.contrib.layers.batch_norm(actions)
+        actions = tf.nn.relu(actions)
+        actions = tf.contrib.layers.fully_connected(
+            actions, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        # action_weights = tf.Variable(
+        #     tf.random_uniform([256, self.action_dim], -3e-4, 3e-4))
+        # action_bias = tf.Variable(
+        #     tf.random_uniform([self.action_dim], -3e-4, 3e-4))
+        # actions = tf.matmul(depth, action_weights) + action_bias
         actions = tf.nn.tanh(actions)
         return inputs, actions
 
@@ -155,7 +169,7 @@ class DeepDronePlanner:
         inputs = tf.placeholder(tf.float32,
                                 (None, self.image_height, self.image_width,
                                  self.sequence_length))
-        actions = tf.placeholder(tf.float32, (None, self.action_dim))
+        actions = tf.placeholder(tf.float32, (None, self.horizon, self.action_dim))
         depth = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
@@ -199,39 +213,39 @@ class DeepDronePlanner:
         act = tf.nn.relu(act)
 
         # TODO(kirmani): Add Multiplicative integration LSTM state here.
+        depth = tf.stack([depth for _ in range(self.horizon)], axis=1)
         lstm_inputs = tf.concat([depth, act], axis=-1)
-        lstm_outputs = lstm_inputs
-        # lstm_inputs = act
         # print(depth)
+        # lstm_inputs = tf.concat([depth, act], axis=-1)
+        # lstm_outputs = lstm_inputs
         # print(lstm_inputs)
-        # exit()
-        # lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
-        # lstm_outputs, lstm_states = tf.nn.dynamic_rnn(lstm_cell, lstm_inputs,
-        #         dtype=tf.float32)
+        lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
+        lstm_outputs, lstm_states = tf.nn.dynamic_rnn(lstm_cell, lstm_inputs,
+                dtype=tf.float32, scope=scope)
         # print(lstm_outputs)
 
         y = tf.contrib.layers.fully_connected(
             lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         y = tf.contrib.layers.batch_norm(y)
         y = tf.nn.relu(y)
-        # y = tf.contrib.layers.fully_connected(
-        #     y, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        y = tf.contrib.layers.fully_connected(
+            y, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         # print(y)
-        y_out_weights = tf.Variable(
-            tf.random_uniform([16, self.horizon], -3e-4, 3e-4))
-        y_out_bias = tf.Variable(tf.random_uniform([self.horizon], -3e-4, 3e-4))
-        y = tf.matmul(y, y_out_weights) + y_out_bias
+        # y_out_weights = tf.Variable(
+        #     tf.random_uniform([16, self.horizon], -3e-4, 3e-4))
+        # y_out_bias = tf.Variable(tf.random_uniform([self.horizon], -3e-4, 3e-4))
+        # y = tf.matmul(y, y_out_weights) + y_out_bias
 
         b = tf.contrib.layers.fully_connected(
             lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         b = tf.contrib.layers.batch_norm(b)
         b = tf.nn.relu(b)
-        # b = tf.contrib.layers.fully_connected(
-        #     b, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        b = tf.contrib.layers.fully_connected(
+            b, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         # print(b)
-        b_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
-        b_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
-        b = tf.matmul(b, b_out_weights) + b_out_bias
+        # b_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
+        # b_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
+        # b = tf.matmul(b, b_out_weights) + b_out_bias
         # exit()
         return inputs, actions, y, b
 
@@ -271,28 +285,28 @@ class DeepDronePlanner:
         self.velocity_publisher.publish(vel_msg)
 
         # Increment episodes without resetting
-        self.episodes_without_resetting += 1
+        # self.episodes_without_resetting += 1
         # Completely reset after some number of episodes
-        if self.episodes_without_resetting >= self.episodes_before_position_reset:
-            # Reset our simulation.
-            rospy.wait_for_service('/gazebo/reset_world')
-            try:
-                reset_world = rospy.ServiceProxy('/gazebo/reset_world',
-                                                 EmptyService)
-                reset_world()
-                rospy.sleep(1.)
-                self.episodes_without_resetting = 0
-            except rospy.ServiceException:
-                print("Failed to reset simulator.")
+        # if self.episodes_without_resetting >= self.episodes_before_position_reset:
+        # Reset our simulation.
+        rospy.wait_for_service('/gazebo/reset_world')
+        try:
+            reset_world = rospy.ServiceProxy('/gazebo/reset_world',
+                                             EmptyService)
+            reset_world()
+            rospy.sleep(1.)
+            self.episodes_without_resetting = 0
+        except rospy.ServiceException:
+            print("Failed to reset simulator.")
 
 
         # Land first, then take off again. This makes sure our height is good
-        self.land_publisher.publish(EmptyMessage())
-        rospy.sleep(2)
+        # self.land_publisher.publish(EmptyMessage())
+        # rospy.sleep(2)
 
         # Take-off.
-        self.takeoff_publisher.publish(EmptyMessage())
-        rospy.sleep(2)
+        # self.takeoff_publisher.publish(EmptyMessage())
+        # rospy.sleep(2)
 
         # Clear our frame buffer.
         self.frame_buffer.clear()
