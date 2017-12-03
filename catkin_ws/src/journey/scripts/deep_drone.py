@@ -54,7 +54,6 @@ class DeepDronePlanner:
             '/ardrone/crash_sensor', ContactsState, self._OnNewContactData)
         self.collided = False
 
-
         # Actions.
         self.velocity_publisher = rospy.Publisher(
             '/cmd_vel', Twist, queue_size=10)
@@ -77,10 +76,10 @@ class DeepDronePlanner:
         self.sequence_length = 4
         self.horizon = 16
         self.frame_buffer = deque(maxlen=self.sequence_length)
-        self.ddpg = DeepDeterministicPolicyGradients(self.create_actor_network,
-                                                     self.create_critic_network,
-                                                     horizon=self.horizon)
-
+        self.ddpg = DeepDeterministicPolicyGradients(
+            self.create_actor_network,
+            self.create_critic_network,
+            horizon=self.horizon)
 
         print("Deep drone planner initialized.")
 
@@ -102,7 +101,9 @@ class DeepDronePlanner:
         return FlyToGoalResponse(True)
 
     def create_actor_network(self, scope):
-        inputs = tf.placeholder(tf.float32, (None, self.image_height, self.image_width, self.sequence_length))
+        inputs = tf.placeholder(tf.float32,
+                                (None, self.image_height, self.image_width,
+                                 self.sequence_length))
         depth = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
@@ -135,14 +136,18 @@ class DeepDronePlanner:
             depth, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
-        action_weights = tf.Variable(tf.random_uniform([256, self.action_dim], -3e-4, 3e-4))
-        action_bias = tf.Variable(tf.random_uniform([self.action_dim], -3e-4, 3e-4))
+        action_weights = tf.Variable(
+            tf.random_uniform([256, self.action_dim], -3e-4, 3e-4))
+        action_bias = tf.Variable(
+            tf.random_uniform([self.action_dim], -3e-4, 3e-4))
         actions = tf.matmul(depth, action_weights) + action_bias
         actions = tf.nn.tanh(actions)
         return inputs, actions
 
     def create_critic_network(self, scope):
-        inputs = tf.placeholder(tf.float32, (None, self.image_height, self.image_width, self.sequence_length))
+        inputs = tf.placeholder(tf.float32,
+                                (None, self.image_height, self.image_width,
+                                 self.sequence_length))
         actions = tf.placeholder(tf.float32, (None, self.action_dim))
         depth = tf.contrib.layers.conv2d(
             inputs,
@@ -196,7 +201,8 @@ class DeepDronePlanner:
         y = tf.nn.relu(y)
         # y = tf.contrib.layers.fully_connected(
         #     y, self.horizon, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        y_out_weights = tf.Variable(tf.random_uniform([128, self.horizon], -3e-4, 3e-4))
+        y_out_weights = tf.Variable(
+            tf.random_uniform([128, self.horizon], -3e-4, 3e-4))
         y_out_bias = tf.Variable(tf.random_uniform([self.horizon], -3e-4, 3e-4))
         y = tf.matmul(y, y_out_weights) + y_out_bias
 
@@ -222,8 +228,7 @@ class DeepDronePlanner:
         # exit()
 
         depth = scipy.misc.imresize(
-            depth_data, [self.image_height, self.image_width],
-            mode='F')
+            depth_data, [self.image_height, self.image_width], mode='F')
         frame = depth
         return frame
 
@@ -296,7 +301,7 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action):
-        return  1 if not self.collided else 0
+        return 1 if not self.collided else 0
 
     def terminal(self, state, action):
         vel_msg = Twist()
@@ -331,7 +336,14 @@ class DeepDronePlanner:
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
         self.ddpg.Train(
-            env, logdir=logdir, episodes_in_epoch=1, num_epochs=(16 * 200), actor_noise=actor_noise, epsilon_zero=0, model_dir=modeldir, max_episode_len=1000)
+            env,
+            logdir=logdir,
+            episodes_in_epoch=1,
+            num_epochs=(16 * 200),
+            actor_noise=actor_noise,
+            epsilon_zero=0,
+            model_dir=modeldir,
+            max_episode_len=1000)
 
 
 def main(args):
