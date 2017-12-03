@@ -34,7 +34,7 @@ from journey.srv import FlyToGoalResponse
 from ddpg import DeepDeterministicPolicyGradients
 from ddpg import OrnsteinUhlenbeckActionNoise
 from ddpg import Environment
-
+from multiplicative_integration_lstm import MultiplicativeIntegrationLSTMCell
 
 class DeepDronePlanner:
 
@@ -191,30 +191,41 @@ class DeepDronePlanner:
         act = tf.contrib.layers.batch_norm(act)
         act = tf.nn.relu(act)
 
-        lstm = tf.concat([depth, act], axis=-1)
-
-        # TODO(kirmani): Add LSTM state here.
+        # TODO(kirmani): Add Multiplicative integration LSTM state here.
+        lstm_inputs = tf.concat([depth, act], axis=-1)
+        lstm_outputs = lstm_inputs
+        # lstm_inputs = act
+        # print(depth)
+        # print(lstm_inputs)
+        # exit()
+        # lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
+        # lstm_outputs, lstm_states = tf.nn.dynamic_rnn(lstm_cell, lstm_inputs,
+        #         dtype=tf.float32)
+        # print(lstm_outputs)
 
         y = tf.contrib.layers.fully_connected(
-            lstm, 128, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+            lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         y = tf.contrib.layers.batch_norm(y)
         y = tf.nn.relu(y)
         # y = tf.contrib.layers.fully_connected(
-        #     y, self.horizon, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        #     y, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        # print(y)
         y_out_weights = tf.Variable(
-            tf.random_uniform([128, self.horizon], -3e-4, 3e-4))
+            tf.random_uniform([16, self.horizon], -3e-4, 3e-4))
         y_out_bias = tf.Variable(tf.random_uniform([self.horizon], -3e-4, 3e-4))
         y = tf.matmul(y, y_out_weights) + y_out_bias
 
         b = tf.contrib.layers.fully_connected(
-            lstm, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+            lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         b = tf.contrib.layers.batch_norm(b)
         b = tf.nn.relu(b)
         # b = tf.contrib.layers.fully_connected(
         #     b, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        # print(b)
         b_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
         b_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
         b = tf.matmul(b, b_out_weights) + b_out_bias
+        # exit()
         return inputs, actions, y, b
 
     def get_current_frame(self):

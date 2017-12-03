@@ -8,7 +8,13 @@
 """
 TODO(kirmani): DESCRIPTION GOES HERE
 """
-
+from tensorflow.python.ops import array_ops
+from tensorflow.python.ops import init_ops
+from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import nn_ops
+from tensorflow.python.ops import rnn_cell_impl
+from tensorflow.python.ops import variable_scope as vs
+from tensorflow.python.util import nest
 
 class MultiplicativeIntegrationLSTMCell(rnn_cell_impl.RNNCell):
     """Multiplicative Integration LSTM(Long short-term memory cell)
