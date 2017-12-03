@@ -515,7 +515,7 @@ class CriticNetwork:
         # Define loss and optimization Op
         y_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.predicted_y_value, logits=self.y_out)
         b_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.predicted_b_value, logits=self.b_out)
-        self.loss = tf.reduce_sum(y_loss + b_loss)
+        self.loss = tf.reduce_mean(tf.reduce_sum(tf.concat([y_loss, b_loss], axis=1), axis=1))
         # self.loss = tf.reduce_mean((self.predicted_q_value - self.y_out)**2)
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
@@ -523,7 +523,7 @@ class CriticNetwork:
         # Get the gradient of the net w.r.t. the action
         shaped_y_out = tf.reshape(self.y_out, [tf.shape(self.inputs)[0], horizon])
         shaped_b_out = tf.reshape(self.b_out, [tf.shape(self.inputs)[0], 1])
-        loss_grad = tf.reduce_sum(shaped_y_out + shaped_b_out)
+        loss_grad = tf.reduce_mean(tf.reduce_sum(tf.concat([shaped_y_out, shaped_b_out], axis=1), axis=1))
         self.action_grads = tf.gradients(loss_grad, self.actions)
 
     def train(self, inputs, actions, y, b):
