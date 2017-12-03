@@ -256,6 +256,11 @@ class DeepDeterministicPolicyGradients:
                 # Calculate targets
                 target_q = self.critic.predict_target(
                     s2_batch, self.actor.predict_target(s2_batch))
+                # print(target_q[:, :self.horizon])
+                # print(target_q[:, :self.horizon].shape)
+                # print(len(r_batch[0][0]))
+                # print(len(r_batch[0][1]))
+                # exit()
                 # print(np.amin(target_q))
                 # print(np.amax(target_q))
 
@@ -269,8 +274,8 @@ class DeepDeterministicPolicyGradients:
                         y_i.append(r_batch[k][0])
                         b_i.append(r_batch[k][1])
                     else:
-                        y_i.append(r_batch[k][0] + self.gamma * target_q[k][0])
-                        b_i.append(r_batch[k][1] + self.gamma * target_q[k][1])
+                        y_i.append(r_batch[k][0] + self.gamma * target_q[k, :self.horizon])
+                        b_i.append(r_batch[k][1] + self.gamma * target_q[k, self.horizon])
                 # print(y_i)
                 # print(b_i)
                 # exit()
@@ -278,6 +283,9 @@ class DeepDeterministicPolicyGradients:
                 # b_i = (np.array(b_i) > 0).astype(np.float32)
                 y_i = 1.0 / (1.0 + np.exp(-np.array(y_i)))
                 b_i = 1.0 / (1.0 + np.exp(-np.array(b_i)))
+                # print(y_i.shape)
+                # print(b_i.shape)
+                # exit()
                 # print(np.amin(y_i))
                 # print(np.amax(y_i))
 
