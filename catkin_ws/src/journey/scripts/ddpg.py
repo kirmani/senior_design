@@ -179,12 +179,15 @@ class DeepDeterministicPolicyGradients:
                     state_buffer, self.actor.predict(np.array(state_buffer)))
                 critic_probs = 1.0 / (1.0 + np.exp(-critic_logits))
                 b_buffer = []
-                for t in range(len(state_buffer) - self.horizon):
+                for t in range(len(state_buffer)):
                     # B is the expectation over the horizon of not colliding.
                     y_i = []
                     b_i = []
                     for h in range(self.horizon):
-                        y_i.append(reward_buffer[t + h])
+                        if t + h < len(state_buffer):
+                            y_i.append(reward_buffer[t + h])
+                        else:
+                            y_i.append(reward_buffer[-1])
                     b_i = np.mean(critic_probs[t, :self.horizon])
                     b_buffer.append(b_i)
                     # print(y_i)
@@ -195,6 +198,7 @@ class DeepDeterministicPolicyGradients:
                 print("Expectation of short-term success: %.4f" % np.mean(critic_probs[:, 0]))
                 print("Expectation of expectation of long-term success: %.4f" % np.mean(critic_probs[:, 1]))
                 print("Actual of expectation of long-term success: %.4f" % np.mean(b_buffer))
+                # exit()
 
                 # Hindsight experience replay.
                 # TODO(kirmani): Fix this.
