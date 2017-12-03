@@ -290,7 +290,7 @@ class DeepDeterministicPolicyGradients:
                 # print(np.amax(y_i))
 
                 # Update the critic given the targets
-                (predicted_q_value, critic_loss) = self.critic.train(s_batch, a_batch,
+                (predicted_q_value, critic_loss, short_term_acc, long_term_acc) = self.critic.train(s_batch, a_batch,
                                                       np.reshape(
                                                           y_i, (batch_size, self.horizon)),
                                                       np.reshape(
@@ -309,9 +309,9 @@ class DeepDeterministicPolicyGradients:
                 self.critic.update_target_network()
 
                 # Output training statistics.
-                print("[%d] Qmax: %.4f, Critic Loss: %.4f" %
+                print("[%d] Qmax: %.4f, Critic Loss: %.4f, Model Acc: %.4f, Path Acc: %.4f" %
                       (optimization_step,
-                       average_epoch_avg_max_q / (optimization_step + 1), critic_loss))
+                       average_epoch_avg_max_q / (optimization_step + 1), critic_loss, short_term_acc, long_term_acc))
 
             average_epoch_avg_max_q /= optimization_steps
             average_epoch_reward = np.mean(epoch_rewards)
@@ -516,9 +516,18 @@ class CriticNetwork:
         y_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.predicted_y_value, logits=self.y_out)
         b_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=self.predicted_b_value, logits=self.b_out)
         self.loss = tf.reduce_mean(tf.reduce_sum(tf.concat([y_loss, b_loss], axis=1), axis=1))
+
         # self.loss = tf.reduce_mean((self.predicted_q_value - self.y_out)**2)
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
+
+        # Metrics
+        y_predictions = tf.cast(self.y_out > 0, tf.float32)
+        y_actual = tf.cast(self.predicted_y_value > 0, tf.float32)
+        self.y_accuracy = tf.reduce_mean(tf.cast(tf.equal(y_predictions, y_actual), tf.float32))
+        b_predictions = tf.cast(self.b_out > 0, tf.float32)
+        b_actual = tf.cast(self.predicted_b_value > 0, tf.float32)
+        self.b_accuracy = tf.reduce_mean(tf.cast(tf.equal(b_predictions, b_actual), tf.float32))
 
         # Get the gradient of the net w.r.t. the action
         shaped_y_out = tf.reshape(self.y_out, [tf.shape(self.inputs)[0], horizon])
@@ -527,15 +536,15 @@ class CriticNetwork:
         self.action_grads = tf.gradients(loss_grad, self.actions)
 
     def train(self, inputs, actions, y, b):
-        preds, loss, _ = self.sess.run(
-            [self.y_out, self.loss, self.optimize],
+        preds, loss, y_acc, b_acc, _ = self.sess.run(
+            [self.y_out, self.loss, self.y_accuracy, self.b_accuracy, self.optimize],
             feed_dict={
                 self.inputs: inputs,
                 self.actions: actions,
                 self.predicted_y_value: y,
                 self.predicted_b_value: b
             })
-        return (preds, loss)
+        return (preds, loss, y_acc, b_acc)
 
     def predict(self, inputs, actions):
         preds = self.sess.run(

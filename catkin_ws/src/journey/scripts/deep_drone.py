@@ -191,12 +191,12 @@ class DeepDronePlanner:
         # TODO(kirmani): Add LSTM state here.
 
         y = tf.contrib.layers.fully_connected(
-            lstm, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+            lstm, 128, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         y = tf.contrib.layers.batch_norm(y)
         y = tf.nn.relu(y)
         # y = tf.contrib.layers.fully_connected(
         #     y, self.horizon, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        y_out_weights = tf.Variable(tf.random_uniform([16, self.horizon], -3e-4, 3e-4))
+        y_out_weights = tf.Variable(tf.random_uniform([128, self.horizon], -3e-4, 3e-4))
         y_out_bias = tf.Variable(tf.random_uniform([self.horizon], -3e-4, 3e-4))
         y = tf.matmul(y, y_out_weights) + y_out_bias
 
