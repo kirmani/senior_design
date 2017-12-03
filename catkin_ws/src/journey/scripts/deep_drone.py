@@ -175,10 +175,6 @@ class DeepDronePlanner:
             depth, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         depth = tf.contrib.layers.batch_norm(depth)
         depth = tf.nn.relu(depth)
-        # y = tf.contrib.layers.fully_connected(
-        #     depth, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # b = tf.contrib.layers.fully_connected(
-        #     depth, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
 
         out_weights = tf.Variable(tf.random_uniform([256, 1], -3e-4, 3e-4))
         out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))

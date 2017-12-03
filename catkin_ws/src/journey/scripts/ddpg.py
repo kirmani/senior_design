@@ -175,17 +175,23 @@ class DeepDeterministicPolicyGradients:
 
                 # replay_buffer.add(state_buffer, action_buffer, reward_buffer,
                 #                   terminal_buffer, next_state_buffer)
+                critic_logits = self.critic.predict(
+                    state_buffer, self.actor.predict(np.array(state_buffer)))
+                critic_probs = 1.0 / (1.0 + np.exp(-critic_logits))
                 for j in range(len(state_buffer)):
+                    # B is the expectation over the horizon of not colliding.
                     b = 0.0
                     for k in range(self.horizon):
                         if j + k < len(state_buffer):
-                          b += reward_buffer[j + k]
+                          b += critic_probs[j + k][0]
                     b = b / self.horizon
                     # b = np.round(b)
                     # print(b)
+                    # exit()
                     replay_buffer.add(state_buffer[j], action_buffer[j],
                                       (reward_buffer[j], b), terminal_buffer[j],
                                       next_state_buffer[j])
+                # exit()
 
                 # Hindsight experience replay.
                 # TODO(kirmani): Fix this.
