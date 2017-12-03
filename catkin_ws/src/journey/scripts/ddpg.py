@@ -140,8 +140,9 @@ class DeepDeterministicPolicyGradients:
                     actor_noise.reset()
 
                 for j in range(max_episode_len):
-                    action = self.actor.predict(
-                        np.expand_dims(state, axis=0))[0][0]
+                    action_horizon = self.actor.predict(
+                        np.expand_dims(state, axis=0))[0]
+                    action = action_horizon[0]
                     # Added exploration noise.
                     if actor_noise != None:
                         action += actor_noise()
@@ -163,9 +164,14 @@ class DeepDeterministicPolicyGradients:
                     episode_reward += reward
 
                     # Collision probability output.
-                    # collision_logits = self.critic.predict(
-                    #     np.expand_dims(state, axis=0), np.expand_dims(action, axis=0))
-                    # collision_probs = 1.0 / (1.0 + np.exp(-collision_logits))
+                    collision_logits = self.critic.predict(
+                        np.expand_dims(state, axis=0),
+                        np.expand_dims(action_horizon, axis=0))[0]
+                    collision_probs = 1.0 / (1.0 + np.exp(-collision_logits))
+                    # print("Probability of collision in short-term: %.4f" %
+                    #         (1 - collision_probs[0]))
+                    print("Probability of collision in long-term: %.4f" %
+                            (1.0 - collision_probs[self.horizon - 1][1]))
                     # print("Probability of short-term collision: %.4f" % (1 - collision_probs[0]))
                     # print("Probability of long-term collision: %.4f" % (1 - collision_probs[1]))
 
@@ -558,12 +564,12 @@ class CriticNetwork:
 
         # Get the gradient of the net w.r.t. the action
         shaped_y_out = tf.reshape(self.y_out,
-                                  [tf.shape(self.inputs)[0], tf.shape(self.inputs)[1], horizon])
-        shaped_b_out = tf.reshape(self.b_out, [tf.shape(self.inputs)[0], tf.shape(self.inputs)[1], horizon])
+                                  [-1, horizon])
+        shaped_b_out = tf.reshape(self.b_out, [-1, horizon])
         # loss_grad = tf.reduce_mean(
         #     tf.reduce_sum(
         #         tf.concat([shaped_y_out, shaped_b_out], axis=1), axis=1))
-        loss_grad = tf.reduce_mean(tf.reduce_sum(tf.reduce_sum(shaped_b_out, axis=2), axis=1))
+        loss_grad = tf.reduce_mean(tf.reduce_sum(shaped_b_out, axis=1))
         # print(loss_grad)
         # exit()
         self.action_grads = tf.gradients(loss_grad, self.actions)
