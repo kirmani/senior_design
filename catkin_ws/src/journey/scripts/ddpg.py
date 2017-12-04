@@ -569,10 +569,10 @@ class CriticNetwork:
         shaped_y_out = tf.reshape(self.y_out,
                                   [-1, horizon])
         shaped_b_out = tf.reshape(self.b_out, [-1, horizon])
-        # loss_grad = tf.reduce_mean(
-        #     tf.reduce_sum(
-        #         tf.concat([shaped_y_out, shaped_b_out], axis=1), axis=1))
-        loss_grad = tf.reduce_mean(tf.reduce_sum(shaped_b_out, axis=1))
+        loss_grad = tf.reduce_mean(
+            tf.reduce_sum(
+                tf.concat([shaped_y_out, shaped_b_out], axis=1), axis=1))
+        # loss_grad = tf.reduce_mean(tf.reduce_sum(shaped_b_out, axis=1))
         # print(loss_grad)
         # exit()
         self.action_grads = tf.gradients(loss_grad, self.actions)
