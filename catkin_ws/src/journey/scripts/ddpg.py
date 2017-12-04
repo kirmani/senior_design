@@ -148,10 +148,14 @@ class DeepDeterministicPolicyGradients:
                 if actor_noise != None:
                     actor_noise.reset()
 
+                action_horizon_idx = 0
+
                 for j in range(max_episode_len):
-                    action_horizon = self.actor.predict(
-                            np.expand_dims(state, axis=0))[0]
-                    action = action_horizon[0]
+                    if action_horizon_idx == 0:
+                        action_horizon = self.actor.predict(
+                                np.expand_dims(state, axis=0))[0]
+                    action = action_horizon[action_horizon_idx]
+                    action_horizon_idx = (action_horizon_idx + 1) % self.horizon
 
                     # Added exploration noise.
                     if actor_noise != None:
@@ -196,7 +200,7 @@ class DeepDeterministicPolicyGradients:
                             a_i.append(action_buffer[t + h])
                         else:
                             y_i.append(reward_buffer[-1])
-                            a_i.append(action_buffer[-1])
+                            a_i.append([np.random.random()])
                         b_i.append(np.mean(critic_probs[t, :(h + 1), 0]))
                     # b_i = np.mean(critic_probs[t, :self.horizon])
                     # b_buffer.append(b_i)

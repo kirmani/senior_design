@@ -212,17 +212,11 @@ class DeepDronePlanner:
         act = tf.contrib.layers.batch_norm(act)
         act = tf.nn.relu(act)
 
-        # TODO(kirmani): Add Multiplicative integration LSTM state here.
         depth = tf.stack([depth for _ in range(self.horizon)], axis=1)
         lstm_inputs = tf.concat([depth, act], axis=-1)
-        # print(depth)
-        # lstm_inputs = tf.concat([depth, act], axis=-1)
-        # lstm_outputs = lstm_inputs
-        # print(lstm_inputs)
         lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
         lstm_outputs, lstm_states = tf.nn.dynamic_rnn(lstm_cell, lstm_inputs,
                 dtype=tf.float32, scope=scope)
-        # print(lstm_outputs)
 
         y = tf.contrib.layers.fully_connected(
             lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
@@ -230,11 +224,12 @@ class DeepDronePlanner:
         y = tf.nn.relu(y)
         y = tf.contrib.layers.fully_connected(
             y, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # print(y)
         # y_out_weights = tf.Variable(
-        #     tf.random_uniform([16, self.horizon], -3e-4, 3e-4))
-        # y_out_bias = tf.Variable(tf.random_uniform([self.horizon], -3e-4, 3e-4))
-        # y = tf.matmul(y, y_out_weights) + y_out_bias
+        #     tf.random_uniform([16, 1], -3e-4, 3e-4))
+        # y_out_bias = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
+        # y = tf.tensordot(y, y_out_weights, [[2], [1]]) # + y_out_bias
+        # print(y)
+        # exit()
 
         b = tf.contrib.layers.fully_connected(
             lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
@@ -242,11 +237,9 @@ class DeepDronePlanner:
         b = tf.nn.relu(b)
         b = tf.contrib.layers.fully_connected(
             b, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # print(b)
-        # b_out_weights = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
-        # b_out_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
-        # b = tf.matmul(b, b_out_weights) + b_out_bias
-        # exit()
+        # b_out_weights = tf.Variable(tf.random_uniform([16, self.horizon], -3e-4, 3e-4))
+        # b_out_bias = tf.Variable(tf.random_uniform([self.horizon], -3e-4, 3e-4))
+        # b = b * b_out_weights + b_out_bias
         return inputs, actions, y, b
 
     def get_current_frame(self):
