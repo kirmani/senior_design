@@ -384,7 +384,7 @@ class DeepDronePlanner:
             logdir=logdir,
             episodes_in_epoch=1,
             num_epochs=(16 * 200),
-            actor_noise=actor_noise,
+            actor_noise=None,
             epsilon_zero=0,
             model_dir=modeldir,
             max_episode_len=1000)
