@@ -136,17 +136,22 @@ class DeepDeterministicPolicyGradients:
                 terminal_buffer = []
                 next_state_buffer = []
 
+                # Collision probability output.
+                collision_logits = self.critic.predict(
+                    np.expand_dims(state, axis=0),
+                    self.actor.predict(np.expand_dims(state, axis=0)))[0]
+                collision_probs = 1.0 / (1.0 + np.exp(-collision_logits))
+                print("Safe travel probability: (YS) %.4f, (YL) %.4f, (BS) %.4f, (BL) %.4f" %
+                        (collision_probs[0][0], collision_probs[-1][0],
+                            collision_probs[0][1], collision_probs[-1][1]))
+
                 if actor_noise != None:
                     actor_noise.reset()
 
-                action_horizon_idx = 0
-
                 for j in range(max_episode_len):
-                    if action_horizon_idx == 0:
-                        action_horizon = self.actor.predict(
+                    action_horizon = self.actor.predict(
                             np.expand_dims(state, axis=0))[0]
-                    action = action_horizon[action_horizon_idx]
-                    action_horizon_idx = (action_horizon_idx + 1) % 4
+                    action = action_horizon[0]
 
                     # Added exploration noise.
                     if actor_noise != None:
@@ -168,18 +173,9 @@ class DeepDeterministicPolicyGradients:
                     state = next_state
                     episode_reward += reward
 
-                    # Collision probability output.
-                    # collision_logits = self.critic.predict(
-                    #     np.expand_dims(state, axis=0),
-                    #     np.expand_dims(action_horizon, axis=0))[0]
-                    # collision_probs = 1.0 / (1.0 + np.exp(-collision_logits))
-                    # print("Probability of collision in short-term: %.4f" %
-                    #         (1 - collision_probs[0]))
-                    # print("Probability of collision in long-term: %.4f" %
-                    #         (1.0 - collision_probs[self.horizon - 1][1]))
-
                     if terminal:
                         break
+
 
                 # replay_buffer.add(state_buffer, action_buffer, reward_buffer,
                 #                   terminal_buffer, next_state_buffer)
@@ -264,8 +260,8 @@ class DeepDeterministicPolicyGradients:
 
             print("Finished data collection for epoch %d." % epoch)
             print("Experience buffer size: %s" % replay_buffer.size())
-            # if replay_buffer.size() < minibatch_size:
-            #     continue
+            if replay_buffer.size() < minibatch_size:
+                continue
 
             print("Starting policy optimization.")
             average_epoch_avg_max_q = 0.0
@@ -337,11 +333,11 @@ class DeepDeterministicPolicyGradients:
                 self.critic.update_target_network()
 
                 # Output training statistics.
-                print(
-                    "[%d] Qmax: %.4f, Critic Loss: %.4f, Model Acc: %.4f, Path Acc: %.4f"
-                    % (optimization_step,
-                       average_epoch_avg_max_q / (optimization_step + 1),
-                       critic_loss, short_term_acc, long_term_acc))
+            print(
+                "[%d] Qmax: %.4f, Critic Loss: %.4f, Model Acc: %.4f, Path Acc: %.4f"
+                % (optimization_step,
+                   average_epoch_avg_max_q / (optimization_step + 1),
+                   critic_loss, short_term_acc, long_term_acc))
 
             average_epoch_avg_max_q /= optimization_steps
             average_epoch_reward = np.mean(epoch_rewards)
