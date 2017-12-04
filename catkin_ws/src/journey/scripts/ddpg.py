@@ -139,10 +139,15 @@ class DeepDeterministicPolicyGradients:
                 if actor_noise != None:
                     actor_noise.reset()
 
+                action_horizon_idx = 0
+
                 for j in range(max_episode_len):
-                    action_horizon = self.actor.predict(
-                        np.expand_dims(state, axis=0))[0]
-                    action = action_horizon[0]
+                    if action_horizon_idx == 0:
+                        action_horizon = self.actor.predict(
+                            np.expand_dims(state, axis=0))[0]
+                    action = action_horizon[action_horizon_idx]
+                    action_horizon_idx = (action_horizon_idx + 1) % 4
+
                     # Added exploration noise.
                     if actor_noise != None:
                         action += actor_noise()
@@ -164,14 +169,14 @@ class DeepDeterministicPolicyGradients:
                     episode_reward += reward
 
                     # Collision probability output.
-                    collision_logits = self.critic.predict(
-                        np.expand_dims(state, axis=0),
-                        np.expand_dims(action_horizon, axis=0))[0]
-                    collision_probs = 1.0 / (1.0 + np.exp(-collision_logits))
+                    # collision_logits = self.critic.predict(
+                    #     np.expand_dims(state, axis=0),
+                    #     np.expand_dims(action_horizon, axis=0))[0]
+                    # collision_probs = 1.0 / (1.0 + np.exp(-collision_logits))
                     # print("Probability of collision in short-term: %.4f" %
                     #         (1 - collision_probs[0]))
-                    print("Probability of collision in long-term: %.4f" %
-                            (1.0 - collision_probs[self.horizon - 1][1]))
+                    # print("Probability of collision in long-term: %.4f" %
+                    #         (1.0 - collision_probs[self.horizon - 1][1]))
                     # print("Probability of short-term collision: %.4f" % (1 - collision_probs[0]))
                     # print("Probability of long-term collision: %.4f" % (1 - collision_probs[1]))
 
