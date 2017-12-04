@@ -154,13 +154,16 @@ class DeepDeterministicPolicyGradients:
                     actor_noise.reset()
 
                 action_horizon_idx = 0
+                replan_frequency = 4
 
                 for j in range(max_episode_len):
                     if action_horizon_idx == 0:
+                        if actor_noise != None:
+                            actor_noise.reset()
                         action_horizon = self.actor.predict(
                                 np.expand_dims(state, axis=0))[0]
                     action = action_horizon[action_horizon_idx]
-                    action_horizon_idx = (action_horizon_idx + 1) % self.horizon
+                    action_horizon_idx = (action_horizon_idx + 1) % replan_frequency
 
                     # Added exploration noise.
                     if actor_noise != None:
@@ -482,7 +485,7 @@ class ActorNetwork:
 
         # Combine the gradients here
         unnormalized_actor_gradients = tf.gradients(
-            self.actions, network_params, -self.action_gradient)
+            self.actions, network_params, self.action_gradient)
         self.actor_gradients = list(
             map(lambda x: tf.div(x, batch_size), unnormalized_actor_gradients))
 
@@ -630,7 +633,7 @@ class CriticNetwork:
 
 class OrnsteinUhlenbeckActionNoise:
 
-    def __init__(self, mu, sigma=0.3, theta=.15, dt=1e-2, x0=None):
+    def __init__(self, mu, sigma=0.05, theta=.025, dt=0.25, x0=None):
         self.theta = theta
         self.mu = mu
         self.sigma = sigma
