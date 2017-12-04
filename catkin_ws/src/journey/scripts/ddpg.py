@@ -177,8 +177,6 @@ class DeepDeterministicPolicyGradients:
                     #         (1 - collision_probs[0]))
                     # print("Probability of collision in long-term: %.4f" %
                     #         (1.0 - collision_probs[self.horizon - 1][1]))
-                    # print("Probability of short-term collision: %.4f" % (1 - collision_probs[0]))
-                    # print("Probability of long-term collision: %.4f" % (1 - collision_probs[1]))
 
                     if terminal:
                         break
