@@ -200,6 +200,7 @@ class DeepDeterministicPolicyGradients:
                 for t in range(len(state_buffer)):
                     # B is the expectation over the horizon of not colliding.
                     y_i = []
+                    # TODO(kirmani): Remove b_i.
                     b_i = []
                     a_i = []
                     for h in range(self.horizon):
@@ -272,8 +273,8 @@ class DeepDeterministicPolicyGradients:
 
             print("Finished data collection for epoch %d." % epoch)
             print("Experience buffer size: %s" % replay_buffer.size())
-            if replay_buffer.size() < minibatch_size:
-                continue
+            # if replay_buffer.size() < minibatch_size:
+            #     continue
 
             print("Starting policy optimization.")
             average_epoch_avg_max_q = 0.0
@@ -285,6 +286,7 @@ class DeepDeterministicPolicyGradients:
                 # Calculate targets
                 target_q = self.critic.predict_target(
                     s2_batch, self.actor.predict_target(s2_batch))
+                target_q = 1.0 / (1.0 + np.exp(-np.array(target_q)))
                 # print(target_q[:, :self.horizon])
                 # print(target_q[:, :self.horizon].shape)
                 # print(len(r_batch[0][0]))
@@ -304,26 +306,33 @@ class DeepDeterministicPolicyGradients:
                 for k in range(batch_size):
                     if t_batch[k]:
                         y_i.append(r_batch[k][0])
-                        b_i.append(r_batch[k][1])
+                        # b_i.append(r_batch[k][1])
                     else:
                         y_i.append(r_batch[k][0] +
                             self.gamma * target_q[k, :, 0])
-                        b_i.append(r_batch[k][1] +
-                            self.gamma * target_q[k, :, 1])
+                        # b_i.append(r_batch[k][1] +
+                        #     self.gamma * target_q[k, :, 1])
+                    # print(y_i[0].shape)
+                    b = np.zeros(self.horizon)
+                    for h in range(self.horizon):
+                        b[h] = np.mean(y_i[k][:(h+1)])
+                    b_i.append(b)
                 # print(y_i)
                 # print(b_i)
                 # exit()
                 # y_i = (np.array(y_i) > 0).astype(np.float32)
                 # b_i = (np.array(b_i) > 0).astype(np.float32)
-                y_i = 1.0 / (1.0 + np.exp(-np.array(y_i)))
-                b_i = 1.0 / (1.0 + np.exp(-np.array(b_i)))
-                # y_i = np.array(y_i)
-                # b_i = np.array(b_i)
+                # y_i = 1.0 / (1.0 + np.exp(-np.array(y_i)))
+                # b_i = 1.0 / (1.0 + np.exp(-np.array(b_i)))
+                y_i = np.array(y_i)
+                b_i = np.array(b_i)
                 # print(y_i.shape)
                 # print(b_i.shape)
-                # exit()
                 # print(np.amin(y_i))
                 # print(np.amax(y_i))
+                # print(np.amin(b_i))
+                # print(np.amax(b_i))
+                # exit()
 
                 # Update the critic given the targets
                 (predicted_q_value, critic_loss,
@@ -485,7 +494,7 @@ class ActorNetwork:
 
         # Combine the gradients here
         unnormalized_actor_gradients = tf.gradients(
-            self.actions, network_params, self.action_gradient)
+            self.actions, network_params, -self.action_gradient)
         self.actor_gradients = list(
             map(lambda x: tf.div(x, batch_size), unnormalized_actor_gradients))
 
@@ -577,9 +586,8 @@ class CriticNetwork:
         shaped_y_out = tf.reshape(self.y_out,
                                   [-1, horizon])
         shaped_b_out = tf.reshape(self.b_out, [-1, horizon])
-        loss_grad = tf.reduce_mean(
-            tf.reduce_sum(
-                tf.concat([shaped_y_out, shaped_b_out], axis=1), axis=1))
+        loss_grad = tf.reduce_mean(tf.reduce_sum(
+            tf.concat([shaped_y_out, shaped_b_out], axis=1), axis=1))
         # loss_grad = tf.reduce_mean(tf.reduce_sum(shaped_b_out, axis=1))
         # print(loss_grad)
         # exit()
