@@ -58,8 +58,13 @@ class DeepDeterministicPolicyGradients:
         for i in range(num_attempts):
             total_reward = 0.0
             state = env.Reset()
+            action_horizon_idx = 0
             for j in range(max_episode_len):
-                action = self.actor.predict(np.expand_dims(state, axis=0))[0]
+                if action_horizon_idx == 0:
+                    action_horizon = self.actor.predict(
+                            np.expand_dims(state, axis=0))[0]
+                action = action_horizon[action_horizon_idx]
+                action_horizon_idx = (action_horizon_idx + 1) % self.horizon
 
                 next_state = env.Step(state, action)
                 terminal = env.Terminal(state, action)
