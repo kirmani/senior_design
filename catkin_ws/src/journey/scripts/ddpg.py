@@ -154,7 +154,7 @@ class DeepDeterministicPolicyGradients:
                     actor_noise.reset()
 
                 action_horizon_idx = 0
-                replan_frequency = 4
+                replan_frequency = self.horizon
 
                 for j in range(max_episode_len):
                     if action_horizon_idx == 0:
@@ -641,7 +641,7 @@ class CriticNetwork:
 
 class OrnsteinUhlenbeckActionNoise:
 
-    def __init__(self, mu, sigma=0.05, theta=.025, dt=0.25, x0=None):
+    def __init__(self, mu, sigma=0.2, theta=0.15, dt=0.25, x0=None):
         self.theta = theta
         self.mu = mu
         self.sigma = sigma
