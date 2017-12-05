@@ -87,7 +87,7 @@ class DeepDeterministicPolicyGradients:
               num_epochs=200,
               episodes_in_epoch=16,
               max_episode_len=50,
-              minibatch_size=64,
+              minibatch_size=128,
               model_dir=None):
 
         # Create a saver object for saving and loading variables
@@ -141,15 +141,6 @@ class DeepDeterministicPolicyGradients:
                 terminal_buffer = []
                 next_state_buffer = []
 
-                # Collision probability output.
-                collision_logits = self.critic.predict(
-                    np.expand_dims(state, axis=0),
-                    self.actor.predict(np.expand_dims(state, axis=0)))[0]
-                collision_probs = 1.0 / (1.0 + np.exp(-collision_logits))
-                print("Safe travel probability: (YS) %.4f, (YL) %.4f, (BS) %.4f, (BL) %.4f" %
-                        (collision_probs[0][0], collision_probs[-1][0],
-                            collision_probs[0][1], collision_probs[-1][1]))
-
                 if actor_noise != None:
                     actor_noise.reset()
 
@@ -189,19 +180,8 @@ class DeepDeterministicPolicyGradients:
                         break
 
 
-                # replay_buffer.add(state_buffer, action_buffer, reward_buffer,
-                #                   terminal_buffer, next_state_buffer)
-                b_buffer = []
-                critic_logits = self.critic.predict(
-                    state_buffer, self.actor.predict(state_buffer))
-                critic_probs = 1.0 / (1.0 + np.exp(-critic_logits))
-                # print(critic_probs)
-                # best_actions = self.actor.predict(np.array(state_buffer))
                 for t in range(len(state_buffer)):
-                    # B is the expectation over the horizon of not colliding.
                     y_i = []
-                    # TODO(kirmani): Remove b_i.
-                    b_i = []
                     a_i = []
                     for h in range(self.horizon):
                         if t + h < len(state_buffer):
@@ -210,57 +190,10 @@ class DeepDeterministicPolicyGradients:
                         else:
                             y_i.append(reward_buffer[-1])
                             a_i.append([np.random.random()])
-                        b_i.append(np.mean(critic_probs[t, :(h + 1), 0]))
-                    # b_i = np.mean(critic_probs[t, :self.horizon])
-                    # b_buffer.append(b_i)
                     y_i = np.array(y_i)
-                    b_i = np.array(b_i)
                     a_i = np.array(a_i)
-                    # print(y_i)
-                    # print(b_i)
-                    # print(a_i)
-                    # exit()
-                    replay_buffer.add(state_buffer[j], a_i, (y_i, b_i),
+                    replay_buffer.add(state_buffer[j], a_i, y_i,
                                       terminal_buffer[j], next_state_buffer[j])
-                # print("Expectation of short-term success: %.4f" %
-                #     np.mean(critic_probs[:, :, 0]))
-                # print("Expectation of expectation of long-term success: %.4f" %
-                #     np.mean(critic_probs[:, :, 1]))
-                # print("Actual of expectation of long-term success: %.4f" %
-                #       np.mean(b_buffer))
-                # exit()
-
-                # Hindsight experience replay.
-                # TODO(kirmani): Fix this.
-                if self.use_hindsight:
-                    for j in range(max_episode_len):
-                        goal = next_state_buffer[j][:self.num_inputs]
-                        her_state_buffer = []
-                        her_action_buffer = []
-                        her_reward_buffer = []
-                        her_terminal_buffer = []
-                        her_next_state_buffer = []
-                        for k in range(max_episode_len):
-                            # Simulate step with hindsight goal.
-                            state = state_buffer[k][:-self.goal_dim]
-                            action = action_buffer[k]
-                            next_state = next_state_buffer[k][:-self.goal_dim]
-                            terminal = False
-                            reward = env.Reward(next_state, action, goal)
-
-                            # Add to hindersight buffers.
-                            her_state_buffer.append(
-                                np.concatenate([state, goal], axis=-1))
-                            her_action_buffer.append(action)
-                            her_reward_buffer.append(reward)
-                            her_terminal_buffer.append(terminal)
-                            her_next_state_buffer.append(
-                                np.concatenate([next_state, goal], axis=-1))
-
-                        replay_buffer.add(her_state_buffer, her_action_buffer,
-                                          her_reward_buffer,
-                                          her_terminal_buffer,
-                                          her_next_state_buffer)
 
                 epoch_rewards.append(episode_reward)
 
@@ -287,65 +220,27 @@ class DeepDeterministicPolicyGradients:
                 target_q = self.critic.predict_target(
                     s2_batch, self.actor.predict_target(s2_batch))
                 target_q = 1.0 / (1.0 + np.exp(-np.array(target_q)))
-                # print(target_q[:, :self.horizon])
-                # print(target_q[:, :self.horizon].shape)
-                # print(len(r_batch[0][0]))
-                # print(len(r_batch[0][1]))
-                # exit()
-                # print(np.amin(target_q))
-                # print(np.amax(target_q))
 
-                # print(target_q.shape)
-                # exit()
-
-                y_i = []
-                b_i = []
-                # print(r_batch[0][0])
-                # print(r_batch[0][1])
-                # exit()
+                y_i = np.zeros((batch_size, self.horizon))
+                b_i = np.zeros(batch_size)
                 for k in range(batch_size):
-                    if t_batch[k]:
-                        y_i.append(r_batch[k][0])
-                        # b_i.append(r_batch[k][1])
-                    else:
-                        y_i.append(r_batch[k][0] +
-                            self.gamma * target_q[k, :, 0])
-                        # b_i.append(r_batch[k][1] +
-                        #     self.gamma * target_q[k, :, 1])
-                    # print(y_i[0].shape)
-                    b = np.zeros(self.horizon)
-                    for h in range(self.horizon):
-                        b[h] = np.mean(y_i[k][:(h+1)])
-                    b_i.append(b)
-                # print(y_i)
-                # print(b_i)
-                # exit()
-                # y_i = (np.array(y_i) > 0).astype(np.float32)
-                # b_i = (np.array(b_i) > 0).astype(np.float32)
-                # y_i = 1.0 / (1.0 + np.exp(-np.array(y_i)))
-                # b_i = 1.0 / (1.0 + np.exp(-np.array(b_i)))
-                y_i = np.array(y_i)
-                b_i = np.array(b_i)
-                # print(y_i.shape)
-                # print(b_i.shape)
-                # print(np.amin(y_i))
-                # print(np.amax(y_i))
-                # print(np.amin(b_i))
-                # print(np.amax(b_i))
-                # exit()
+                    # Y represents the probability of flight without collision
+                    #   between time t and t + h.
+                    # B represents the best-case future likelihood of flight
+                    #   without collosion.
+                    y_i[k, :] = r_batch[k]
+                    b_i[k] = np.mean(r_batch[k])
 
                 # Update the critic given the targets
                 (predicted_q_value, critic_loss,
                  short_term_acc, long_term_acc) = self.critic.train(
                      s_batch, a_batch,
-                     np.reshape(y_i, (batch_size, self.horizon, 1)),
-                     np.reshape(b_i, (batch_size, self.horizon, 1)))
+                     np.reshape(y_i, (batch_size, self.horizon)),
+                     np.reshape(b_i, (batch_size, 1)))
                 average_epoch_avg_max_q += np.amax(predicted_q_value)
 
                 # Update the actor policy using the sampled gradient
                 a_outs = self.actor.predict(s_batch)
-                # print(1.0 / (1.0 + np.exp(-a_outs)))
-                # exit()
                 grads = self.critic.action_gradients(s_batch, a_outs)
                 self.actor.train(s_batch, grads[0])
 
@@ -353,7 +248,7 @@ class DeepDeterministicPolicyGradients:
                 self.actor.update_target_network()
                 self.critic.update_target_network()
 
-                # Output training statistics.
+            # Output training statistics.
             print(
                 "[%d] Qmax: %.4f, Critic Loss: %.4f, Model Acc: %.4f, Path Acc: %.4f"
                 % (optimization_step,
@@ -557,16 +452,15 @@ class CriticNetwork:
 
         # Network target (y_i)
         # Obtained from the target networks
-        self.predicted_y_value = tf.placeholder(tf.float32, (None, horizon, 1))
-        self.predicted_b_value = tf.placeholder(tf.float32, (None, horizon, 1))
+        self.predicted_y_value = tf.placeholder(tf.float32, (None, horizon))
+        self.predicted_b_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
-        y_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=self.predicted_y_value, logits=self.y_out)
+        y_loss = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(
+            labels=self.predicted_y_value, logits=self.y_out), axis=1)
         b_loss = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=self.predicted_b_value, logits=self.b_out)
-        self.loss = tf.reduce_mean(
-            tf.reduce_sum(tf.concat([y_loss, b_loss], axis=1), axis=1))
+        self.loss = tf.reduce_mean(y_loss + b_loss)
 
         # self.loss = tf.reduce_mean((self.predicted_q_value - self.y_out)**2)
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
@@ -583,14 +477,8 @@ class CriticNetwork:
             tf.cast(tf.equal(b_predictions, b_actual), tf.float32))
 
         # Get the gradient of the net w.r.t. the action
-        shaped_y_out = tf.reshape(self.y_out,
-                                  [-1, horizon])
-        shaped_b_out = tf.reshape(self.b_out, [-1, horizon])
-        loss_grad = tf.reduce_mean(tf.reduce_sum(
-            tf.concat([shaped_y_out, shaped_b_out], axis=1), axis=1))
-        # loss_grad = tf.reduce_mean(tf.reduce_sum(shaped_b_out, axis=1))
-        # print(loss_grad)
-        # exit()
+        shaped_b_out = tf.reshape(self.b_out, [-1, 1])
+        loss_grad = tf.reduce_mean(shaped_b_out)
         self.action_grads = tf.gradients(loss_grad, self.actions)
 
     def train(self, inputs, actions, y, b):
@@ -614,7 +502,7 @@ class CriticNetwork:
                        self.actions: actions})
         y_out = np.array(preds[0])
         b_out = np.array(preds[1])
-        preds = np.concatenate([y_out, b_out], axis=2)
+        preds = np.concatenate([y_out, b_out], axis=1)
         return preds
 
     def predict_target(self, inputs, actions):
@@ -626,7 +514,7 @@ class CriticNetwork:
             })
         y_out = np.array(preds[0])
         b_out = np.array(preds[1])
-        preds = np.concatenate([y_out, b_out], axis=2)
+        preds = np.concatenate([y_out, b_out], axis=1)
         return preds
 
     def update_target_network(self):
@@ -641,7 +529,7 @@ class CriticNetwork:
 
 class OrnsteinUhlenbeckActionNoise:
 
-    def __init__(self, mu, sigma=0.1, theta=0.075, dt=0.25, x0=None):
+    def __init__(self, mu, sigma=0.05, theta=0.05, dt=0.25, x0=None):
         self.theta = theta
         self.mu = mu
         self.sigma = sigma

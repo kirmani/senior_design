@@ -224,6 +224,7 @@ class DeepDronePlanner:
         y = tf.nn.relu(y)
         y = tf.contrib.layers.fully_connected(
             y, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        y = tf.squeeze(y)
         # y_out_weights = tf.Variable(
         #     tf.random_uniform([16, 1], -3e-4, 3e-4))
         # y_out_bias = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
@@ -235,6 +236,7 @@ class DeepDronePlanner:
             lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         b = tf.contrib.layers.batch_norm(b)
         b = tf.nn.relu(b)
+        b = tf.reshape(b, [-1, 16 * self.horizon])
         b = tf.contrib.layers.fully_connected(
             b, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         # b_out_weights = tf.Variable(tf.random_uniform([16, self.horizon], -3e-4, 3e-4))
@@ -312,7 +314,7 @@ class DeepDronePlanner:
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = 1.0
+        vel_msg.linear.x = 0.5
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
         vel_msg.angular.z = action[0]
