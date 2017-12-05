@@ -45,8 +45,13 @@ class DeepDeterministicPolicyGradients:
         tf.summary.scalar("Reward", episode_reward)
         episode_ave_max_q = tf.Variable(0.)
         tf.summary.scalar("Qmax_Value", episode_ave_max_q)
+        model_accuracy = tf.Variable(0.)
+        tf.summary.scalar("Model_accuracy", model_accuracy)
+        horizon_trajectory_success = tf.Variable(0.)
+        tf.summary.scalar("Horizon_success_prob", horizon_trajectory_success)
 
-        summary_vars = [episode_reward, episode_ave_max_q]
+        summary_vars = [episode_reward, episode_ave_max_q, model_accuracy,
+                horizon_trajectory_success]
         summary_ops = tf.summary.merge_all()
 
         return summary_ops, summary_vars
@@ -233,7 +238,7 @@ class DeepDeterministicPolicyGradients:
 
                 # Update the critic given the targets
                 (predicted_q_value, critic_loss,
-                 short_term_acc, long_term_acc) = self.critic.train(
+                 model_acc, horizon_success_prob) = self.critic.train(
                      s_batch, a_batch,
                      np.reshape(y_i, (batch_size, self.horizon)),
                      np.reshape(b_i, (batch_size, 1)))
@@ -253,7 +258,7 @@ class DeepDeterministicPolicyGradients:
                 "[%d] Qmax: %.4f, Critic Loss: %.4f, Model Acc: %.4f, Horizon Success Prob: %.4f"
                 % (optimization_step,
                    average_epoch_avg_max_q / (optimization_step + 1),
-                   critic_loss, short_term_acc, long_term_acc))
+                   critic_loss, model_acc, horizon_success_prob))
 
             average_epoch_avg_max_q /= optimization_steps
             average_epoch_reward = np.mean(epoch_rewards)
@@ -271,7 +276,9 @@ class DeepDeterministicPolicyGradients:
                 summary_ops,
                 feed_dict={
                     summary_vars[0]: average_epoch_reward,
-                    summary_vars[1]: average_epoch_avg_max_q
+                    summary_vars[1]: average_epoch_avg_max_q,
+                    summary_vars[2]: model_acc,
+                    summary_vars[3]: horizon_success_prob
                 })
 
             writer.add_summary(summary_str, epoch)
