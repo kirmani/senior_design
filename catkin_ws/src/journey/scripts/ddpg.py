@@ -229,7 +229,7 @@ class DeepDeterministicPolicyGradients:
                     # B represents the best-case future likelihood of flight
                     #   without collosion.
                     y_i[k, :] = r_batch[k]
-                    b_i[k] = np.mean(r_batch[k])
+                    b_i[k] = np.mean(target_q[k, :self.horizon])
 
                 # Update the critic given the targets
                 (predicted_q_value, critic_loss,
