@@ -475,9 +475,7 @@ class CriticNetwork:
             tf.cast(tf.equal(b_predictions, b_actual), tf.float32))
 
         # Get the gradient of the net w.r.t. the action
-        shaped_b_out = tf.reshape(self.b_out, [-1, 1])
-        loss_grad = tf.reduce_mean(shaped_b_out)
-        self.action_grads = tf.gradients(loss_grad, self.actions)
+        self.action_grads = tf.gradients(self.b_out, self.actions)
 
     def train(self, inputs, actions, y, b):
         preds, loss, y_acc, b_acc, _ = self.sess.run(
