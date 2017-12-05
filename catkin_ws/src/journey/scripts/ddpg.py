@@ -250,7 +250,7 @@ class DeepDeterministicPolicyGradients:
 
             # Output training statistics.
             print(
-                "[%d] Qmax: %.4f, Critic Loss: %.4f, Model Acc: %.4f, Path Acc: %.4f"
+                "[%d] Qmax: %.4f, Critic Loss: %.4f, Model Acc: %.4f, Horizon Success Prob: %.4f"
                 % (optimization_step,
                    average_epoch_avg_max_q / (optimization_step + 1),
                    critic_loss, short_term_acc, long_term_acc))
@@ -469,10 +469,7 @@ class CriticNetwork:
         y_actual = tf.cast(self.predicted_y_value > 0, tf.float32)
         self.y_accuracy = tf.reduce_mean(
             tf.cast(tf.equal(y_predictions, y_actual), tf.float32))
-        b_predictions = tf.cast(self.b_out > 0, tf.float32)
-        b_actual = tf.cast(self.predicted_b_value > 0, tf.float32)
-        self.b_accuracy = tf.reduce_mean(
-            tf.cast(tf.equal(b_predictions, b_actual), tf.float32))
+        self.b_accuracy = tf.reduce_mean(tf.nn.sigmoid(self.b_out))
 
         # Get the gradient of the net w.r.t. the action
         self.action_grads = tf.gradients(self.b_out, self.actions)
