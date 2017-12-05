@@ -49,9 +49,11 @@ class DeepDeterministicPolicyGradients:
         tf.summary.scalar("Model_accuracy", model_accuracy)
         horizon_trajectory_success = tf.Variable(0.)
         tf.summary.scalar("Horizon_success_prob", horizon_trajectory_success)
+        critic_loss = tf.Variable(0.)
+        tf.summary.scalar("Critic_loss", critic_loss)
 
         summary_vars = [episode_reward, episode_ave_max_q, model_accuracy,
-                horizon_trajectory_success]
+                horizon_trajectory_success, critic_loss]
         summary_ops = tf.summary.merge_all()
 
         return summary_ops, summary_vars
@@ -278,7 +280,8 @@ class DeepDeterministicPolicyGradients:
                     summary_vars[0]: average_epoch_reward,
                     summary_vars[1]: average_epoch_avg_max_q,
                     summary_vars[2]: model_acc,
-                    summary_vars[3]: horizon_success_prob
+                    summary_vars[3]: horizon_success_prob,
+                    summary_vars[4]: critic_loss
                 })
 
             writer.add_summary(summary_str, epoch)
