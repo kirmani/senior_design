@@ -83,7 +83,7 @@ class DeepDeterministicPolicyGradients:
               actor_noise=None,
               epsilon_zero=0,
               logdir='log',
-              optimization_steps=10,
+              optimization_steps=40,
               num_epochs=200,
               episodes_in_epoch=16,
               max_episode_len=50,
@@ -273,7 +273,7 @@ class DeepDeterministicPolicyGradients:
 
             print("Finished data collection for epoch %d." % epoch)
             print("Experience buffer size: %s" % replay_buffer.size())
-            if replay_buffer.size() < (minibatch_size * optimization_steps):
+            if replay_buffer.size() < minibatch_size:
                 continue
 
             print("Starting policy optimization.")
