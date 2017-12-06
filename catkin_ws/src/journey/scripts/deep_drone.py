@@ -29,8 +29,6 @@ from std_msgs.msg import String
 from std_srvs.srv import Empty as EmptyService
 from visualization_msgs.msg import Marker
 from tum_ardrone.msg import filter_state
-from journey.srv import FlyToGoal
-from journey.srv import FlyToGoalResponse
 from ddpg import DeepDeterministicPolicyGradients
 from ddpg import OrnsteinUhlenbeckActionNoise
 from ddpg import Environment
@@ -47,11 +45,11 @@ class DeepDronePlanner:
 
         # Inputs.
         self.depth_subscriber = rospy.Subscriber(
-            '/ardrone/front/depth/image_raw', Image, self._OnNewDepth)
+            '/ardrone/front/depth/image_raw', Image, self.on_new_depth)
         self.depth_msg = None
 
         self.collision_subscriber = rospy.Subscriber(
-            '/ardrone/crash_sensor', ContactsState, self._OnNewContactData)
+            '/ardrone/crash_sensor', ContactsState, self.on_new_contact_data)
         self.collided = False
 
         # Actions.
@@ -69,14 +67,11 @@ class DeepDronePlanner:
         self.episodes_before_position_reset = episodes_before_position_reset
         self.episodes_without_resetting = episodes_before_position_reset # Reset on first run
 
-        # Listen for new goal when planning at test time.
-        s = rospy.Service('fly_to_goal', FlyToGoal, self.FlyToGoal)
-
         # The rate which we publish commands.
         self.rate = rospy.Rate(self.rate)
 
         # Set up policy search network.
-        self.action_dim = 1
+        self.action_dim = 2
         scale = 0.1
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
@@ -90,22 +85,13 @@ class DeepDronePlanner:
 
         print("Deep drone planner initialized.")
 
-    def _OnNewDepth(self, depth):
+    def on_new_depth(self, depth):
         self.depth_msg = depth
 
-    def _OnNewContactData(self, contact):
+    def on_new_contact_data(self, contact):
         # Surprisingly, this works pretty well for collision detection
         if len(contact.states) > 0:
             self.collided = True
-
-    def FlyToGoal(self, req):
-        self.goal_pose.position.x = self.pose.position.x + req.x
-        self.goal_pose.position.y = self.pose.position.y + req.y
-        self.goal_pose.position.z = self.pose.position.z + req.z
-        print("Flying to: (%s, %s, %s)" %
-              (self.goal_pose.position.x, self.goal_pose.position.y,
-               self.goal_pose.position.z))
-        return FlyToGoalResponse(True)
 
     def create_actor_network(self, scope):
         inputs = tf.placeholder(tf.float32,
@@ -156,7 +142,7 @@ class DeepDronePlanner:
         actions = tf.contrib.layers.batch_norm(actions)
         actions = tf.nn.relu(actions)
         actions = tf.contrib.layers.fully_connected(
-            actions, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+            actions, self.action_dim, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         # action_weights = tf.Variable(
         #     tf.random_uniform([256, self.action_dim], -3e-4, 3e-4))
         # action_bias = tf.Variable(
@@ -314,10 +300,10 @@ class DeepDronePlanner:
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = 0.5
+        vel_msg.linear.x = action[0]
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
-        vel_msg.angular.z = action[0]
+        vel_msg.angular.z = action[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -355,15 +341,15 @@ class DeepDronePlanner:
         self.velocity_publisher.publish(vel_msg)
         return self.collided
 
-    def RunModel(self, model_name, num_attempts):
+    def run_model(self, model_name, num_attempts):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
         modeldir = os.path.join(
             os.path.dirname(__file__),
             '../../../learning/deep_drone/' + model_name)
-        self.ddpg.RunModel(
+        self.ddpg.run_model(
             env, modeldir, num_attempts=num_attempts, max_episode_len=1000)
 
-    def Train(self, prev_model):
+    def train(self, prev_model):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim))
         modeldir = None
@@ -374,13 +360,12 @@ class DeepDronePlanner:
             print("modeldir is %s" % modeldir)
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../learning/deep_drone/')
-        self.ddpg.Train(
+        self.ddpg.train(
             env,
             logdir=logdir,
             episodes_in_epoch=1,
             num_epochs=(16 * 200),
             actor_noise=actor_noise,
-            epsilon_zero=0,
             model_dir=modeldir,
             max_episode_len=1000)
 
@@ -391,9 +376,9 @@ def main(args):
         attempts = 1
         if args.num_attempts:
             attempts = int(args.num_attempts)
-        deep_drone_planner.RunModel(args.model, num_attempts=attempts)
+        deep_drone_planner.run_model(args.model, num_attempts=attempts)
     else:
-        deep_drone_planner.Train(args.prev_model)
+        deep_drone_planner.train(args.prev_model)
 
 
 if __name__ == '__main__':

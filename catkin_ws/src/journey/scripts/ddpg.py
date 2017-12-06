@@ -58,7 +58,7 @@ class DeepDeterministicPolicyGradients:
 
         return summary_ops, summary_vars
 
-    def RunModel(self, env, model_dir, num_attempts=1, max_episode_len=50):
+    def run_model(self, env, model_dir, num_attempts=1, max_episode_len=50):
         saver = tf.train.Saver()
         saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
 
@@ -85,10 +85,9 @@ class DeepDeterministicPolicyGradients:
             print("Episode over.")
             print("Reward: %.4f" % total_reward)
 
-    def Train(self,
+    def train(self,
               env,
               actor_noise=None,
-              epsilon_zero=0,
               logdir='log',
               optimization_steps=40,
               num_epochs=200,
@@ -114,7 +113,8 @@ class DeepDeterministicPolicyGradients:
         # Set up summary Ops
         summary_ops, summary_vars = self.build_summaries()
 
-        # Create a new log directory (if you run low on disk space you can either disable this or delete old logs)
+        # Create a new log directory (if you run low on disk space you can
+        # either disable this or delete old logs)
         # run: `tensorboard --logdir log` to see all the nice summaries
         for n_model in range(1000):
             summary_dir = "%s/model_%d" % (logdir, n_model)
@@ -123,6 +123,7 @@ class DeepDeterministicPolicyGradients:
         writer = tf.summary.FileWriter(summary_dir, self.sess.graph)
 
         self.sess.run(tf.global_variables_initializer())
+
         # Initialize target network weights
         self.actor.update_target_network()
         self.critic.update_target_network()
@@ -134,10 +135,6 @@ class DeepDeterministicPolicyGradients:
             epoch = tf.train.global_step(self.sess, global_step)
             epoch_rewards = []
             total_epoch_avg_max_q = 0.0
-            greedy_eps = epsilon_zero * (1.0 - epoch / num_epochs)
-            if greedy_eps > 0.0:
-                print("Start training epoch %d with e-greedy (%.4f)" %
-                      (epoch, greedy_eps))
             for i in range(episodes_in_epoch):
                 state = env.Reset()
                 episode_reward = 0.0
@@ -151,26 +148,16 @@ class DeepDeterministicPolicyGradients:
                 if actor_noise != None:
                     actor_noise.reset()
 
-                action_horizon_idx = 0
-                replan_frequency = 1 # self.horizon
-
                 for j in range(max_episode_len):
-                    if action_horizon_idx == 0:
-                        # if actor_noise != None:
-                        #     actor_noise.reset()
-                        action_horizon = self.actor.predict(
-                                np.expand_dims(state, axis=0))[0]
-                    action = action_horizon[action_horizon_idx]
-                    action_horizon_idx = (action_horizon_idx + 1) % replan_frequency
+                    action = action_horizon = self.actor.predict(
+                                np.expand_dims(state, axis=0))[0][0]
 
                     # Added exploration noise.
                     if actor_noise != None:
                         action += actor_noise()
-                    if np.random.random() < greedy_eps:
-                        action = np.random.random(action.shape) - 0.5
 
                     next_state = env.Step(state, action)
-                    terminal = env.Terminal(state, action)
+                    terminal = env.Terminal(next_state, action)
                     reward = env.Reward(next_state, action)
 
                     # Add to episode buffer.
@@ -186,19 +173,17 @@ class DeepDeterministicPolicyGradients:
                     if terminal:
                         break
 
-
+                num_actions = action_buffer[0].shape[0]
                 for t in range(len(state_buffer)):
-                    y_i = []
-                    a_i = []
+                    y_i = np.zeros(self.horizon)
+                    a_i = np.zeros((self.horizon, num_actions))
                     for h in range(self.horizon):
                         if t + h < len(state_buffer):
-                            y_i.append(reward_buffer[t + h])
-                            a_i.append(action_buffer[t + h])
+                            y_i[h] = reward_buffer[t + h]
+                            a_i[h, :] = action_buffer[t + h]
                         else:
-                            y_i.append(reward_buffer[-1])
-                            a_i.append([np.random.random()])
-                    y_i = np.array(y_i)
-                    a_i = np.array(a_i)
+                            y_i[h] = reward_buffer[-1]
+                            a_i[h, :] = np.random.random(num_actions)
                     replay_buffer.add(state_buffer[j], a_i, y_i,
                                       terminal_buffer[j], next_state_buffer[j])
 
@@ -228,13 +213,13 @@ class DeepDeterministicPolicyGradients:
                     s2_batch, self.actor.predict_target(s2_batch))
                 target_q = 1.0 / (1.0 + np.exp(-np.array(target_q)))
 
+                # Y represents the probability of flight without collision
+                #   between time t and t + h.
+                # B represents the best-case future likelihood of flight
+                #   without collosion.
                 y_i = np.zeros((batch_size, self.horizon))
                 b_i = np.zeros(batch_size)
                 for k in range(batch_size):
-                    # Y represents the probability of flight without collision
-                    #   between time t and t + h.
-                    # B represents the best-case future likelihood of flight
-                    #   without collosion.
                     y_i[k, :] = r_batch[k]
                     b_i[k] = np.mean(target_q[k, :self.horizon])
 
