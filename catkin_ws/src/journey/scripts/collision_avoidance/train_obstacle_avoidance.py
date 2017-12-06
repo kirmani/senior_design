@@ -71,7 +71,7 @@ class DeepDronePlanner:
         self.rate = rospy.Rate(self.rate)
 
         # Set up policy search network.
-        self.action_dim = 2
+        self.action_dim = 1
         scale = 0.1
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
@@ -300,10 +300,10 @@ class DeepDronePlanner:
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = action[0]
+        vel_msg.linear.x = 1.0
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
-        vel_msg.angular.z = action[1]
+        vel_msg.angular.z = action[0]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.

@@ -88,6 +88,7 @@ class DeepDeterministicPolicyGradients:
     def train(self,
               env,
               actor_noise=None,
+              act_randomly=True,
               logdir='log',
               optimization_steps=40,
               num_epochs=200,
@@ -148,13 +149,25 @@ class DeepDeterministicPolicyGradients:
                 if actor_noise != None:
                     actor_noise.reset()
 
-                for j in range(max_episode_len):
-                    action = action_horizon = self.actor.predict(
-                                np.expand_dims(state, axis=0))[0][0]
+                num_actions = 1
+                k = 1000
 
-                    # Added exploration noise.
-                    if actor_noise != None:
-                        action += actor_noise()
+                for j in range(max_episode_len):
+                    if not act_randomly:
+                      action = self.actor.predict(
+                                  np.expand_dims(state, axis=0))[0][0]
+
+                      # Added exploration noise.
+                      if actor_noise != None:
+                          action += actor_noise()
+                    else:
+                      action_candidates = np.random.random((k, self.horizon, num_actions))
+                      action_predictions = self.critic.predict(
+                        np.array([state for _ in range(k)]),
+                        action_candidates)
+                      success_probs = action_predictions[:, -1]
+                      best_candidate = np.argmax(success_probs)
+                      action = action_candidates[best_candidate][0]
 
                     next_state = env.Step(state, action)
                     terminal = env.Terminal(next_state, action)
@@ -173,7 +186,6 @@ class DeepDeterministicPolicyGradients:
                     if terminal:
                         break
 
-                num_actions = action_buffer[0].shape[0]
                 for t in range(len(state_buffer)):
                     y_i = np.zeros(self.horizon)
                     a_i = np.zeros((self.horizon, num_actions))
