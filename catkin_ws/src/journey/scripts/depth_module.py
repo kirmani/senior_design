@@ -1,64 +1,83 @@
-#!/usr/bin/env python
-# Software License Agreement (BSD License)
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+# vim:fenc=utf-8
 #
-# Copyright (c) 2008, Willow Garage, Inc.
-# All rights reserved.
+# Copyright © 2017 Sean Kirmani <sean@kirmani.io>
 #
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
-#
-#  * Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-#  * Redistributions in binary form must reproduce the above
-#    copyright notice, this list of conditions and the following
-#    disclaimer in the documentation and/or other materials provided
-#    with the distribution.
-#  * Neither the name of Willow Garage, Inc. nor the names of its
-#    contributors may be used to endorse or promote products derived
-#    from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-# COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-# ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-#
-# Revision $Id$
+# Distributed under terms of the MIT license.
+"""
+Depth from RGB neural network module.
+"""
 
-## Simple talker demo that listens to std_msgs/Strings published
-## to the 'chatter' topic
-
+import numpy as np
+import os
 import rospy
+import ros_numpy
+import tensorflow as tf
+from depth_from_rgb import models
+from matplotlib import pyplot as plt
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
 
+HEIGHT = 360
+WIDTH = 640
+CHANNELS = 3
+BATCH_SIZE = 1
+MODEL_DATA_PATH = '../tensorflow/models/depth_from_rgb/NYU_FCRN.ckpt'
+DEPTH_MAX = 4
 
-def callback(data):
-    rospy.loginfo(rospy.get_caller_id() + ': Received image')
+
+class DepthFromRGBNode:
+
+    def __init__(self):
+        # Create a placeholder for the input image
+        self.input_node = tf.placeholder(
+            tf.float32, shape=(None, HEIGHT, WIDTH, CHANNELS))
+
+        # Construct the network
+        self.net = models.ResNet50UpProj({
+            'data': self.input_node
+        }, BATCH_SIZE, 1, False)
+
+        self.sess = tf.Session()
+
+        # Load the converted parameters
+        print('Loading the model')
+
+        # Use to load from ckpt file
+        saver = tf.train.Saver()
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        saver.restore(self.sess, os.path.join(dir_path, MODEL_DATA_PATH))
+
+        # Initialize ROS node.
+        rospy.init_node('image_depth', anonymous=True)
+
+        # Subscribe to camera feed.
+        rospy.Subscriber('ardrone/front/image_raw', Image, self.on_new_image)
+
+        # Create depth publisher.
+        self.depth_publisher = rospy.Publisher(
+            'ardrone/front/depth/image_raw', Image, queue_size=10)
+
+        # spin() simply keeps python from exiting until this node is stopped
+        rospy.spin()
+
+    def on_new_image(self, data):
+        rgb = ros_numpy.numpify(data)
+        depth = (self.predict(np.expand_dims(rgb, axis=0))[0] * 256.0 /
+                 DEPTH_MAX).astype(np.uint8)
+        msg = ros_numpy.msgify(Image, depth, encoding='mono8')
+        self.depth_publisher.publish(msg)
+
+    def predict(self, img):
+        prediction = self.sess.run(
+            self.net.get_output(), feed_dict={self.input_node: img})
+        return prediction
 
 
-def listener():
-
-    # In ROS, nodes are uniquely named. If two nodes with the same
-    # name are launched, the previous one is kicked off. The
-    # anonymous=True flag means that rospy will choose a unique
-    # name for our 'listener' node so that multiple listeners can
-    # run simultaneously.
-    rospy.init_node('image_depth', anonymous=True)
-
-    rospy.Subscriber('ardrone/front/image_raw', Image, callback)
-
-    # spin() simply keeps python from exiting until this node is stopped
-    rospy.spin()
+def main():
+    depth_from_rgb = DepthFromRGBNode()
 
 
 if __name__ == '__main__':
-    listener()
+    main()
