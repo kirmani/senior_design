@@ -529,7 +529,7 @@ class CriticNetwork:
 
 class OrnsteinUhlenbeckActionNoise:
 
-    def __init__(self, mu, sigma=0.05, theta=0.05, dt=0.25, x0=None):
+    def __init__(self, mu, sigma=0.1, theta=0.1, dt=0.25, x0=None):
         self.theta = theta
         self.mu = mu
         self.sigma = sigma
