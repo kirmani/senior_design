@@ -2,9 +2,9 @@ import numpy as np
 import tensorflow as tf
 
 # ----------------------------------------------------------------------------------
-# Commonly used layers and operations based on ethereon's implementation 
+# Commonly used layers and operations based on ethereon's implementation
 # https://github.com/ethereon/caffe-tensorflow
-# Slight modifications may apply. FCRN-specific operations have also been appended. 
+# Slight modifications may apply. FCRN-specific operations have also been appended.
 # ----------------------------------------------------------------------------------
 # Thanks to *Helisa Dhamo* for the model conversion and integration into TensorFlow.
 # ----------------------------------------------------------------------------------
@@ -27,6 +27,7 @@ def interleave(tensors, axis):
     new_shape = [-1] + old_shape
     new_shape[axis] *= len(tensors)
     return tf.reshape(tf.stack(tensors, axis + 1), new_shape)
+
 
 def layer(op):
     '''Decorator for composable network layers.'''
@@ -56,7 +57,7 @@ def layer(op):
 
 class Network(object):
 
-    def __init__(self, inputs, batch, keep_prob, is_training, trainable = True):
+    def __init__(self, inputs, batch, keep_prob, is_training, trainable=True):
         # The input nodes for this network
         self.inputs = inputs
         # The current list of terminal nodes
@@ -70,7 +71,6 @@ class Network(object):
         self.is_training = is_training
         self.setup()
 
-
     def setup(self):
         '''Construct the network. '''
         raise NotImplementedError('Must be implemented by the subclass.')
@@ -82,9 +82,9 @@ class Network(object):
         ignore_missing: If true, serialized weights for missing layers are ignored.
         '''
         data_dict = np.load(data_path, encoding='latin1').item()
-        for op_name in data_dict: 
+        for op_name in data_dict:
             with tf.variable_scope(op_name, reuse=True):
-                for param_name, data in iter(data_dict[op_name].items()):      
+                for param_name, data in iter(data_dict[op_name].items()):
                     try:
                         var = tf.get_variable(param_name)
                         session.run(var.assign(data))
@@ -124,7 +124,8 @@ class Network(object):
 
     def make_var(self, name, shape):
         '''Creates a new TensorFlow variable.'''
-        return tf.get_variable(name, shape, dtype = 'float32', trainable=self.trainable)
+        return tf.get_variable(
+            name, shape, dtype='float32', trainable=self.trainable)
 
     def validate_padding(self, padding):
         '''Verifies that the padding is one of the supported ones.'''
@@ -150,16 +151,20 @@ class Network(object):
         c_i = input_data.get_shape()[-1]
 
         if (padding == 'SAME'):
-            input_data = tf.pad(input_data, [[0, 0], [(k_h - 1)//2, (k_h - 1)//2], [(k_w - 1)//2, (k_w - 1)//2], [0, 0]], "CONSTANT")
-        
+            input_data = tf.pad(input_data,
+                                [[0, 0], [(k_h - 1) // 2, (k_h - 1) // 2],
+                                 [(k_w - 1) // 2,
+                                  (k_w - 1) // 2], [0, 0]], "CONSTANT")
+
         # Verify that the grouping parameter is valid
         assert c_i % group == 0
         assert c_o % group == 0
         # Convolution for a given input and kernel
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding='VALID')
-        
+
         with tf.variable_scope(name) as scope:
-            kernel = self.make_var('weights', shape=[k_h, k_w, c_i // group, c_o])
+            kernel = self.make_var(
+                'weights', shape=[k_h, k_w, c_i // group, c_o])
 
             if group == 1:
                 # This is the common-case. Convolve the input without any further complications.
@@ -169,7 +174,9 @@ class Network(object):
 
                 input_groups = tf.split(3, group, input_data)
                 kernel_groups = tf.split(3, group, kernel)
-                output_groups = [convolve(i, k) for i, k in zip(input_groups, kernel_groups)]
+                output_groups = [
+                    convolve(i, k) for i, k in zip(input_groups, kernel_groups)
+                ]
                 # Concatenate the groups
                 output = tf.concat(3, output_groups)
 
@@ -188,31 +195,48 @@ class Network(object):
         return tf.nn.relu(input_data, name=name)
 
     @layer
-    def max_pool(self, input_data, k_h, k_w, s_h, s_w, name, padding=DEFAULT_PADDING):
+    def max_pool(self,
+                 input_data,
+                 k_h,
+                 k_w,
+                 s_h,
+                 s_w,
+                 name,
+                 padding=DEFAULT_PADDING):
         self.validate_padding(padding)
-        return tf.nn.max_pool(input_data,
-                              ksize=[1, k_h, k_w, 1],
-                              strides=[1, s_h, s_w, 1],
-                              padding=padding,
-                              name=name)
+        return tf.nn.max_pool(
+            input_data,
+            ksize=[1, k_h, k_w, 1],
+            strides=[1, s_h, s_w, 1],
+            padding=padding,
+            name=name)
 
     @layer
-    def avg_pool(self, input_data, k_h, k_w, s_h, s_w, name, padding=DEFAULT_PADDING):
+    def avg_pool(self,
+                 input_data,
+                 k_h,
+                 k_w,
+                 s_h,
+                 s_w,
+                 name,
+                 padding=DEFAULT_PADDING):
         self.validate_padding(padding)
-        return tf.nn.avg_pool(input_data,
-                              ksize=[1, k_h, k_w, 1],
-                              strides=[1, s_h, s_w, 1],
-                              padding=padding,
-                              name=name)
+        return tf.nn.avg_pool(
+            input_data,
+            ksize=[1, k_h, k_w, 1],
+            strides=[1, s_h, s_w, 1],
+            padding=padding,
+            name=name)
 
     @layer
     def lrn(self, input_data, radius, alpha, beta, name, bias=1.0):
-        return tf.nn.local_response_normalization(input_data,
-                                                  depth_radius=radius,
-                                                  alpha=alpha,
-                                                  beta=beta,
-                                                  bias=bias,
-                                                  name=name)
+        return tf.nn.local_response_normalization(
+            input_data,
+            depth_radius=radius,
+            alpha=alpha,
+            beta=beta,
+            bias=bias,
+            name=name)
 
     @layer
     def concat(self, inputs, axis, name):
@@ -254,32 +278,58 @@ class Network(object):
         return tf.nn.softmax(input_data, name)
 
     @layer
-    def batch_normalization(self, input_data, name, scale_offset=True, relu=False):
+    def batch_normalization(self,
+                            input_data,
+                            name,
+                            scale_offset=True,
+                            relu=False):
 
         with tf.variable_scope(name) as scope:
             shape = [input_data.get_shape()[-1]]
-            pop_mean = tf.get_variable("mean", shape, initializer = tf.constant_initializer(0.0), trainable=False)
-            pop_var = tf.get_variable("variance", shape, initializer = tf.constant_initializer(1.0), trainable=False)
+            pop_mean = tf.get_variable(
+                "mean",
+                shape,
+                initializer=tf.constant_initializer(0.0),
+                trainable=False)
+            pop_var = tf.get_variable(
+                "variance",
+                shape,
+                initializer=tf.constant_initializer(1.0),
+                trainable=False)
             epsilon = 1e-4
             decay = 0.999
             if scale_offset:
-                scale = tf.get_variable("scale", shape, initializer = tf.constant_initializer(1.0))
-                offset = tf.get_variable("offset", shape, initializer = tf.constant_initializer(0.0))
+                scale = tf.get_variable(
+                    "scale", shape, initializer=tf.constant_initializer(1.0))
+                offset = tf.get_variable(
+                    "offset", shape, initializer=tf.constant_initializer(0.0))
             else:
                 scale, offset = (None, None)
             if self.is_training:
                 batch_mean, batch_var = tf.nn.moments(input_data, [0, 1, 2])
 
-                train_mean = tf.assign(pop_mean,
-                               pop_mean * decay + batch_mean * (1 - decay))
+                train_mean = tf.assign(pop_mean, pop_mean * decay + batch_mean *
+                                       (1 - decay))
                 train_var = tf.assign(pop_var,
-                              pop_var * decay + batch_var * (1 - decay))
+                                      pop_var * decay + batch_var * (1 - decay))
                 with tf.control_dependencies([train_mean, train_var]):
-                    output = tf.nn.batch_normalization(input_data,
-                    batch_mean, batch_var, offset, scale, epsilon, name = name)
+                    output = tf.nn.batch_normalization(
+                        input_data,
+                        batch_mean,
+                        batch_var,
+                        offset,
+                        scale,
+                        epsilon,
+                        name=name)
             else:
-                output = tf.nn.batch_normalization(input_data,
-                pop_mean, pop_var, offset, scale, epsilon, name = name)
+                output = tf.nn.batch_normalization(
+                    input_data,
+                    pop_mean,
+                    pop_var,
+                    offset,
+                    scale,
+                    epsilon,
+                    name=name)
 
             if relu:
                 output = tf.nn.relu(output)
@@ -289,65 +339,104 @@ class Network(object):
     @layer
     def dropout(self, input_data, keep_prob, name):
         return tf.nn.dropout(input_data, keep_prob, name=name)
-    
 
-    def unpool_as_conv(self, size, input_data, id, stride = 1, ReLU = False, BN = True):
+    def unpool_as_conv(self,
+                       size,
+                       input_data,
+                       id,
+                       stride=1,
+                       ReLU=False,
+                       BN=True):
 
-		# Model upconvolutions (unpooling + convolution) as interleaving feature
-		# maps of four convolutions (A,B,C,D). Building block for up-projections. 
-
+        # Model upconvolutions (unpooling + convolution) as interleaving feature
+        # maps of four convolutions (A,B,C,D). Building block for up-projections.
 
         # Convolution A (3x3)
         # --------------------------------------------------
         layerName = "layer%s_ConvA" % (id)
         self.feed(input_data)
-        self.conv( 3, 3, size[3], stride, stride, name = layerName, padding = 'SAME', relu = False)
+        self.conv(
+            3,
+            3,
+            size[3],
+            stride,
+            stride,
+            name=layerName,
+            padding='SAME',
+            relu=False)
         outputA = self.get_output()
 
         # Convolution B (2x3)
         # --------------------------------------------------
         layerName = "layer%s_ConvB" % (id)
-        padded_input_B = tf.pad(input_data, [[0, 0], [1, 0], [1, 1], [0, 0]], "CONSTANT")
+        padded_input_B = tf.pad(input_data, [[0, 0], [1, 0], [1, 1], [0, 0]],
+                                "CONSTANT")
         self.feed(padded_input_B)
-        self.conv(2, 3, size[3], stride, stride, name = layerName, padding = 'VALID', relu = False)
+        self.conv(
+            2,
+            3,
+            size[3],
+            stride,
+            stride,
+            name=layerName,
+            padding='VALID',
+            relu=False)
         outputB = self.get_output()
 
         # Convolution C (3x2)
         # --------------------------------------------------
         layerName = "layer%s_ConvC" % (id)
-        padded_input_C = tf.pad(input_data, [[0, 0], [1, 1], [1, 0], [0, 0]], "CONSTANT")
+        padded_input_C = tf.pad(input_data, [[0, 0], [1, 1], [1, 0], [0, 0]],
+                                "CONSTANT")
         self.feed(padded_input_C)
-        self.conv(3, 2, size[3], stride, stride, name = layerName, padding = 'VALID', relu = False)
+        self.conv(
+            3,
+            2,
+            size[3],
+            stride,
+            stride,
+            name=layerName,
+            padding='VALID',
+            relu=False)
         outputC = self.get_output()
 
         # Convolution D (2x2)
         # --------------------------------------------------
         layerName = "layer%s_ConvD" % (id)
-        padded_input_D = tf.pad(input_data, [[0, 0], [1, 0], [1, 0], [0, 0]], "CONSTANT")
+        padded_input_D = tf.pad(input_data, [[0, 0], [1, 0], [1, 0], [0, 0]],
+                                "CONSTANT")
         self.feed(padded_input_D)
-        self.conv(2, 2, size[3], stride, stride, name = layerName, padding = 'VALID', relu = False)
+        self.conv(
+            2,
+            2,
+            size[3],
+            stride,
+            stride,
+            name=layerName,
+            padding='VALID',
+            relu=False)
         outputD = self.get_output()
 
         # Interleaving elements of the four feature maps
         # --------------------------------------------------
         left = interleave([outputA, outputB], axis=1)  # columns
         right = interleave([outputC, outputD], axis=1)  # columns
-        Y = interleave([left, right], axis=2) # rows
-        
+        Y = interleave([left, right], axis=2)  # rows
+
         if BN:
             layerName = "layer%s_BN" % (id)
             self.feed(Y)
-            self.batch_normalization(name = layerName, scale_offset = True, relu = False)
+            self.batch_normalization(
+                name=layerName, scale_offset=True, relu=False)
             Y = self.get_output()
 
         if ReLU:
-            Y = tf.nn.relu(Y, name = layerName)
-        
+            Y = tf.nn.relu(Y, name=layerName)
+
         return Y
 
+    def up_project(self, size, id, stride=1, BN=True):
 
-    def up_project(self, size, id, stride = 1, BN = True):
-        
         # Create residual upsampling layer (UpProjection)
 
         input_data = self.get_output()
@@ -356,30 +445,38 @@ class Network(object):
         id_br1 = "%s_br1" % (id)
 
         # Interleaving Convs of 1st branch
-        out = self.unpool_as_conv(size, input_data, id_br1, stride, ReLU=True, BN=True)
+        out = self.unpool_as_conv(
+            size, input_data, id_br1, stride, ReLU=True, BN=True)
 
         # Convolution following the upProjection on the 1st branch
         layerName = "layer%s_Conv" % (id)
         self.feed(out)
-        self.conv(size[0], size[1], size[3], stride, stride, name = layerName, relu = False)
+        self.conv(
+            size[0],
+            size[1],
+            size[3],
+            stride,
+            stride,
+            name=layerName,
+            relu=False)
 
         if BN:
             layerName = "layer%s_BN" % (id)
-            self.batch_normalization(name = layerName, scale_offset=True, relu = False)
+            self.batch_normalization(
+                name=layerName, scale_offset=True, relu=False)
 
         # Output of 1st branch
         branch1_output = self.get_output()
 
-            
         # Branch 2
         id_br2 = "%s_br2" % (id)
         # Interleaving convolutions and output of 2nd branch
-        branch2_output = self.unpool_as_conv(size, input_data, id_br2, stride, ReLU=False)
+        branch2_output = self.unpool_as_conv(
+            size, input_data, id_br2, stride, ReLU=False)
 
-        
         # sum branches
         layerName = "layer%s_Sum" % (id)
-        output = tf.add_n([branch1_output, branch2_output], name = layerName)
+        output = tf.add_n([branch1_output, branch2_output], name=layerName)
         # ReLU
         layerName = "layer%s_ReLU" % (id)
         output = tf.nn.relu(output, name=layerName)

@@ -26,13 +26,18 @@ BATCH_SIZE = 1
 MODEL_DATA_PATH = '../tensorflow/models/depth_from_rgb/NYU_FCRN.ckpt'
 DEPTH_MAX = 4
 
+
 class DepthFromRGBNode:
+
     def __init__(self):
         # Create a placeholder for the input image
-        self.input_node = tf.placeholder(tf.float32, shape=(None, HEIGHT, WIDTH, CHANNELS))
+        self.input_node = tf.placeholder(
+            tf.float32, shape=(None, HEIGHT, WIDTH, CHANNELS))
 
         # Construct the network
-        self.net = models.ResNet50UpProj({'data': self.input_node}, BATCH_SIZE, 1, False)
+        self.net = models.ResNet50UpProj({
+            'data': self.input_node
+        }, BATCH_SIZE, 1, False)
 
         self.sess = tf.Session()
 
@@ -51,26 +56,28 @@ class DepthFromRGBNode:
         rospy.Subscriber('ardrone/front/image_raw', Image, self.on_new_image)
 
         # Create depth publisher.
-        self.depth_publisher = rospy.Publisher('ardrone/front/depth/image_raw',
-                Image, queue_size=10)
+        self.depth_publisher = rospy.Publisher(
+            'ardrone/front/depth/image_raw', Image, queue_size=10)
 
         # spin() simply keeps python from exiting until this node is stopped
         rospy.spin()
 
     def on_new_image(self, data):
         rgb = ros_numpy.numpify(data)
-        depth = (self.predict(np.expand_dims(rgb, axis=0))[0]
-                * 256.0 / DEPTH_MAX).astype(np.uint8)
+        depth = (self.predict(np.expand_dims(rgb, axis=0))[0] * 256.0 /
+                 DEPTH_MAX).astype(np.uint8)
         msg = ros_numpy.msgify(Image, depth, encoding='mono8')
         self.depth_publisher.publish(msg)
 
-
     def predict(self, img):
-        prediction = self.sess.run(self.net.get_output(), feed_dict={self.input_node: img})
+        prediction = self.sess.run(
+            self.net.get_output(), feed_dict={self.input_node: img})
         return prediction
+
 
 def main():
     depth_from_rgb = DepthFromRGBNode()
+
 
 if __name__ == '__main__':
     main()
