@@ -90,7 +90,7 @@ class DeepDeterministicPolicyGradients:
     def train(self,
               env,
               actor_noise=None,
-              act_randomly=True,
+              act_randomly=False,
               k = 1000,
               logdir='log',
               optimization_steps=40,
