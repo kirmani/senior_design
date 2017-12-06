@@ -345,7 +345,7 @@ class DeepDronePlanner:
         env = Environment(self.reset, self.step, self.reward, self.terminal)
         modeldir = os.path.join(
             os.path.dirname(__file__),
-            '../../../learning/deep_drone/' + model_name)
+            '../../../../learning/deep_drone/' + model_name)
         self.ddpg.run_model(
             env, modeldir, num_attempts=num_attempts, max_episode_len=1000)
 
@@ -356,10 +356,10 @@ class DeepDronePlanner:
         if prev_model != None:
             modeldir = os.path.join(
                 os.path.dirname(__file__),
-                '../../../learning/deep_drone/' + prev_model)
+                '../../../../learning/deep_drone/' + prev_model)
             print("modeldir is %s" % modeldir)
         logdir = os.path.join(
-            os.path.dirname(__file__), '../../../learning/deep_drone/')
+            os.path.dirname(__file__), '../../../../learning/deep_drone/')
         self.ddpg.train(
             env,
             logdir=logdir,
