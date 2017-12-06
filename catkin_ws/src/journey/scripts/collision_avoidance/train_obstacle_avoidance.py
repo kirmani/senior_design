@@ -282,10 +282,6 @@ class DeepDronePlanner:
                 print("Failed to reset simulator.")
 
 
-        # Land first, then take off again. This makes sure our height is good
-        self.land_publisher.publish(EmptyMessage())
-        rospy.sleep(2)
-
         # Take-off.
         self.takeoff_publisher.publish(EmptyMessage())
         rospy.sleep(2)
@@ -338,8 +334,13 @@ class DeepDronePlanner:
             self.velocity_publisher.publish(vel_msg)
             rospy.sleep(3)
 
-        vel_msg.linear.x = 0.0
-        self.velocity_publisher.publish(vel_msg)
+            vel_msg.linear.x = 0.0
+            self.velocity_publisher.publish(vel_msg)
+
+            # Land drone.
+            self.land_publisher.publish(EmptyMessage())
+            rospy.sleep(2)
+
         return self.collided
 
     def run_model(self, model_name, num_attempts):
