@@ -78,6 +78,7 @@ class DeepDronePlanner:
         self.sequence_length = 4
         self.horizon = 16
         self.frame_buffer = deque(maxlen=self.sequence_length)
+        self.drone_speed = 0.5
         self.ddpg = DeepDeterministicPolicyGradients(
             self.create_actor_network,
             self.create_critic_network,
@@ -297,7 +298,7 @@ class DeepDronePlanner:
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = 0.5
+        vel_msg.linear.x = self.drone_speed
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
         vel_msg.angular.z = action[0]
@@ -327,7 +328,7 @@ class DeepDronePlanner:
     def terminal(self, state, action):
         vel_msg = Twist()
         if self.collided:
-            vel_msg.linear.x = -0.2
+            vel_msg.linear.x = -self.drone_speed
             vel_msg.linear.y = 0
             vel_msg.linear.z = 0
             vel_msg.angular.z = 0

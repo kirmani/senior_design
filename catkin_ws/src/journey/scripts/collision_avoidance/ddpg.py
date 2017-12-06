@@ -472,20 +472,21 @@ class CriticNetwork:
             self.loss)
 
         # Metrics
-        y_predictions = tf.cast(self.y_out > 0, tf.float32)
-        y_actual = tf.cast(self.predicted_y_value > 0, tf.float32)
-        self.y_accuracy = tf.reduce_mean(
-            tf.cast(tf.equal(y_predictions, y_actual), tf.float32))
-        self.b_accuracy = tf.reduce_mean(tf.nn.sigmoid(self.b_out))
+        self.model_accuracy = 1.0 - tf.reduce_mean(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=self.predicted_y_value,
+                    logits=self.y_out))
+        self.horizon_success_probability = tf.reduce_mean(
+                tf.nn.sigmoid(self.b_out))
 
         # Get the gradient of the net w.r.t. the action
         self.action_grads = tf.gradients(self.b_out, self.actions)
 
     def train(self, inputs, actions, y, b):
-        preds, loss, y_acc, b_acc, _ = self.sess.run(
+        preds, loss, model_acc, path_acc, _ = self.sess.run(
             [
-                self.y_out, self.loss, self.y_accuracy, self.b_accuracy,
-                self.optimize
+                self.y_out, self.loss, self.model_accuracy,
+                self.horizon_success_probability, self.optimize
             ],
             feed_dict={
                 self.inputs: inputs,
@@ -493,7 +494,7 @@ class CriticNetwork:
                 self.predicted_y_value: y,
                 self.predicted_b_value: b
             })
-        return (preds, loss, y_acc, b_acc)
+        return (preds, loss, model_acc, path_acc)
 
     def predict(self, inputs, actions):
         preds = self.sess.run(
