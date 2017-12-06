@@ -25,9 +25,11 @@ class DeepDeterministicPolicyGradients:
     def __init__(self,
                  create_actor_network,
                  create_critic_network,
+                 action_dim,
                  gamma=0.99,
                  horizon=16,
                  use_hindsight=False):
+        self.action_dim = action_dim
         self.gamma = gamma
         self.horizon = horizon
         self.use_hindsight = use_hindsight
@@ -89,6 +91,7 @@ class DeepDeterministicPolicyGradients:
               env,
               actor_noise=None,
               act_randomly=True,
+              k = 1000,
               logdir='log',
               optimization_steps=40,
               num_epochs=200,
@@ -149,9 +152,6 @@ class DeepDeterministicPolicyGradients:
                 if actor_noise != None:
                     actor_noise.reset()
 
-                num_actions = 1
-                k = 1000
-
                 for j in range(max_episode_len):
                     if not act_randomly:
                       action = self.actor.predict(
@@ -161,7 +161,7 @@ class DeepDeterministicPolicyGradients:
                       if actor_noise != None:
                           action += actor_noise()
                     else:
-                      action_candidates = np.random.random((k, self.horizon, num_actions))
+                      action_candidates = np.random.random((k, self.horizon, self.action_dim))
                       action_predictions = self.critic.predict(
                         np.array([state for _ in range(k)]),
                         action_candidates)
@@ -188,14 +188,14 @@ class DeepDeterministicPolicyGradients:
 
                 for t in range(len(state_buffer)):
                     y_i = np.zeros(self.horizon)
-                    a_i = np.zeros((self.horizon, num_actions))
+                    a_i = np.zeros((self.horizon, self.action_dim))
                     for h in range(self.horizon):
                         if t + h < len(state_buffer):
                             y_i[h] = reward_buffer[t + h]
                             a_i[h, :] = action_buffer[t + h]
                         else:
                             y_i[h] = reward_buffer[-1]
-                            a_i[h, :] = np.random.random(num_actions)
+                            a_i[h, :] = np.random.random(self.action_dim)
                     replay_buffer.add(state_buffer[j], a_i, y_i,
                                       terminal_buffer[j], next_state_buffer[j])
 

@@ -81,6 +81,7 @@ class DeepDronePlanner:
         self.ddpg = DeepDeterministicPolicyGradients(
             self.create_actor_network,
             self.create_critic_network,
+            self.action_dim,
             horizon=self.horizon)
 
         print("Deep drone planner initialized.")
@@ -300,7 +301,7 @@ class DeepDronePlanner:
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = 1.0
+        vel_msg.linear.x = 0.5
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
         vel_msg.angular.z = action[0]
