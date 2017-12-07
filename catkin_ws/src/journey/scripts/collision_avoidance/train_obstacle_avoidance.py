@@ -34,9 +34,13 @@ from ddpg import OrnsteinUhlenbeckActionNoise
 from ddpg import Environment
 from multiplicative_integration_lstm import MultiplicativeIntegrationLSTMCell
 
+
 class DeepDronePlanner:
 
-    def __init__(self, distance_threshold=0.5, rate=4, episodes_before_position_reset=5):
+    def __init__(self,
+                 distance_threshold=0.5,
+                 rate=4,
+                 episodes_before_position_reset=5):
         self.distance_threshold = distance_threshold  # meters
         self.rate = rate  # Hz
 
@@ -65,7 +69,7 @@ class DeepDronePlanner:
 
         # Whether to reset positions of drone
         self.episodes_before_position_reset = episodes_before_position_reset
-        self.episodes_without_resetting = episodes_before_position_reset # Reset on first run
+        self.episodes_without_resetting = episodes_before_position_reset  # Reset on first run
 
         # The rate which we publish commands.
         self.rate = rospy.Rate(self.rate)
@@ -134,17 +138,21 @@ class DeepDronePlanner:
         depth = tf.stack([depth for _ in range(self.horizon)], axis=1)
         lstm_inputs = depth
         lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
-        lstm_outputs, lstm_states = tf.nn.dynamic_rnn(lstm_cell, lstm_inputs,
-                dtype=tf.float32, scope=scope)
-
-
+        lstm_outputs, lstm_states = tf.nn.dynamic_rnn(
+            lstm_cell, lstm_inputs, dtype=tf.float32, scope=scope)
 
         actions = tf.contrib.layers.fully_connected(
-            lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+            lstm_outputs,
+            16,
+            activation_fn=None,
+            weights_regularizer=tf.nn.l2_loss)
         actions = tf.contrib.layers.batch_norm(actions)
         actions = tf.nn.relu(actions)
         actions = tf.contrib.layers.fully_connected(
-            actions, self.action_dim, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+            actions,
+            self.action_dim,
+            activation_fn=None,
+            weights_regularizer=tf.nn.l2_loss)
         # action_weights = tf.Variable(
         #     tf.random_uniform([256, self.action_dim], -3e-4, 3e-4))
         # action_bias = tf.Variable(
@@ -157,7 +165,8 @@ class DeepDronePlanner:
         inputs = tf.placeholder(tf.float32,
                                 (None, self.image_height, self.image_width,
                                  self.sequence_length))
-        actions = tf.placeholder(tf.float32, (None, self.horizon, self.action_dim))
+        actions = tf.placeholder(tf.float32, (None, self.horizon,
+                                              self.action_dim))
         depth = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
@@ -203,11 +212,14 @@ class DeepDronePlanner:
         depth = tf.stack([depth for _ in range(self.horizon)], axis=1)
         lstm_inputs = tf.concat([depth, act], axis=-1)
         lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
-        lstm_outputs, lstm_states = tf.nn.dynamic_rnn(lstm_cell, lstm_inputs,
-                dtype=tf.float32, scope=scope)
+        lstm_outputs, lstm_states = tf.nn.dynamic_rnn(
+            lstm_cell, lstm_inputs, dtype=tf.float32, scope=scope)
 
         y = tf.contrib.layers.fully_connected(
-            lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+            lstm_outputs,
+            16,
+            activation_fn=None,
+            weights_regularizer=tf.nn.l2_loss)
         y = tf.contrib.layers.batch_norm(y)
         y = tf.nn.relu(y)
         y = tf.contrib.layers.fully_connected(
@@ -221,7 +233,10 @@ class DeepDronePlanner:
         # exit()
 
         b = tf.contrib.layers.fully_connected(
-            lstm_outputs, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+            lstm_outputs,
+            16,
+            activation_fn=None,
+            weights_regularizer=tf.nn.l2_loss)
         b = tf.contrib.layers.batch_norm(b)
         b = tf.nn.relu(b)
         b = tf.reshape(b, [-1, 16 * self.horizon])
@@ -281,7 +296,6 @@ class DeepDronePlanner:
                 self.episodes_without_resetting = 0
             except rospy.ServiceException:
                 print("Failed to reset simulator.")
-
 
         # Take-off.
         self.takeoff_publisher.publish(EmptyMessage())
