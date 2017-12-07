@@ -17,12 +17,15 @@ import ros_numpy
 import scipy
 import sys
 import tensorflow as tf
+import tf as transform
 import time
 import traceback
 from collections import deque
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
 from gazebo_msgs.msg import ContactsState
+from gazebo_msgs.msg import ModelState
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image
 from std_msgs.msg import Empty as EmptyMessage
 from std_msgs.msg import String
@@ -48,6 +51,13 @@ class DeepDronePlanner:
             '/ardrone/front/depth/image_raw', Image, self.on_new_depth)
         self.depth_msg = None
 
+        # Subscribe to ground truth pose.
+        self.ground_truth_subscriber = rospy.Subscriber(
+            '/ground_truth/state', Odometry, self.on_new_state)
+        self.last_collision_pose = Pose()
+        self.pose = None
+
+        # Subscribe to collision detector.
         self.collision_subscriber = rospy.Subscriber(
             '/ardrone/crash_sensor', ContactsState, self.on_new_contact_data)
         self.collided = False
@@ -63,9 +73,9 @@ class DeepDronePlanner:
         self.land_publisher = rospy.Publisher(
             '/ardrone/land', EmptyMessage, queue_size=10)
 
-        # Whether to reset positions of drone
-        self.episodes_before_position_reset = episodes_before_position_reset
-        self.episodes_without_resetting = episodes_before_position_reset # Reset on first run
+        # Publish model state.
+        self.model_state_publisher = rospy.Publisher(
+            '/gazebo/set_model_state', ModelState)
 
         # The rate which we publish commands.
         self.rate = rospy.Rate(self.rate)
@@ -78,7 +88,8 @@ class DeepDronePlanner:
         self.sequence_length = 4
         self.horizon = 16
         self.frame_buffer = deque(maxlen=self.sequence_length)
-        self.drone_speed = 0.5
+        self.linear_velocity = 0.5
+        self.reset_distance = 1.5
         self.ddpg = DeepDeterministicPolicyGradients(
             self.create_actor_network,
             self.create_critic_network,
@@ -94,6 +105,9 @@ class DeepDronePlanner:
         # Surprisingly, this works pretty well for collision detection
         if len(contact.states) > 0:
             self.collided = True
+
+    def on_new_state(self, state):
+        self.pose = state.pose.pose
 
     def create_actor_network(self, scope):
         inputs = tf.placeholder(tf.float32,
@@ -259,33 +273,43 @@ class DeepDronePlanner:
         return state
 
     def reset(self):
-        # Stop moving our drone.
-        vel_msg = Twist()
-        vel_msg.linear.x = 0
-        vel_msg.linear.y = 0
-        vel_msg.linear.z = 0
-        vel_msg.angular.z = 0
-        self.velocity_publisher.publish(vel_msg)
+        self.velocity_publisher.publish(Twist())
 
-        # Increment episodes without resetting
-        self.episodes_without_resetting += 1
-        # Completely reset after some number of episodes
-        if self.episodes_without_resetting >= self.episodes_before_position_reset:
-            # Reset our simulation.
-            rospy.wait_for_service('/gazebo/reset_world')
-            try:
-                reset_world = rospy.ServiceProxy('/gazebo/reset_world',
-                                                 EmptyService)
-                reset_world()
-                rospy.sleep(1.)
-                self.episodes_without_resetting = 0
-            except rospy.ServiceException:
-                print("Failed to reset simulator.")
+        # Reset our drone.
+        model_state = ModelState()
+        model_state.model_name = 'quadrotor'
+        model_state.reference_frame = 'world'
 
+        position = (
+                self.last_collision_pose.position.x,
+                self.last_collision_pose.position.y,
+                self.last_collision_pose.position.z)
+
+        quaternion = (
+                self.last_collision_pose.orientation.x,
+                self.last_collision_pose.orientation.y,
+                self.last_collision_pose.orientation.z,
+                self.last_collision_pose.orientation.w)
+        _, _, yaw = transform.transformations.euler_from_quaternion(quaternion)
+        position = (position[0] - self.reset_distance * np.cos(yaw),
+                position[1] - self.reset_distance * np.sin(yaw), 1)
+        quaternion = transform.transformations.quaternion_from_euler(0, 0, yaw)
+
+        reset_pose = Pose()
+        reset_pose.position.x = position[0]
+        reset_pose.position.y = position[1]
+        reset_pose.position.z = position[2]
+        reset_pose.orientation.w = quaternion[3]
+        reset_pose.orientation.x = quaternion[0]
+        reset_pose.orientation.y = quaternion[1]
+        reset_pose.orientation.z = quaternion[2]
+
+        model_state.pose = reset_pose
+        self.model_state_publisher.publish(model_state)
+        rospy.sleep(1.)
 
         # Take-off.
         self.takeoff_publisher.publish(EmptyMessage())
-        rospy.sleep(2)
 
         # Clear our frame buffer.
         self.frame_buffer.clear()
@@ -298,7 +322,7 @@ class DeepDronePlanner:
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = self.drone_speed
+        vel_msg.linear.x = self.linear_velocity
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
         vel_msg.angular.z = action[0]
@@ -326,22 +350,9 @@ class DeepDronePlanner:
         return 1 if not self.collided else 0
 
     def terminal(self, state, action):
-        vel_msg = Twist()
         if self.collided:
-            vel_msg.linear.x = -self.drone_speed
-            vel_msg.linear.y = 0
-            vel_msg.linear.z = 0
-            vel_msg.angular.z = 0
-            self.velocity_publisher.publish(vel_msg)
-            rospy.sleep(3)
-
-            vel_msg.linear.x = 0.0
-            self.velocity_publisher.publish(vel_msg)
-
-            # Land drone.
-            self.land_publisher.publish(EmptyMessage())
-            rospy.sleep(2)
-
+            self.last_collision_pose = self.pose
+            self.velocity_publisher.publish(Twist())
         return self.collided
 
     def run_model(self, model_name, num_attempts):
