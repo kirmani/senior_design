@@ -25,9 +25,11 @@ class DeepDeterministicPolicyGradients:
     def __init__(self,
                  create_actor_network,
                  create_critic_network,
+                 action_dim,
                  gamma=0.99,
                  horizon=16,
                  use_hindsight=False):
+        self.action_dim = action_dim
         self.gamma = gamma
         self.horizon = horizon
         self.use_hindsight = use_hindsight
@@ -52,8 +54,10 @@ class DeepDeterministicPolicyGradients:
         critic_loss = tf.Variable(0.)
         tf.summary.scalar("Critic_loss", critic_loss)
 
-        summary_vars = [episode_reward, episode_ave_max_q, model_accuracy,
-                horizon_trajectory_success, critic_loss]
+        summary_vars = [
+            episode_reward, episode_ave_max_q, model_accuracy,
+            horizon_trajectory_success, critic_loss
+        ]
         summary_ops = tf.summary.merge_all()
 
         return summary_ops, summary_vars
@@ -69,7 +73,7 @@ class DeepDeterministicPolicyGradients:
             for j in range(max_episode_len):
                 if action_horizon_idx == 0:
                     action_horizon = self.actor.predict(
-                            np.expand_dims(state, axis=0))[0]
+                        np.expand_dims(state, axis=0))[0]
                 action = action_horizon[action_horizon_idx]
                 action_horizon_idx = (action_horizon_idx + 1) % self.horizon
 
@@ -88,6 +92,8 @@ class DeepDeterministicPolicyGradients:
     def train(self,
               env,
               actor_noise=None,
+              act_randomly=False,
+              k=1000,
               logdir='log',
               optimization_steps=40,
               num_epochs=200,
@@ -149,12 +155,22 @@ class DeepDeterministicPolicyGradients:
                     actor_noise.reset()
 
                 for j in range(max_episode_len):
-                    action = action_horizon = self.actor.predict(
-                                np.expand_dims(state, axis=0))[0][0]
+                    if not act_randomly:
+                        action = self.actor.predict(
+                            np.expand_dims(state, axis=0))[0][0]
 
-                    # Added exploration noise.
-                    if actor_noise != None:
-                        action += actor_noise()
+                        # Added exploration noise.
+                        if actor_noise != None:
+                            action += actor_noise()
+                    else:
+                        action_candidates = np.random.random((k, self.horizon,
+                                                              self.action_dim))
+                        action_predictions = self.critic.predict(
+                            np.array([state
+                                      for _ in range(k)]), action_candidates)
+                        success_probs = action_predictions[:, -1]
+                        best_candidate = np.argmax(success_probs)
+                        action = action_candidates[best_candidate][0]
 
                     next_state = env.Step(state, action)
                     terminal = env.Terminal(next_state, action)
@@ -173,17 +189,16 @@ class DeepDeterministicPolicyGradients:
                     if terminal:
                         break
 
-                num_actions = action_buffer[0].shape[0]
                 for t in range(len(state_buffer)):
                     y_i = np.zeros(self.horizon)
-                    a_i = np.zeros((self.horizon, num_actions))
+                    a_i = np.zeros((self.horizon, self.action_dim))
                     for h in range(self.horizon):
                         if t + h < len(state_buffer):
                             y_i[h] = reward_buffer[t + h]
                             a_i[h, :] = action_buffer[t + h]
                         else:
                             y_i[h] = reward_buffer[-1]
-                            a_i[h, :] = np.random.random(num_actions)
+                            a_i[h, :] = np.random.random(self.action_dim)
                     replay_buffer.add(state_buffer[j], a_i, y_i,
                                       terminal_buffer[j], next_state_buffer[j])
 
@@ -224,8 +239,8 @@ class DeepDeterministicPolicyGradients:
                     b_i[k] = np.mean(target_q[k, :self.horizon])
 
                 # Update the critic given the targets
-                (predicted_q_value, critic_loss,
-                 model_acc, horizon_success_prob) = self.critic.train(
+                (predicted_q_value, critic_loss, model_acc,
+                 horizon_success_prob) = self.critic.train(
                      s_batch, a_batch,
                      np.reshape(y_i, (batch_size, self.horizon)),
                      np.reshape(b_i, (batch_size, 1)))
@@ -449,8 +464,10 @@ class CriticNetwork:
         self.predicted_b_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
-        y_loss = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=self.predicted_y_value, logits=self.y_out), axis=1)
+        y_loss = tf.reduce_sum(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=self.predicted_y_value, logits=self.y_out),
+            axis=1)
         b_loss = tf.nn.sigmoid_cross_entropy_with_logits(
             labels=self.predicted_b_value, logits=self.b_out)
         self.loss = tf.reduce_mean(y_loss + b_loss)
@@ -460,20 +477,20 @@ class CriticNetwork:
             self.loss)
 
         # Metrics
-        y_predictions = tf.cast(self.y_out > 0, tf.float32)
-        y_actual = tf.cast(self.predicted_y_value > 0, tf.float32)
-        self.y_accuracy = tf.reduce_mean(
-            tf.cast(tf.equal(y_predictions, y_actual), tf.float32))
-        self.b_accuracy = tf.reduce_mean(tf.nn.sigmoid(self.b_out))
+        self.model_accuracy = 1.0 - tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=self.predicted_y_value, logits=self.y_out))
+        self.horizon_success_probability = tf.reduce_mean(
+            tf.nn.sigmoid(self.b_out))
 
         # Get the gradient of the net w.r.t. the action
         self.action_grads = tf.gradients(self.b_out, self.actions)
 
     def train(self, inputs, actions, y, b):
-        preds, loss, y_acc, b_acc, _ = self.sess.run(
+        preds, loss, model_acc, path_acc, _ = self.sess.run(
             [
-                self.y_out, self.loss, self.y_accuracy, self.b_accuracy,
-                self.optimize
+                self.y_out, self.loss, self.model_accuracy,
+                self.horizon_success_probability, self.optimize
             ],
             feed_dict={
                 self.inputs: inputs,
@@ -481,7 +498,7 @@ class CriticNetwork:
                 self.predicted_y_value: y,
                 self.predicted_b_value: b
             })
-        return (preds, loss, y_acc, b_acc)
+        return (preds, loss, model_acc, path_acc)
 
     def predict(self, inputs, actions):
         preds = self.sess.run(
@@ -517,7 +534,7 @@ class CriticNetwork:
 
 class OrnsteinUhlenbeckActionNoise:
 
-    def __init__(self, mu, sigma=0.05, theta=0.05, dt=0.25, x0=None):
+    def __init__(self, mu, sigma=0.1, theta=0.1, dt=0.25, x0=None):
         self.theta = theta
         self.mu = mu
         self.sigma = sigma
