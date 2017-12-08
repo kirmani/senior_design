@@ -92,7 +92,7 @@ class DeepDronePlanner:
         self.sequence_length = 4
         self.horizon = 16
         self.frame_buffer = deque(maxlen=self.sequence_length)
-        self.linear_velocity = 0.5
+        self.linear_velocity = 1.0
         self.ddpg = DeepDeterministicPolicyGradients(
             self.create_actor_network,
             self.create_critic_network,
