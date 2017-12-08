@@ -93,7 +93,6 @@ class DeepDronePlanner:
         self.horizon = 16
         self.frame_buffer = deque(maxlen=self.sequence_length)
         self.linear_velocity = 0.5
-        self.reset_distance = 2.0
         self.ddpg = DeepDeterministicPolicyGradients(
             self.create_actor_network,
             self.create_critic_network,
@@ -304,8 +303,7 @@ class DeepDronePlanner:
                       self.last_collision_pose.orientation.z,
                       self.last_collision_pose.orientation.w)
         _, _, yaw = transform.transformations.euler_from_quaternion(quaternion)
-        position = (position[0] - self.reset_distance * np.cos(yaw),
-                    position[1] - self.reset_distance * np.sin(yaw), 1)
+        position = (position[0], position[1], 1)
         quaternion = transform.transformations.quaternion_from_euler(0, 0, yaw)
 
         reset_pose = Pose()
@@ -364,6 +362,13 @@ class DeepDronePlanner:
 
     def terminal(self, state, action):
         if self.collided:
+            vel_msg = Twist()
+            vel_msg.linear.x = -self.linear_velocity
+            vel_msg.linear.y = 0
+            vel_msg.linear.z = 0
+            vel_msg.angular.z = 0
+            self.velocity_publisher.publish(vel_msg)
+            rospy.sleep(2.0)
             self.last_collision_pose = self.pose
             self.velocity_publisher.publish(Twist())
         return self.collided
