@@ -10,7 +10,9 @@ Navigation planner.
 """
 
 import rospy
+import numpy as np
 from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Twist
 from journey.srv import FlyToGoal
 from std_msgs.msg import Empty as EmptyMessage
 from tum_ardrone.msg import filter_state
@@ -27,8 +29,12 @@ class NavigationPlannerNode:
 
         # Pose subscriber.
         self.pose_subscriber = rospy.Subscriber(
-            '/ardrone/predicted_pose', filter_state, self.on_new_pose)
+            '/ardrone/predictedPose', filter_state, self.on_new_pose)
         self.pose = Pose()
+
+        # Actions.
+        self.velocity_publisher = rospy.Publisher(
+            '/cmd_vel', Twist, queue_size=10)
 
         # Takeoff publisher.
         self.takeoff_publisher = rospy.Publisher(
@@ -60,6 +66,26 @@ class NavigationPlannerNode:
 
     def planning_loop(self):
         while not rospy.is_shutdown():
+            x = np.array([
+                    self.pose.position.x,
+                    self.pose.position.y,
+                    self.pose.position.z
+                ])
+            g = np.array([
+                    self.nav_goal.position.x,
+                    self.nav_goal.position.y,
+                    self.nav_goal.position.z
+                    ])
+            kp = 0.1
+            delta = kp * (g - x)
+
+            vel_msg = Twist()
+            vel_msg.linear.x = delta[0]
+            vel_msg.linear.y = delta[1]
+            vel_msg.linear.z = delta[2]
+            vel_msg.angular.z = 0
+            self.velocity_publisher.publish(vel_msg)
+
             # Wait.
             self.rate.sleep()
 
