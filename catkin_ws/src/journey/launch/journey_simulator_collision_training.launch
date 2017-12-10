@@ -10,5 +10,10 @@
     <arg name="model" value="$(find journey)/urdf/quadrotor_sensors.urdf.xacro"/>
   </include>
 
-  <node name="drone_stateestimation" pkg="tum_ardrone" type="drone_stateestimation"></node>
+  <!--
+  <node name="image_view" pkg="image_view" type="image_view" respawn="false" output="screen">
+    <remap from="image" to="/ardrone/front/depth/image_view" />
+    <param name="approximate_sync" value="true" />
+  </node>
+  -->
 </launch>
