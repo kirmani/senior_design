@@ -25,7 +25,8 @@ class NavigationPlannerNode:
         rospy.init_node('nav_planner', anonymous=True)
 
         # Nav command update frequency in Hz.
-        self.rate = rospy.Rate(rate)
+        self.update_rate = rate
+        self.rate = rospy.Rate(self.update_rate)
 
         # Pose subscriber.
         self.pose_subscriber = rospy.Subscriber(
@@ -65,6 +66,14 @@ class NavigationPlannerNode:
         self.nav_goal.position.z = self.pose.position.z + nav_goal.dz
 
     def planning_loop(self):
+        # PID controller initialization.
+        error_prior = np.zeros(3)
+        integral = np.zeros(3)
+        k_i = np.zeros(3)
+        k_d = np.zeros(3)
+        p_u = 1.0
+        bias = np.zeros(3)
+
         while not rospy.is_shutdown():
             x = np.array([
                     self.pose.position.x,
@@ -76,13 +85,24 @@ class NavigationPlannerNode:
                     self.nav_goal.position.y,
                     self.nav_goal.position.z
                     ])
-            kp = 0.1
-            delta = kp * (g - x)
+            error = (g - x)
+
+            # Zielger-Nichols method for PID tuning.
+            k_u = error
+
+            k_p = 0.6 * k_u
+            k_i = 2 * k_p / p_u
+            k_d = k_p * p_u / 8.0
+
+            integral = integral + error * (1.0 / self.update_rate)
+            derivative = (error - error_prior) * self.update_rate
+            output = (k_p * error + k_i * integral + k_d * derivative + bias)
+            error_prior = error
 
             vel_msg = Twist()
-            vel_msg.linear.x = delta[0]
-            vel_msg.linear.y = delta[1]
-            vel_msg.linear.z = delta[2]
+            vel_msg.linear.x = output[0]
+            vel_msg.linear.y = output[1]
+            vel_msg.linear.z = output[2]
             vel_msg.angular.z = 0
             self.velocity_publisher.publish(vel_msg)
 
