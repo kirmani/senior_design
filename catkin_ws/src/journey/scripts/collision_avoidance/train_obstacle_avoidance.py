@@ -368,7 +368,7 @@ class DeepDronePlanner:
             vel_msg.linear.z = 0
             vel_msg.angular.z = 0
             self.velocity_publisher.publish(vel_msg)
-            rospy.sleep(3.0)
+            rospy.sleep(1.0)
             self.last_collision_pose = self.pose
             self.velocity_publisher.publish(Twist())
         return self.collided
