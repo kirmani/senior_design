@@ -62,7 +62,7 @@ class DeepDeterministicPolicyGradients:
 
         return summary_ops, summary_vars
 
-    def run_model(self, env, model_dir, num_attempts=1, max_episode_len=50):
+    def eval(self, env, model_dir, num_attempts=1, max_episode_len=50):
         saver = tf.train.Saver()
         saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
 
@@ -113,8 +113,8 @@ class DeepDeterministicPolicyGradients:
             saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
             print("Restoring model: %s" % model_dir)
             last_step = int(
-                os.path.basename(tf.train.latest_checkpoint(model_dir)).split(
-                    '-')[1])
+                os.path.basename(
+                    tf.train.latest_checkpoint(model_dir)).split('-')[1])
 
         # Set up summary Ops
         summary_ops, summary_vars = self.build_summaries()
@@ -166,8 +166,8 @@ class DeepDeterministicPolicyGradients:
                         action_candidates = np.random.random((k, self.horizon,
                                                               self.action_dim))
                         action_predictions = self.critic.predict(
-                            np.array([state
-                                      for _ in range(k)]), action_candidates)
+                            np.array([state for _ in range(k)]),
+                            action_candidates)
                         success_probs = action_predictions[:, -1]
                         best_candidate = np.argmax(success_probs)
                         action = action_candidates[best_candidate][0]
@@ -411,15 +411,19 @@ class ActorNetwork:
     def train(self, inputs, a_gradient):
         self.sess.run(
             self.optimize,
-            feed_dict={self.inputs: inputs,
-                       self.action_gradient: a_gradient})
+            feed_dict={
+                self.inputs: inputs,
+                self.action_gradient: a_gradient
+            })
 
     def predict(self, inputs):
         return self.sess.run(self.actions, feed_dict={self.inputs: inputs})
 
     def predict_target(self, inputs):
         return self.sess.run(
-            self.target_actions, feed_dict={self.target_inputs: inputs})
+            self.target_actions, feed_dict={
+                self.target_inputs: inputs
+            })
 
     def update_target_network(self):
         self.sess.run(self.update_target_network_params)
@@ -503,8 +507,10 @@ class CriticNetwork:
     def predict(self, inputs, actions):
         preds = self.sess.run(
             [self.y_out, self.b_out],
-            feed_dict={self.inputs: inputs,
-                       self.actions: actions})
+            feed_dict={
+                self.inputs: inputs,
+                self.actions: actions
+            })
         y_out = np.array(preds[0])
         b_out = np.array(preds[1])
         preds = np.concatenate([y_out, b_out], axis=1)
@@ -528,8 +534,10 @@ class CriticNetwork:
     def action_gradients(self, inputs, actions):
         return self.sess.run(
             self.action_grads,
-            feed_dict={self.inputs: inputs,
-                       self.actions: actions})
+            feed_dict={
+                self.inputs: inputs,
+                self.actions: actions
+            })
 
 
 class OrnsteinUhlenbeckActionNoise:

@@ -113,9 +113,9 @@ class DeepDronePlanner:
         self.pose = state.pose.pose
 
     def create_actor_network(self, scope):
-        inputs = tf.placeholder(tf.float32,
-                                (None, self.image_height, self.image_width,
-                                 self.sequence_length))
+        inputs = tf.placeholder(
+            tf.float32,
+            (None, self.image_height, self.image_width, self.sequence_length))
         depth = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
@@ -175,11 +175,11 @@ class DeepDronePlanner:
         return inputs, actions
 
     def create_critic_network(self, scope):
-        inputs = tf.placeholder(tf.float32,
-                                (None, self.image_height, self.image_width,
-                                 self.sequence_length))
-        actions = tf.placeholder(tf.float32, (None, self.horizon,
-                                              self.action_dim))
+        inputs = tf.placeholder(
+            tf.float32,
+            (None, self.image_height, self.image_width, self.sequence_length))
+        actions = tf.placeholder(tf.float32,
+                                 (None, self.horizon, self.action_dim))
         depth = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
@@ -373,13 +373,11 @@ class DeepDronePlanner:
             self.velocity_publisher.publish(Twist())
         return self.collided
 
-    def run_model(self, model_name, num_attempts):
+    def eval(self, model_dir, num_attempts):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
-        modeldir = os.path.join(
-            os.path.dirname(__file__),
-            '../../../../learning/deep_drone/' + model_name)
-        self.ddpg.run_model(
-            env, modeldir, num_attempts=num_attempts, max_episode_len=1000)
+        model_dir = os.path.join(os.getcwd(), model_dir)
+        self.ddpg.eval(
+            env, model_dir, num_attempts=num_attempts, max_episode_len=1000)
 
     def train(self, prev_model):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
@@ -404,13 +402,13 @@ class DeepDronePlanner:
 
 def main(args):
     deep_drone_planner = DeepDronePlanner()
-    if args.model:
+    if args.eval:
         attempts = 1
         if args.num_attempts:
             attempts = int(args.num_attempts)
-        deep_drone_planner.run_model(args.model, num_attempts=attempts)
+        deep_drone_planner.eval(args.model, num_attempts=attempts)
     else:
-        deep_drone_planner.train(args.prev_model)
+        deep_drone_planner.train(args.model)
 
 
 if __name__ == '__main__':
@@ -426,15 +424,16 @@ if __name__ == '__main__':
         parser.add_argument(
             '-m', '--model', action='store', help='run specific model')
         parser.add_argument(
+            '-e',
+            '--eval',
+            action='store_true',
+            default=False,
+            help='evaluate model')
+        parser.add_argument(
             '-n',
             '--num_attempts',
             action='store',
             help='number of attempts to run model for')
-        parser.add_argument(
-            '-t',
-            '--prev_model',
-            action='store',
-            help='name of existing model to start training with')
         args = parser.parse_args()
         #if len(args) < 1:
         #    parser.error ('missing argument')
