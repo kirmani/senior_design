@@ -27,11 +27,13 @@ class DeepDeterministicPolicyGradients:
                  create_critic_network,
                  action_dim,
                  use_discrete_actions=True,
+                 use_classification_reward=False,
                  gamma=0.99,
                  horizon=16,
                  use_hindsight=False):
         self.action_dim = action_dim
         self.use_discrete_actions = use_discrete_actions
+        self.use_classification_reward = use_classification_reward
         self.gamma = gamma
         self.horizon = horizon
         self.use_hindsight = use_hindsight
@@ -41,7 +43,9 @@ class DeepDeterministicPolicyGradients:
 
         # Create actor network.
         self.actor = ActorNetwork(self.sess, create_actor_network, horizon, 128)
-        self.critic = CriticNetwork(self.sess, create_critic_network, horizon,
+        self.critic = CriticNetwork(self.sess, create_critic_network,
+                                    self.horizon,
+                                    self.use_classification_reward,
                                     self.actor.get_num_trainable_vars())
 
     def build_summaries(self):
@@ -232,7 +236,8 @@ class DeepDeterministicPolicyGradients:
                 # Calculate targets
                 target_q = self.critic.predict_target(
                     s2_batch, self.actor.predict_target(s2_batch))
-                target_q = 1.0 / (1.0 + np.exp(-np.array(target_q)))
+                if self.use_classification_reward:
+                    target_q = 1.0 / (1.0 + np.exp(-np.array(target_q)))
 
                 # Y represents the probability of flight without collision
                 #   between time t and t + h.
@@ -444,6 +449,7 @@ class CriticNetwork:
                  sess,
                  create_critic_network,
                  horizon,
+                 use_classification_reward,
                  num_actor_vars,
                  tau=0.001,
                  learning_rate=0.001):
@@ -474,12 +480,19 @@ class CriticNetwork:
         self.predicted_b_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
-        y_loss = tf.reduce_sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_y_value, logits=self.y_out),
-            axis=1)
-        b_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=self.predicted_b_value, logits=self.b_out)
+        if use_classification_reward:
+            y_loss = tf.reduce_sum(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=self.predicted_y_value, logits=self.y_out),
+                axis=1)
+            b_loss = tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=self.predicted_b_value, logits=self.b_out)
+        else:
+            y_loss = tf.reduce_sum(
+                tf.losses.mean_squared_error(
+                    labels=self.predicted_y_value, predictions=self.y_out))
+            b_loss = tf.losses.mean_squared_error(
+                labels=self.predicted_b_value, predictions=self.b_out)
         self.loss = tf.reduce_mean(y_loss + b_loss)
 
         # self.loss = tf.reduce_mean((self.predicted_q_value - self.y_out)**2)
@@ -487,11 +500,15 @@ class CriticNetwork:
             self.loss)
 
         # Metrics
-        self.model_accuracy = 1.0 - tf.reduce_mean(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_y_value, logits=self.y_out))
-        self.horizon_success_probability = tf.reduce_mean(
-            tf.nn.sigmoid(self.b_out))
+        if use_classification_reward:
+            self.model_accuracy = 1.0 - tf.reduce_mean(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=self.predicted_y_value, logits=self.y_out))
+            self.horizon_success_probability = tf.reduce_mean(
+                tf.nn.sigmoid(self.b_out))
+        else:
+            self.model_accuracy = self.loss
+            self.horizon_success_probability = tf.reduce_mean(self.b_out)
 
         # Get the gradient of the net w.r.t. the action
         self.action_grads = tf.gradients(self.b_out, self.actions)
