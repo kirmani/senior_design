@@ -155,17 +155,19 @@ class DeepDeterministicPolicyGradients:
                     actor_noise.reset()
 
                 for j in range(max_episode_len):
-                    if not act_randomly:
-                        action = self.actor.predict(
-                            np.expand_dims(state, axis=0))[0][0]
+                    action_sequence = self.actor.predict(
+                        np.expand_dims(state, axis=0))
 
-                        # Added exploration noise.
-                        if actor_noise != None:
-                            action += actor_noise()
-                    else:
-                        action = (np.random.random(self.action_dim) - 0.5) * 2
+                    action = action_sequence[0][0]
 
-                    next_state = env.Step(state, action)
+                    # Added exploration noise.
+                    if actor_noise != None:
+                        action += actor_noise()
+
+                    critique = self.critic.predict(
+                        np.expand_dims(state, axis=0), action_sequence)[0]
+
+                    next_state = env.Step(state, action, critique)
                     terminal = env.Terminal(next_state, action)
                     reward = env.Reward(next_state, action)
 
@@ -298,8 +300,8 @@ class Environment:
     def Reset(self):
         return self.reset()
 
-    def Step(self, state, action):
-        return self.step(state, action)
+    def Step(self, state, action, critique):
+        return self.step(state, action, critique)
 
     def Reward(self, state, action):
         return self.reward(state, action)
