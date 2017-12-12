@@ -85,14 +85,14 @@ class DeepDronePlanner:
         self.rate = rospy.Rate(self.rate)
 
         # Set up policy search network.
-        self.action_dim = 2
+        self.action_dim = 1
         scale = 0.1
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
         self.sequence_length = 4
         self.horizon = 16
         self.frame_buffer = deque(maxlen=self.sequence_length)
-        self.linear_velocity = 0.7
+        self.linear_velocity = 0.8
         self.ddpg = DeepDeterministicPolicyGradients(
             self.create_actor_network,
             self.create_critic_network,
@@ -333,10 +333,10 @@ class DeepDronePlanner:
 
     def step(self, state, action):
         vel_msg = Twist()
-        vel_msg.linear.x = action[0]
+        vel_msg.linear.x = self.linear_velocity
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
-        vel_msg.angular.z = action[1]
+        vel_msg.angular.z = action[0]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -397,8 +397,7 @@ class DeepDronePlanner:
             num_epochs=(16 * 200),
             actor_noise=actor_noise,
             model_dir=modeldir,
-            max_episode_len=1000,
-            act_randomly=True)
+            max_episode_len=1000)
 
 
 def main(args):
