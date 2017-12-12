@@ -85,14 +85,14 @@ class DeepDronePlanner:
         self.rate = rospy.Rate(self.rate)
 
         # Set up policy search network.
-        self.action_dim = 1
+        self.action_dim = 5
         scale = 0.1
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
         self.sequence_length = 4
         self.horizon = 16
         self.frame_buffer = deque(maxlen=self.sequence_length)
-        self.linear_velocity = 0.8
+        self.linear_velocity = 0.5
         self.ddpg = DeepDeterministicPolicyGradients(
             self.create_actor_network,
             self.create_critic_network,
@@ -171,7 +171,7 @@ class DeepDronePlanner:
         # action_bias = tf.Variable(
         #     tf.random_uniform([self.action_dim], -3e-4, 3e-4))
         # actions = tf.matmul(depth, action_weights) + action_bias
-        actions = tf.nn.tanh(actions)
+        actions = tf.nn.softmax(actions)
         return inputs, actions
 
     def create_critic_network(self, scope):
@@ -336,8 +336,13 @@ class DeepDronePlanner:
         y = collision_probs[:-1]
         b = collision_probs[-1]
 
+        optimal_action = (np.argmax(action) - (self.action_dim / 2)) * 0.5
+        # print(action)
+        # print(np.sum(action))
+        # print(optimal_action)
+
         vel_msg = Twist()
-        vel_msg.linear.x = b
+        vel_msg.linear.x = self.linear_velocity
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
         vel_msg.angular.z = action[0]
@@ -372,7 +377,7 @@ class DeepDronePlanner:
             vel_msg.linear.z = 0
             vel_msg.angular.z = 0
             self.velocity_publisher.publish(vel_msg)
-            rospy.sleep(1.0)
+            rospy.sleep(2.0)
             self.last_collision_pose = self.pose
             self.velocity_publisher.publish(Twist())
         return self.collided

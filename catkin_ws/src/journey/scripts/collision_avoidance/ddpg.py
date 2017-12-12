@@ -26,10 +26,12 @@ class DeepDeterministicPolicyGradients:
                  create_actor_network,
                  create_critic_network,
                  action_dim,
+                 use_discrete_actions=True,
                  gamma=0.99,
                  horizon=16,
                  use_hindsight=False):
         self.action_dim = action_dim
+        self.use_discrete_actions = use_discrete_actions
         self.gamma = gamma
         self.horizon = horizon
         self.use_hindsight = use_hindsight
@@ -137,10 +139,13 @@ class DeepDeterministicPolicyGradients:
         # Initialize replay memory
         replay_buffer = ReplayBuffer()
 
+        epsilon_zero = 0.2
+
         while tf.train.global_step(self.sess, global_step) < num_epochs:
             epoch = tf.train.global_step(self.sess, global_step)
             epoch_rewards = []
             total_epoch_avg_max_q = 0.0
+            epsilon = epsilon_zero * (1.0 - epoch / num_epochs)
             for i in range(episodes_in_epoch):
                 state = env.Reset()
                 episode_reward = 0.0
@@ -160,9 +165,15 @@ class DeepDeterministicPolicyGradients:
 
                     action = action_sequence[0][0]
 
-                    # Added exploration noise.
-                    if actor_noise != None:
-                        action += actor_noise()
+                    if self.use_discrete_actions:
+                        # Epsilon-greedy exploration for discrete actions.
+                        if np.random.random() < epsilon:
+                            action = np.random.random(self.action_dim)
+                            action = action / np.sum(action)
+                    else:
+                        # Added exploration noise.
+                        if actor_noise != None:
+                            action += actor_noise()
 
                     critique = self.critic.predict(
                         np.expand_dims(state, axis=0), action_sequence)[0]
