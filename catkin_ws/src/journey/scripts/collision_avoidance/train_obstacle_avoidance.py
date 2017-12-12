@@ -345,7 +345,7 @@ class DeepDronePlanner:
         vel_msg.linear.x = self.linear_velocity
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
-        vel_msg.angular.z = action[0]
+        vel_msg.angular.z = optimal_action
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
