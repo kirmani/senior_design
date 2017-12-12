@@ -163,14 +163,8 @@ class DeepDeterministicPolicyGradients:
                         if actor_noise != None:
                             action += actor_noise()
                     else:
-                        action_candidates = np.random.random((k, self.horizon,
-                                                              self.action_dim))
-                        action_predictions = self.critic.predict(
-                            np.array([state for _ in range(k)]),
-                            action_candidates)
-                        success_probs = action_predictions[:, -1]
-                        best_candidate = np.argmax(success_probs)
-                        action = action_candidates[best_candidate][0]
+                        action = np.random.random(self.action_dim)
+                        action[1] = (action[1] - 0.5) * 2
 
                     next_state = env.Step(state, action)
                     terminal = env.Terminal(next_state, action)
