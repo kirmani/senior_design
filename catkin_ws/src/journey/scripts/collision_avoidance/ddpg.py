@@ -80,12 +80,13 @@ class DeepDeterministicPolicyGradients:
                 action = action_horizon[action_horizon_idx]
                 action_horizon_idx = (action_horizon_idx + 1) % self.horizon
 
-                next_state = env.Step(state, action)
+                (next_state, action) = env.Step(state, action)
                 terminal = env.Terminal(state, action)
                 reward = env.Reward(next_state, action)
-                state = next_state
 
-                total_reward += reward
+                state = next_state
+                total_reward += reward[1]
+
                 if terminal:
                     break
 
