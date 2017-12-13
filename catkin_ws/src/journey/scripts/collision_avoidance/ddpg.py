@@ -179,7 +179,7 @@ class DeepDeterministicPolicyGradients:
                     critique = self.critic.predict(
                         np.expand_dims(state, axis=0), action_sequence)[0]
 
-                    next_state = env.Step(state, action, critique)
+                    (next_state, action) = env.Step(state, action, critique)
                     terminal = env.Terminal(next_state, action)
                     reward = env.Reward(next_state, action)
 

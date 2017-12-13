@@ -357,6 +357,8 @@ class DeepDronePlanner:
         # print(np.sum(action))
         # print(optimal_action)
 
+        action[0] = max(action[0], 0)
+
         vel_msg = Twist()
         vel_msg.linear.x = action[0]
         vel_msg.linear.y = 0
@@ -380,7 +382,7 @@ class DeepDronePlanner:
         # plt.show()
         # exit()
 
-        return next_state
+        return (next_state, action)
 
     def reward(self, state, action):
         collision_reward = 1 if not self.collided else 0
