@@ -55,10 +55,14 @@ class DeepDeterministicPolicyGradients:
                           expected_collision_reward)
         expected_task_reward = tf.Variable(0.)
         tf.summary.scalar("expected_task_reward", expected_task_reward)
+        collision_model_loss = tf.Variable(0.)
+        tf.summary.scalar("collision_model_loss", collision_model_loss)
+        task_model_loss = tf.Variable(0.)
+        tf.summary.scalar("task_model_loss", task_model_loss)
 
         summary_vars = [
             episode_reward, critic_loss, expected_collision_reward,
-            expected_task_reward
+            expected_task_reward, collision_model_loss, task_model_loss
         ]
         summary_ops = tf.summary.merge_all()
 
@@ -250,7 +254,8 @@ class DeepDeterministicPolicyGradients:
                     b_task_i[k] = np.mean(target_q[k, :self.horizon, 1])
 
                 # Update the critic given the targets
-                (critic_loss, expected_collision_reward,
+                (critic_loss, collision_model_loss, task_model_loss,
+                 expected_collision_reward,
                  expected_task_reward) = self.critic.train(
                      s_batch,
                      a_batch,
@@ -291,6 +296,8 @@ class DeepDeterministicPolicyGradients:
                     summary_vars[1]: critic_loss,
                     summary_vars[2]: expected_collision_reward,
                     summary_vars[3]: expected_task_reward,
+                    summary_vars[4]: collision_model_loss,
+                    summary_vars[5]: task_model_loss,
                 })
 
             writer.add_summary(summary_str, epoch)
@@ -485,21 +492,23 @@ class CriticNetwork:
         self.predicted_b_task_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
-        y_coll_loss = tf.reduce_mean(
+        y_coll_loss = tf.reduce_sum(
             tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_y_coll_value, logits=self.y_coll_out))
-        b_coll_loss = tf.reduce_mean(
+                labels=self.predicted_y_coll_value, logits=self.y_coll_out),
+            axis=1)
+        b_coll_loss = tf.reduce_sum(
             tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_b_coll_value, logits=self.b_coll_out))
-        collision_loss = y_coll_loss + b_coll_loss
+                labels=self.predicted_b_coll_value, logits=self.b_coll_out),
+            axis=1)
+        self.collision_loss = tf.reduce_mean(y_coll_loss + b_coll_loss)
 
-        y_task_loss = tf.losses.mean_squared_error(self.predicted_y_task_value,
-                                                   self.y_task_out)
-        b_task_loss = tf.losses.mean_squared_error(self.predicted_b_task_value,
-                                                   self.b_task_out)
-        task_loss = y_task_loss + b_task_loss
+        y_task_loss = tf.reduce_sum(
+            (self.predicted_y_task_value - self.y_task_out)**2, axis=1)
+        b_task_loss = tf.reduce_sum(
+            (self.predicted_b_task_value - self.b_task_out)**2, axis=1)
+        self.task_loss = tf.reduce_mean(y_task_loss + b_task_loss)
 
-        self.loss = task_loss + collision_loss
+        self.loss = self.task_loss + collision_weight * self.collision_loss
 
         # self.loss = tf.reduce_mean((self.predicted_q_value - self.y_coll_out)**2)
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
@@ -519,20 +528,23 @@ class CriticNetwork:
             self.b_task_out + collision_weight * self.b_coll_out, self.actions)
 
     def train(self, inputs, actions, y_coll, b_coll, y_task, b_task):
-        loss, expected_collision_reward, expected_task_reward, _ = self.sess.run(
-            [
-                self.loss, self.expected_collision_reward,
-                self.expected_task_reward, self.optimize
-            ],
-            feed_dict={
-                self.inputs: inputs,
-                self.actions: actions,
-                self.predicted_y_coll_value: y_coll,
-                self.predicted_b_coll_value: b_coll,
-                self.predicted_y_task_value: y_task,
-                self.predicted_b_task_value: b_task,
-            })
-        return (loss, expected_collision_reward, expected_task_reward)
+        (loss, collision_model_loss, task_model_loss, expected_collision_reward,
+         expected_task_reward, _) = self.sess.run(
+             [
+                 self.loss, self.collision_loss, self.task_loss,
+                 self.expected_collision_reward, self.expected_task_reward,
+                 self.optimize
+             ],
+             feed_dict={
+                 self.inputs: inputs,
+                 self.actions: actions,
+                 self.predicted_y_coll_value: y_coll,
+                 self.predicted_b_coll_value: b_coll,
+                 self.predicted_y_task_value: y_task,
+                 self.predicted_b_task_value: b_task,
+             })
+        return (loss, collision_model_loss, task_model_loss,
+                expected_collision_reward, expected_task_reward)
 
     def predict(self, inputs, actions):
         preds = self.sess.run(
