@@ -85,7 +85,7 @@ class DeepDronePlanner:
         self.rate = rospy.Rate(self.rate)
 
         # Set up policy search network.
-        self.action_dim = 5
+        self.action_dim = 2
         scale = 0.1
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
@@ -171,7 +171,7 @@ class DeepDronePlanner:
         # action_bias = tf.Variable(
         #     tf.random_uniform([self.action_dim], -3e-4, 3e-4))
         # actions = tf.matmul(depth, action_weights) + action_bias
-        actions = tf.nn.softmax(actions)
+        actions = tf.nn.tanh(actions)
         return inputs, actions
 
     def create_critic_network(self, scope):
@@ -228,37 +228,53 @@ class DeepDronePlanner:
         lstm_outputs, lstm_states = tf.nn.dynamic_rnn(
             lstm_cell, lstm_inputs, dtype=tf.float32, scope=scope)
 
-        y = tf.contrib.layers.fully_connected(
+        # Collision probability prediction.
+        y_coll = tf.contrib.layers.fully_connected(
             lstm_outputs,
             16,
             activation_fn=None,
             weights_regularizer=tf.nn.l2_loss)
-        y = tf.contrib.layers.batch_norm(y)
-        y = tf.nn.relu(y)
-        y = tf.contrib.layers.fully_connected(
-            y, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        y = tf.reshape(y, [-1, self.horizon])
-        # y_out_weights = tf.Variable(
-        #     tf.random_uniform([16, 1], -3e-4, 3e-4))
-        # y_out_bias = tf.Variable(tf.random_uniform([16, 1], -3e-4, 3e-4))
-        # y = tf.tensordot(y, y_out_weights, [[2], [1]]) # + y_out_bias
-        # print(y)
-        # exit()
+        y_coll = tf.contrib.layers.batch_norm(y_coll)
+        y_coll = tf.nn.relu(y_coll)
+        y_coll = tf.contrib.layers.fully_connected(
+            y_coll, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        y_coll = tf.reshape(y_coll, [-1, self.horizon])
 
-        b = tf.contrib.layers.fully_connected(
+        b_coll = tf.contrib.layers.fully_connected(
             lstm_outputs,
             16,
             activation_fn=None,
             weights_regularizer=tf.nn.l2_loss)
-        b = tf.contrib.layers.batch_norm(b)
-        b = tf.nn.relu(b)
-        b = tf.reshape(b, [-1, 16 * self.horizon])
-        b = tf.contrib.layers.fully_connected(
-            b, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        # b_out_weights = tf.Variable(tf.random_uniform([16, self.horizon], -3e-4, 3e-4))
-        # b_out_bias = tf.Variable(tf.random_uniform([self.horizon], -3e-4, 3e-4))
-        # b = b * b_out_weights + b_out_bias
-        return inputs, actions, y, b
+        b_coll = tf.contrib.layers.batch_norm(b_coll)
+        b_coll = tf.nn.relu(b_coll)
+        b_coll = tf.reshape(b_coll, [-1, 16 * self.horizon])
+        b_coll = tf.contrib.layers.fully_connected(
+            b_coll, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+
+        # Task reward prediction.
+        y_task = tf.contrib.layers.fully_connected(
+            lstm_outputs,
+            16,
+            activation_fn=None,
+            weights_regularizer=tf.nn.l2_loss)
+        y_task = tf.contrib.layers.batch_norm(y_task)
+        y_task = tf.nn.relu(y_task)
+        y_task = tf.contrib.layers.fully_connected(
+            y_task, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        y_task = tf.reshape(y_task, [-1, self.horizon])
+
+        b_task = tf.contrib.layers.fully_connected(
+            lstm_outputs,
+            16,
+            activation_fn=None,
+            weights_regularizer=tf.nn.l2_loss)
+        b_task = tf.contrib.layers.batch_norm(b_task)
+        b_task = tf.nn.relu(b_task)
+        b_task = tf.reshape(b_task, [-1, 16 * self.horizon])
+        b_task = tf.contrib.layers.fully_connected(
+            b_task, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+
+        return inputs, actions, y_coll, b_coll, y_task, b_task
 
     def get_current_frame(self):
         depth_data = ros_numpy.numpify(self.depth_msg)
@@ -332,20 +348,20 @@ class DeepDronePlanner:
         return state
 
     def step(self, state, action, critique):
-        collision_probs = 1.0 / (1.0 + np.exp(-critique))
-        y = collision_probs[:-1]
-        b = collision_probs[-1]
+        # collision_probs = 1.0 / (1.0 + np.exp(-critique))
+        # y = collision_probs[:-1]
+        # b = collision_probs[-1]
 
-        optimal_action = (np.argmax(action) - (self.action_dim / 2)) * 0.5
+        # optimal_action = (np.argmax(action) - (self.action_dim / 2)) * 0.5
         # print(action)
         # print(np.sum(action))
         # print(optimal_action)
 
         vel_msg = Twist()
-        vel_msg.linear.x = self.linear_velocity
+        vel_msg.linear.x = action[0]
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
-        vel_msg.angular.z = optimal_action
+        vel_msg.angular.z = action[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -367,7 +383,9 @@ class DeepDronePlanner:
         return next_state
 
     def reward(self, state, action):
-        return 1 if not self.collided else 0
+        collision_reward = 1 if not self.collided else 0
+        task_reward = action[0] * np.cos(action[1] * np.pi / 2)
+        return (collision_reward, task_reward)
 
     def terminal(self, state, action):
         if self.collided:
