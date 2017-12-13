@@ -485,18 +485,19 @@ class CriticNetwork:
         self.predicted_b_task_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
-        y_coll_loss = tf.reduce_sum(
+        y_coll_loss = tf.reduce_mean(
             tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_y_coll_value, logits=self.y_coll_out),
-            axis=1)
-        b_coll_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=self.predicted_b_coll_value, logits=self.b_coll_out)
-        collision_loss = tf.reduce_mean(y_coll_loss + b_coll_loss)
+                labels=self.predicted_y_coll_value, logits=self.y_coll_out))
+        b_coll_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=self.predicted_b_coll_value, logits=self.b_coll_out))
+        collision_loss = y_coll_loss + b_coll_loss
 
-        y_task_loss = tf.reduce_sum(
-            (self.predicted_y_task_value - self.y_task_out)**2, axis=1)
-        b_task_loss = (self.predicted_b_task_value - self.b_task_out)**2
-        task_loss = tf.reduce_mean(y_task_loss + b_task_loss)
+        y_task_loss = tf.losses.mean_squared_error(self.predicted_y_task_value,
+                                                   self.y_task_out)
+        b_task_loss = tf.losses.mean_squared_error(self.predicted_b_task_value,
+                                                   self.b_task_out)
+        task_loss = y_task_loss + b_task_loss
 
         self.loss = task_loss + collision_loss
 
