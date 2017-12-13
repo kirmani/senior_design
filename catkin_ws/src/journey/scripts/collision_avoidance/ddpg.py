@@ -524,8 +524,13 @@ class CriticNetwork:
             tf.nn.sigmoid(self.b_task_out))
 
         # Get the gradient of the net w.r.t. the action
-        self.action_grads = tf.gradients(
-            self.b_task_out + collision_weight * self.b_coll_out, self.actions)
+        task_influence = tf.reduce_sum(
+            self.y_task_out, axis=1, keep_dims=True) + self.b_task_out
+        collision_influence = tf.reduce_sum(
+            self.y_coll_out, axis=1, keep_dims=True) + self.b_coll_out
+        critic_influence = (
+            task_influence + collision_weight * collision_influence)
+        self.action_grads = tf.gradients(critic_influence, self.actions)
 
     def train(self, inputs, actions, y_coll, b_coll, y_task, b_task):
         (loss, collision_model_loss, task_model_loss, expected_collision_reward,
