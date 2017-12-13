@@ -408,15 +408,12 @@ class DeepDronePlanner:
         self.ddpg.eval(
             env, model_dir, num_attempts=num_attempts, max_episode_len=1000)
 
-    def train(self, prev_model):
+    def train(self, model_dir=None):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim))
-        modeldir = None
-        if prev_model != None:
-            modeldir = os.path.join(
-                os.path.dirname(__file__),
-                '../../../../learning/deep_drone/' + prev_model)
-            print("modeldir is %s" % modeldir)
+        if model_dir != None:
+            model_dir = os.path.join(os.getcwd(), model_dir)
+            print("model_dir is %s" % model_dir)
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../../learning/deep_drone/')
         self.ddpg.train(
@@ -425,7 +422,7 @@ class DeepDronePlanner:
             episodes_in_epoch=1,
             num_epochs=(16 * 200),
             actor_noise=actor_noise,
-            model_dir=modeldir,
+            model_dir=model_dir,
             max_episode_len=1000)
 
 
