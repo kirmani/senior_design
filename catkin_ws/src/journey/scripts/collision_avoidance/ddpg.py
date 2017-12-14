@@ -520,8 +520,7 @@ class CriticNetwork:
                 labels=self.predicted_y_coll_value, logits=self.y_coll_out))
         self.expected_collision_reward = tf.reduce_mean(
             tf.nn.sigmoid(self.b_coll_out))
-        self.expected_task_reward = tf.reduce_mean(
-            tf.nn.sigmoid(self.b_task_out))
+        self.expected_task_reward = tf.reduce_mean(self.b_task_out)
 
         # Get the gradient of the net w.r.t. the action
         task_influence = tf.reduce_sum(
