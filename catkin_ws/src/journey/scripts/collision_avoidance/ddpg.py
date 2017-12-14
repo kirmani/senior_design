@@ -48,18 +48,21 @@ class DeepDeterministicPolicyGradients:
     def build_summaries(self):
         episode_reward = tf.Variable(0.)
         tf.summary.scalar("Reward", episode_reward)
-        episode_ave_max_q = tf.Variable(0.)
-        tf.summary.scalar("Qmax_Value", episode_ave_max_q)
-        model_accuracy = tf.Variable(0.)
-        tf.summary.scalar("Model_accuracy", model_accuracy)
-        horizon_trajectory_success = tf.Variable(0.)
-        tf.summary.scalar("Horizon_success_prob", horizon_trajectory_success)
         critic_loss = tf.Variable(0.)
         tf.summary.scalar("Critic_loss", critic_loss)
+        expected_collision_reward = tf.Variable(0.)
+        tf.summary.scalar("expected_collision_reward",
+                          expected_collision_reward)
+        expected_task_reward = tf.Variable(0.)
+        tf.summary.scalar("expected_task_reward", expected_task_reward)
+        collision_model_loss = tf.Variable(0.)
+        tf.summary.scalar("collision_model_loss", collision_model_loss)
+        task_model_loss = tf.Variable(0.)
+        tf.summary.scalar("task_model_loss", task_model_loss)
 
         summary_vars = [
-            episode_reward, episode_ave_max_q, model_accuracy,
-            horizon_trajectory_success, critic_loss
+            episode_reward, critic_loss, expected_collision_reward,
+            expected_task_reward, collision_model_loss, task_model_loss
         ]
         summary_ops = tf.summary.merge_all()
 
@@ -225,7 +228,6 @@ class DeepDeterministicPolicyGradients:
                 continue
 
             print("Starting policy optimization.")
-            average_epoch_avg_max_q = 0.0
             for optimization_step in range(optimization_steps):
                 batch_size = min(minibatch_size, replay_buffer.size())
                 (s_batch, a_batch, r_batch, t_batch,
@@ -252,8 +254,9 @@ class DeepDeterministicPolicyGradients:
                     b_task_i[k] = np.mean(target_q[k, :self.horizon, 1])
 
                 # Update the critic given the targets
-                (predicted_q_value, critic_loss, model_acc,
-                 horizon_success_prob) = self.critic.train(
+                (critic_loss, collision_model_loss, task_model_loss,
+                 expected_collision_reward,
+                 expected_task_reward) = self.critic.train(
                      s_batch,
                      a_batch,
                      np.reshape(y_coll_i, (batch_size, self.horizon)),
@@ -261,7 +264,6 @@ class DeepDeterministicPolicyGradients:
                      np.reshape(y_task_i, (batch_size, self.horizon)),
                      np.reshape(b_task_i, (batch_size, 1)),
                  )
-                average_epoch_avg_max_q += np.amax(predicted_q_value)
 
                 # Update the actor policy using the sampled gradient
                 a_outs = self.actor.predict(s_batch)
@@ -274,40 +276,38 @@ class DeepDeterministicPolicyGradients:
 
             # Output training statistics.
             print(
-                "[%d] Qmax: %.4f, Critic Loss: %.4f, Model Acc: %.4f, Horizon Success Prob: %.4f"
-                % (optimization_step,
-                   average_epoch_avg_max_q / (optimization_step + 1),
-                   critic_loss, model_acc, horizon_success_prob))
+                "[%d] Critic Loss: %.4f, Exp Collision Reward: %.4f, Exp Task Reward: %.4f"
+                % (optimization_step, critic_loss, expected_collision_reward,
+                   expected_task_reward))
 
-            average_epoch_avg_max_q /= optimization_steps
             average_epoch_reward = np.mean(epoch_rewards)
             epoch_reward_stddev = np.std(epoch_rewards)
-            if np.isnan(average_epoch_reward) or np.isnan(
-                    average_epoch_avg_max_q):
+            if np.isnan(average_epoch_reward):
                 print("Reward is NaN. Exiting...")
                 sys.exit(0)
-            print('| Reward: {:4f} ({:4f})| Epoch: {:d} | Qmax: {:4f} |'.format(
-                average_epoch_reward, epoch_reward_stddev, epoch,
-                average_epoch_avg_max_q))
+            print('| Reward: {:4f} ({:4f})| Epoch: {:d} |'.format(
+                average_epoch_reward, epoch_reward_stddev, epoch))
 
             # Write episode summary statistics.
             summary_str = self.sess.run(
                 summary_ops,
                 feed_dict={
                     summary_vars[0]: average_epoch_reward,
-                    summary_vars[1]: average_epoch_avg_max_q,
-                    summary_vars[2]: model_acc,
-                    summary_vars[3]: horizon_success_prob,
-                    summary_vars[4]: critic_loss
+                    summary_vars[1]: critic_loss,
+                    summary_vars[2]: expected_collision_reward,
+                    summary_vars[3]: expected_task_reward,
+                    summary_vars[4]: collision_model_loss,
+                    summary_vars[5]: task_model_loss,
                 })
 
             writer.add_summary(summary_str, epoch)
             writer.flush()
 
             # Save model checkpoint.
-            print("Saving model checkpoint: %s/model-%d.meta" % (summary_dir,
-                                                                 epoch))
-            saver.save(self.sess, summary_dir + '/model', global_step=epoch)
+            print("Saving model checkpoint: %s/model.ckpt-%d.meta" %
+                  (summary_dir, epoch))
+            saver.save(
+                self.sess, summary_dir + '/model.ckpt', global_step=epoch)
             self.sess.run(increment_global_step)
 
 
@@ -496,47 +496,56 @@ class CriticNetwork:
             tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=self.predicted_y_coll_value, logits=self.y_coll_out),
             axis=1)
-        b_coll_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=self.predicted_b_coll_value, logits=self.b_coll_out)
-        collision_loss = tf.reduce_mean(y_coll_loss + b_coll_loss)
+        b_coll_loss = tf.reduce_sum(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=self.predicted_b_coll_value, logits=self.b_coll_out),
+            axis=1)
+        self.collision_loss = tf.reduce_mean(y_coll_loss + b_coll_loss)
 
         y_task_loss = tf.reduce_sum(
             (self.predicted_y_task_value - self.y_task_out)**2, axis=1)
-        b_task_loss = (self.predicted_b_task_value - self.b_task_out)**2
-        task_loss = tf.reduce_mean(y_task_loss + b_task_loss)
+        b_task_loss = tf.reduce_sum(
+            (self.predicted_b_task_value - self.b_task_out)**2, axis=1)
+        self.task_loss = tf.reduce_mean(y_task_loss + b_task_loss)
 
-        self.loss = task_loss + collision_loss
+        self.loss = self.task_loss + collision_weight * self.collision_loss
 
         # self.loss = tf.reduce_mean((self.predicted_q_value - self.y_coll_out)**2)
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
 
         # Metrics
-        self.model_accuracy = 1.0 - tf.reduce_mean(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_y_coll_value, logits=self.y_coll_out))
-        self.horizon_success_probability = tf.reduce_mean(
+        self.expected_collision_reward = tf.reduce_mean(
             tf.nn.sigmoid(self.b_coll_out))
+        self.expected_task_reward = tf.reduce_mean(self.b_task_out)
 
         # Get the gradient of the net w.r.t. the action
-        self.action_grads = tf.gradients(
-            self.b_task_out + collision_weight * self.b_coll_out, self.actions)
+        task_influence = tf.reduce_sum(
+            self.y_task_out, axis=1, keep_dims=True) + self.b_task_out
+        collision_influence = tf.reduce_sum(
+            self.y_coll_out, axis=1, keep_dims=True) + self.b_coll_out
+        critic_influence = (
+            task_influence + collision_weight * collision_influence)
+        self.action_grads = tf.gradients(critic_influence, self.actions)
 
     def train(self, inputs, actions, y_coll, b_coll, y_task, b_task):
-        preds, loss, model_acc, path_acc, _ = self.sess.run(
-            [
-                self.y_coll_out, self.loss, self.model_accuracy,
-                self.horizon_success_probability, self.optimize
-            ],
-            feed_dict={
-                self.inputs: inputs,
-                self.actions: actions,
-                self.predicted_y_coll_value: y_coll,
-                self.predicted_b_coll_value: b_coll,
-                self.predicted_y_task_value: y_task,
-                self.predicted_b_task_value: b_task,
-            })
-        return (preds, loss, model_acc, path_acc)
+        (loss, collision_model_loss, task_model_loss, expected_collision_reward,
+         expected_task_reward, _) = self.sess.run(
+             [
+                 self.loss, self.collision_loss, self.task_loss,
+                 self.expected_collision_reward, self.expected_task_reward,
+                 self.optimize
+             ],
+             feed_dict={
+                 self.inputs: inputs,
+                 self.actions: actions,
+                 self.predicted_y_coll_value: y_coll,
+                 self.predicted_b_coll_value: b_coll,
+                 self.predicted_y_task_value: y_task,
+                 self.predicted_b_task_value: b_task,
+             })
+        return (loss, collision_model_loss, task_model_loss,
+                expected_collision_reward, expected_task_reward)
 
     def predict(self, inputs, actions):
         preds = self.sess.run(

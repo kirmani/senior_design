@@ -84,6 +84,10 @@ class DeepDronePlanner:
         # The rate which we publish commands.
         self.rate = rospy.Rate(self.rate)
 
+        # Reset count.
+        self.reset_count = 0
+        self.reset_limit = 100
+
         # Set up policy search network.
         self.action_dim = 2
         scale = 0.1
@@ -319,8 +323,15 @@ class DeepDronePlanner:
                       self.last_collision_pose.orientation.z,
                       self.last_collision_pose.orientation.w)
         _, _, yaw = transform.transformations.euler_from_quaternion(quaternion)
-        position = (position[0], position[1], 1)
-        quaternion = transform.transformations.quaternion_from_euler(0, 0, yaw)
+        if self.reset_count == 0:
+            position = (0, 0, 1)
+            quaternion = transform.transformations.quaternion_from_euler(
+                0, 0, 0)
+        else:
+            position = (position[0], position[1], 1)
+            quaternion = transform.transformations.quaternion_from_euler(
+                0, 0, yaw)
+        self.reset_count = (self.reset_count + 1) % self.reset_limit
 
         reset_pose = Pose()
         reset_pose.position.x = position[0]
@@ -408,24 +419,21 @@ class DeepDronePlanner:
         self.ddpg.eval(
             env, model_dir, num_attempts=num_attempts, max_episode_len=1000)
 
-    def train(self, prev_model):
+    def train(self, model_dir=None):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim))
-        modeldir = None
-        if prev_model != None:
-            modeldir = os.path.join(
-                os.path.dirname(__file__),
-                '../../../../learning/deep_drone/' + prev_model)
-            print("modeldir is %s" % modeldir)
+        if model_dir != None:
+            model_dir = os.path.join(os.getcwd(), model_dir)
+            print("model_dir is %s" % model_dir)
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../../learning/deep_drone/')
         self.ddpg.train(
             env,
             logdir=logdir,
             episodes_in_epoch=1,
-            num_epochs=(16 * 200),
+            num_epochs=3200,
             actor_noise=actor_noise,
-            model_dir=modeldir,
+            model_dir=model_dir,
             max_episode_len=1000)
 
 
