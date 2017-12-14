@@ -324,7 +324,7 @@ class DeepDronePlanner:
                       self.last_collision_pose.orientation.w)
         _, _, yaw = transform.transformations.euler_from_quaternion(quaternion)
         if self.reset_count == 0:
-            position = (0, 0, 0)
+            position = (0, 0, 1)
             quaternion = transform.transformations.quaternion_from_euler(
                 0, 0, 0)
         else:
