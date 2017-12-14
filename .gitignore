@@ -55,8 +55,9 @@
 catkin_ws/build
 catkin_ws/devel
 catkin_ws/learning
-catkin_ws/src
-!catkin_ws/src/journey
-!catkin_ws/src/ros_numpy
-!catkin_ws/src/tum_ardrone
-!catkin_ws/src/tum_simulator
+catkin_ws/src/bwi
+catkin_ws/src/bwi_common
+catkin_ws/src/segbot
+catkin_ws/src/segway_rmp
+catkin_ws/src/segway_v3
+catkin_ws/src/velodyne
