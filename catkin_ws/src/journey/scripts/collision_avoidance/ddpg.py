@@ -240,7 +240,7 @@ class DeepDeterministicPolicyGradients:
                     1.0 + np.exp(-np.array(target_q[:, :, 0])))
 
                 # Prefer sooner task rewards more than later ones.
-                time_decay = self.gamma**np.arange(self.horizon)
+                time_decay = self.gamma**np.arange(1, self.horizon + 1)
 
                 # Y represents the probability of flight without collision
                 #   between time t and t + h.
@@ -252,10 +252,15 @@ class DeepDeterministicPolicyGradients:
                 b_task_i = np.zeros(batch_size)
                 for k in range(batch_size):
                     y_coll_i[k, :] = r_batch[k, :, 0]
-                    b_coll_i[k] = np.mean(target_q[k, :self.horizon, 0])
                     y_task_i[k, :] = r_batch[k, :, 1]
-                    b_task_i[k] = np.mean(
-                        target_q[k, :self.horizon, 1] * time_decay)
+                    if t_batch[k]:
+                        b_coll_i[k] = r_batch[k, 0, 0]
+                        b_task_i[k] = r_batch[k, 0, 1]
+                    else:
+                        b_coll_i[k] = (r_batch[k, 0, 0] + np.inner(
+                            target_q[k, :self.horizon, 0], time_decay))
+                        b_task_i[k] = (r_batch[k, 0, 1] + np.inner(
+                            target_q[k, :self.horizon, 1], time_decay))
 
                 # Update the critic given the targets
                 (critic_loss, collision_model_loss, task_model_loss,
@@ -501,9 +506,7 @@ class CriticNetwork:
                 labels=self.predicted_y_coll_value, logits=self.y_coll_out),
             axis=1)
         b_coll_loss = tf.reduce_sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_b_coll_value, logits=self.b_coll_out),
-            axis=1)
+            (self.predicted_b_coll_value - self.b_coll_out)**2, axis=1)
         self.collision_loss = tf.reduce_mean(y_coll_loss + b_coll_loss)
 
         y_task_loss = tf.reduce_sum(
