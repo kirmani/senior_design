@@ -437,7 +437,7 @@ class DeepDronePlanner:
 
     def action_to_metric(self, action):
         metric = np.zeros(2)
-        metric[0] = action[0] * self.max_angular_velocity
+        metric[0] = action[0] * self.max_linear_velocity
         metric[1] = action[1] * self.max_angular_velocity
         return metric
 
@@ -481,7 +481,7 @@ class Control:
 
     def get_metric(self):
         metric = np.zeros((self.horizon, self.action_dim))
-        metric[:, 0] = self.action[:, 0] * self.max_angular_velocity
+        metric[:, 0] = self.action[:, 0] * self.max_linear_velocity
         metric[:, 1] = self.action[:, 1] * self.max_angular_velocity
         return metric
 
