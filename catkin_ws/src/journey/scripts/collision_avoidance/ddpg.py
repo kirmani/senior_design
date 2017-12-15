@@ -515,7 +515,7 @@ class CriticNetwork:
             (self.predicted_b_task_value - self.b_task_out)**2, axis=1)
         self.task_loss = tf.reduce_mean(y_task_loss + b_task_loss)
 
-        self.loss = self.task_loss + self.collision_loss
+        self.loss = self.task_loss + collision_weight * self.collision_loss
 
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
