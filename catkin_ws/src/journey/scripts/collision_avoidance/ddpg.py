@@ -210,8 +210,8 @@ class DeepDeterministicPolicyGradients:
                         else:
                             y_i[h, :] = np.array(reward_buffer[-1])
                             a_i[h, :] = np.random.random(self.action_dim)
-                    replay_buffer.add(state_buffer[j], a_i, y_i,
-                                      terminal_buffer[j], next_state_buffer[j])
+                    replay_buffer.add(state_buffer[t], a_i, y_i,
+                                      terminal_buffer[t], next_state_buffer[t])
 
                 epoch_rewards.append(episode_reward)
 
