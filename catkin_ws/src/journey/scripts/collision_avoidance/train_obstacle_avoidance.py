@@ -165,16 +165,15 @@ class DeepDronePlanner:
             weights_regularizer=tf.nn.l2_loss)
         actions = tf.contrib.layers.batch_norm(actions)
         actions = tf.nn.relu(actions)
-        actions = tf.contrib.layers.fully_connected(
-            actions,
-            self.action_dim,
-            activation_fn=None,
-            weights_regularizer=tf.nn.l2_loss)
-        # action_weights = tf.Variable(
-        #     tf.random_uniform([256, self.action_dim], -3e-4, 3e-4))
-        # action_bias = tf.Variable(
-        #     tf.random_uniform([self.action_dim], -3e-4, 3e-4))
-        # actions = tf.matmul(depth, action_weights) + action_bias
+        actions = tf.reshape(actions, [-1, 16 * self.horizon])
+        actions_weights = tf.Variable(
+            tf.random_uniform(
+                [16 * self.horizon, self.horizon * self.action_dim], -3e-4,
+                3e-4))
+        actions_bias = tf.Variable(
+            tf.random_uniform([self.horizon * self.action_dim], -3e-4, 3e-4))
+        actions = tf.matmul(actions, actions_weights) + actions_bias
+        actions = tf.reshape(actions, [-1, self.horizon, self.action_dim])
         actions = tf.nn.tanh(actions)
         return inputs, actions
 
@@ -240,9 +239,12 @@ class DeepDronePlanner:
             weights_regularizer=tf.nn.l2_loss)
         y_coll = tf.contrib.layers.batch_norm(y_coll)
         y_coll = tf.nn.relu(y_coll)
-        y_coll = tf.contrib.layers.fully_connected(
-            y_coll, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        y_coll = tf.reshape(y_coll, [-1, self.horizon])
+        y_coll = tf.reshape(y_coll, [-1, 16 * self.horizon])
+        y_coll_weights = tf.Variable(
+            tf.random_uniform([16 * self.horizon, self.horizon], -3e-4, 3e-4))
+        y_coll_bias = tf.Variable(
+            tf.random_uniform([self.horizon], -3e-4, 3e-4))
+        y_coll = tf.matmul(y_coll, y_coll_weights) + y_coll_bias
 
         b_coll = tf.contrib.layers.fully_connected(
             lstm_outputs,
@@ -252,8 +254,10 @@ class DeepDronePlanner:
         b_coll = tf.contrib.layers.batch_norm(b_coll)
         b_coll = tf.nn.relu(b_coll)
         b_coll = tf.reshape(b_coll, [-1, 16 * self.horizon])
-        b_coll = tf.contrib.layers.fully_connected(
-            b_coll, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        b_coll_weights = tf.Variable(
+            tf.random_uniform([16 * self.horizon, 1], -3e-4, 3e-4))
+        b_coll_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
+        b_coll = tf.matmul(b_coll, b_coll_weights) + b_coll_bias
 
         # Task reward prediction.
         y_task = tf.contrib.layers.fully_connected(
@@ -263,9 +267,12 @@ class DeepDronePlanner:
             weights_regularizer=tf.nn.l2_loss)
         y_task = tf.contrib.layers.batch_norm(y_task)
         y_task = tf.nn.relu(y_task)
-        y_task = tf.contrib.layers.fully_connected(
-            y_task, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        y_task = tf.reshape(y_task, [-1, self.horizon])
+        y_task = tf.reshape(y_task, [-1, 16 * self.horizon])
+        y_task_weights = tf.Variable(
+            tf.random_uniform([16 * self.horizon, self.horizon], -3e-4, 3e-4))
+        y_task_bias = tf.Variable(
+            tf.random_uniform([self.horizon], -3e-4, 3e-4))
+        y_task = tf.matmul(y_task, y_task_weights) + y_task_bias
 
         b_task = tf.contrib.layers.fully_connected(
             lstm_outputs,
@@ -275,8 +282,10 @@ class DeepDronePlanner:
         b_task = tf.contrib.layers.batch_norm(b_task)
         b_task = tf.nn.relu(b_task)
         b_task = tf.reshape(b_task, [-1, 16 * self.horizon])
-        b_task = tf.contrib.layers.fully_connected(
-            b_task, 1, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        b_task_weights = tf.Variable(
+            tf.random_uniform([16 * self.horizon, 1], -3e-4, 3e-4))
+        b_task_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
+        b_task = tf.matmul(b_task, b_task_weights) + b_task_bias
 
         return inputs, actions, y_coll, b_coll, y_task, b_task
 
