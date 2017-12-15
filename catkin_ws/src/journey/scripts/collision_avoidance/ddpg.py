@@ -239,6 +239,9 @@ class DeepDeterministicPolicyGradients:
                 target_q[:, :, 0] = 1.0 / (
                     1.0 + np.exp(-np.array(target_q[:, :, 0])))
 
+                # Prefer sooner task rewards more than later ones.
+                time_decay = self.gamma**np.arange(1, self.horizon + 1)
+
                 # Y represents the probability of flight without collision
                 #   between time t and t + h.
                 # B represents the best-case future likelihood of flight
@@ -249,9 +252,15 @@ class DeepDeterministicPolicyGradients:
                 b_task_i = np.zeros(batch_size)
                 for k in range(batch_size):
                     y_coll_i[k, :] = r_batch[k, :, 0]
-                    b_coll_i[k] = np.mean(target_q[k, :self.horizon, 0])
                     y_task_i[k, :] = r_batch[k, :, 1]
-                    b_task_i[k] = np.mean(target_q[k, :self.horizon, 1])
+                    if t_batch[k]:
+                        b_coll_i[k] = r_batch[k, 0, 0]
+                        b_task_i[k] = r_batch[k, 0, 1]
+                    else:
+                        b_coll_i[k] = (r_batch[k, 0, 0] + np.inner(
+                            target_q[k, :self.horizon, 0], time_decay))
+                        b_task_i[k] = (r_batch[k, 0, 1] + np.inner(
+                            target_q[k, :self.horizon, 1], time_decay))
 
                 # Update the critic given the targets
                 (critic_loss, collision_model_loss, task_model_loss,
@@ -497,9 +506,7 @@ class CriticNetwork:
                 labels=self.predicted_y_coll_value, logits=self.y_coll_out),
             axis=1)
         b_coll_loss = tf.reduce_sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_b_coll_value, logits=self.b_coll_out),
-            axis=1)
+            (self.predicted_b_coll_value - self.b_coll_out)**2, axis=1)
         self.collision_loss = tf.reduce_mean(y_coll_loss + b_coll_loss)
 
         y_task_loss = tf.reduce_sum(
@@ -510,22 +517,15 @@ class CriticNetwork:
 
         self.loss = self.task_loss + collision_weight * self.collision_loss
 
-        # self.loss = tf.reduce_mean((self.predicted_q_value - self.y_coll_out)**2)
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
 
         # Metrics
-        self.expected_collision_reward = tf.reduce_mean(
-            tf.nn.sigmoid(self.b_coll_out))
+        self.expected_collision_reward = tf.reduce_mean(self.b_coll_out)
         self.expected_task_reward = tf.reduce_mean(self.b_task_out)
 
         # Get the gradient of the net w.r.t. the action
-        task_influence = tf.reduce_sum(
-            self.y_task_out, axis=1, keep_dims=True) + self.b_task_out
-        collision_influence = tf.reduce_sum(
-            self.y_coll_out, axis=1, keep_dims=True) + self.b_coll_out
-        critic_influence = (
-            task_influence + collision_weight * collision_influence)
+        critic_influence = self.b_task_out + collision_weight * self.b_coll_out
         self.action_grads = tf.gradients(critic_influence, self.actions)
 
     def train(self, inputs, actions, y_coll, b_coll, y_task, b_task):
