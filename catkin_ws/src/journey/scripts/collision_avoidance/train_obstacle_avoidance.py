@@ -389,7 +389,7 @@ class DeepDronePlanner:
         # print(np.sum(action))
         # print(optimal_action)
 
-        action[0] = max(action[0], 0.1)
+        action[0] = max(action[0], 0.4)
 
         vel_msg = Twist()
         vel_msg.linear.x = action[0]
