@@ -63,7 +63,7 @@ class NavigationPlannerNode:
     def set_nav_goal(self, nav_delta):
         self.nav_goal.position.x = self.pose.position.x + nav_delta.x
         self.nav_goal.position.y = self.pose.position.y + nav_delta.y
-        self.nav_goal.position.z = self.pose.position.z + nav_delta.z
+        self.nav_goal.position.z = nav_delta.z
         print("Set navigation goal: (%.4f, %.4f, %.4f)" %
               (self.nav_goal.position.x, self.nav_goal.position.y,
                self.nav_goal.position.z))
@@ -91,7 +91,7 @@ class NavigationPlannerNode:
 
                 # Angular velocity in the XY plane.
                 vel_msg.angular.z = np.clip(
-                    -4 * (np.arctan2(g[1] - x[1], g[0] - x[0]) - yaw), -1, 1)
+                    -1.0 * (np.arctan2(g[1] - x[1], g[0] - x[0]) - yaw), -1, 1)
 
             # Linear velocity in the up axis.
             vel_msg.linear.z = np.clip(0.2 * np.linalg.norm(g[2] - x[2]), -1, 1)
