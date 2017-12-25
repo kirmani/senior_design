@@ -33,8 +33,7 @@ from std_srvs.srv import Empty as EmptyService
 from visualization_msgs.msg import Marker
 from tum_ardrone.msg import filter_state
 from ddpg import DeepDeterministicPolicyGradients
-from ddpg import OrnsteinUhlenbeckActionNoise
-from ddpg import Environment
+from environment import Environment
 from multiplicative_integration_lstm import MultiplicativeIntegrationLSTMCell
 
 
@@ -90,8 +89,8 @@ class DeepDronePlanner:
             '/ardrone/land', EmptyMessage, queue_size=10)
 
         # Publish model state.
-        self.model_state_publisher = rospy.Publisher('/gazebo/set_model_state',
-                                                     ModelState)
+        self.model_state_publisher = rospy.Publisher(
+            '/gazebo/set_model_state', ModelState, queue_size=10)
 
         # The rate which we publish commands.
         self.rate = rospy.Rate(self.update_rate)
@@ -112,7 +111,6 @@ class DeepDronePlanner:
         self.ddpg = DeepDeterministicPolicyGradients(
             self.create_actor_network,
             self.create_critic_network,
-            self.action_dim,
             horizon=self.horizon)
 
         print("Deep drone planner initialized.")
@@ -129,9 +127,9 @@ class DeepDronePlanner:
         self.pose = state.pose.pose
 
     def create_actor_network(self, scope):
-        inputs = tf.placeholder(
-            tf.float32,
-            (None, self.image_height, self.image_width, self.sequence_length))
+        inputs = tf.placeholder(tf.float32,
+                                (None, self.image_height, self.image_width,
+                                 self.sequence_length))
         depth = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
@@ -179,9 +177,9 @@ class DeepDronePlanner:
         actions = tf.nn.relu(actions)
         actions = tf.reshape(actions, [-1, 16 * self.horizon])
         actions_weights = tf.Variable(
-            tf.random_uniform(
-                [16 * self.horizon, self.horizon * self.action_dim], -3e-4,
-                3e-4))
+            tf.random_uniform([
+                16 * self.horizon, self.horizon * self.action_dim
+            ], -3e-4, 3e-4))
         actions_bias = tf.Variable(
             tf.random_uniform([self.horizon * self.action_dim], -3e-4, 3e-4))
         actions = tf.matmul(actions, actions_weights) + actions_bias
@@ -190,11 +188,11 @@ class DeepDronePlanner:
         return inputs, actions
 
     def create_critic_network(self, scope):
-        inputs = tf.placeholder(
-            tf.float32,
-            (None, self.image_height, self.image_width, self.sequence_length))
-        actions = tf.placeholder(tf.float32,
-                                 (None, self.horizon, self.action_dim))
+        inputs = tf.placeholder(tf.float32,
+                                (None, self.image_height, self.image_width,
+                                 self.sequence_length))
+        actions = tf.placeholder(tf.float32, (None, self.horizon,
+                                              self.action_dim))
         depth = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
@@ -379,16 +377,7 @@ class DeepDronePlanner:
 
         return state
 
-    def step(self, state, action, critique):
-        # collision_probs = 1.0 / (1.0 + np.exp(-critique))
-        # y = collision_probs[:-1]
-        # b = collision_probs[-1]
-
-        # optimal_action = (np.argmax(action) - (self.action_dim / 2)) * 0.5
-        # print(action)
-        # print(np.sum(action))
-        # print(optimal_action)
-
+    def step(self, state, action):
         action[0] = max(action[0], 0.1)
 
         vel_msg = Twist()
@@ -449,20 +438,12 @@ class DeepDronePlanner:
 
     def train(self, model_dir=None):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
-        actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(self.action_dim))
         if model_dir != None:
             model_dir = os.path.join(os.getcwd(), model_dir)
             print("model_dir is %s" % model_dir)
         logdir = os.path.join(
             os.path.dirname(__file__), '../../../../learning/deep_drone/')
-        self.ddpg.train(
-            env,
-            logdir=logdir,
-            episodes_in_epoch=1,
-            num_epochs=3200,
-            actor_noise=actor_noise,
-            model_dir=model_dir,
-            max_episode_len=1000)
+        self.ddpg.train(env, logdir=logdir, model_dir=model_dir)
 
 
 class Control:
