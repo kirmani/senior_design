@@ -6,7 +6,24 @@
 #
 # Distributed under terms of the MIT license.
 """
-Deep deterministic policy gradients with hindsight experience replay.
+Actor-critic generalized computation graph (AC-GCG). A model-based reinforcement
+learning approach for navigation and obstacle avoidance.
+
+Our critic is similar to N-step Q-Learning where we learn a Q-function, as well
+as a model of the world.
+
+In this implementation, we specifically are interested in learning
+collision-avoidant navigation policies, so we simultaneously learn a model that
+predicts the probability of collision as well as the model of our reward for
+some arbitray navigation task.
+
+Our actor network takes actions that maximize our expected return for our
+navigation task weighted with our desire to avoid obstacles.
+
+We can formulate the process as a 3-level optimization problem. We first are
+trying to model the environment, then our critic is trying to evaluate our
+environment given the learned model, and our actor is trying to optimize
+actions with respect to our critic's evaluation of our model.
 """
 import argparse
 import matplotlib.pyplot as plt
@@ -18,6 +35,8 @@ import traceback
 import tensorflow as tf
 import time
 from collections import deque
+from environment import Environment
+from replay_buffer import ReplayBuffer
 
 
 class DeepDeterministicPolicyGradients:
@@ -25,25 +44,28 @@ class DeepDeterministicPolicyGradients:
     def __init__(self,
                  create_actor_network,
                  create_critic_network,
-                 action_dim,
-                 use_discrete_actions=False,
+                 minibatch_size=128,
                  gamma=0.99,
                  horizon=16,
-                 use_hindsight=False):
-        self.action_dim = action_dim
-        self.use_discrete_actions = use_discrete_actions
+                 collision_weight=0.01):
+        self.collision_weight = collision_weight
         self.gamma = gamma
         self.horizon = horizon
-        self.use_hindsight = use_hindsight
+        self.minibatch_size = minibatch_size
 
         # Start tensorflow session.
         self.sess = tf.Session()
 
-        # Create actor network.
-        self.actor = ActorNetwork(self.sess, create_actor_network, horizon, 128)
-        self.critic = CriticNetwork(self.sess, create_critic_network,
-                                    self.horizon,
-                                    self.actor.get_num_trainable_vars())
+        # Create actor and critic networks.
+        self.actor = ActorNetwork(self.sess, create_actor_network, horizon,
+                                  self.minibatch_size)
+        self.critic = CriticNetwork(
+            self.sess,
+            create_critic_network,
+            self.horizon,
+            self.actor.get_num_trainable_vars(),
+            collision_weight=self.collision_weight)
+        self.action_dim = self.actor.get_action_dim()
 
     def build_summaries(self):
         episode_reward = tf.Variable(0.)
@@ -68,27 +90,28 @@ class DeepDeterministicPolicyGradients:
 
         return summary_ops, summary_vars
 
-    def eval(self, env, model_dir, num_attempts=1, max_episode_len=50):
+    def eval(self, env, model_dir, num_attempts=1, max_episode_len=1000):
         saver = tf.train.Saver()
         saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
 
         for i in range(num_attempts):
             total_reward = 0.0
-            state = env.Reset()
-            action_horizon_idx = 0
+            state = env.reset()
             for j in range(max_episode_len):
-                if action_horizon_idx == 0:
-                    action_horizon = self.actor.predict(
-                        np.expand_dims(state, axis=0))[0]
-                action = action_horizon[action_horizon_idx]
-                action_horizon_idx = (action_horizon_idx + 1) % self.horizon
+                # Predict the optimal actions over the horizon.
+                action_sequence = self.actor.predict(
+                    np.expand_dims(state, axis=0))
 
-                (next_state, action) = env.Step(state, action)
-                terminal = env.Terminal(state, action)
-                reward = env.Reward(next_state, action)
+                # MPC action selection.
+                action = action_sequence[0][0]
+
+                # Take a step.
+                (next_state, action) = env.step(state, action)
+                terminal = env.terminal(next_state, action)
+                reward = env.reward(next_state, action)
 
                 state = next_state
-                total_reward += reward[1]
+                episode_reward += reward[1]
 
                 if terminal:
                     break
@@ -99,14 +122,11 @@ class DeepDeterministicPolicyGradients:
     def train(self,
               env,
               actor_noise=None,
-              act_randomly=False,
-              k=1000,
               logdir='log',
               optimization_steps=40,
-              num_epochs=200,
-              episodes_in_epoch=16,
-              max_episode_len=50,
-              minibatch_size=128,
+              num_epochs=3200,
+              episodes_in_epoch=1,
+              max_episode_len=1000,
               model_dir=None):
 
         # Create a saver object for saving and loading variables
@@ -120,8 +140,8 @@ class DeepDeterministicPolicyGradients:
             saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
             print("Restoring model: %s" % model_dir)
             last_step = int(
-                os.path.basename(
-                    tf.train.latest_checkpoint(model_dir)).split('-')[1])
+                os.path.basename(tf.train.latest_checkpoint(model_dir)).split(
+                    '-')[1])
 
         # Set up summary Ops
         summary_ops, summary_vars = self.build_summaries()
@@ -144,15 +164,16 @@ class DeepDeterministicPolicyGradients:
         # Initialize replay memory
         replay_buffer = ReplayBuffer()
 
-        epsilon_zero = 0.2
+        if actor_noise is None:
+            actor_noise = OrnsteinUhlenbeckActionNoise(
+                mu=np.zeros(self.action_dim))
 
         while tf.train.global_step(self.sess, global_step) < num_epochs:
             epoch = tf.train.global_step(self.sess, global_step)
             epoch_rewards = []
             total_epoch_avg_max_q = 0.0
-            epsilon = epsilon_zero * (1.0 - epoch / num_epochs)
             for i in range(episodes_in_epoch):
-                state = env.Reset()
+                state = env.reset()
                 episode_reward = 0.0
 
                 state_buffer = []
@@ -160,32 +181,23 @@ class DeepDeterministicPolicyGradients:
                 reward_buffer = []
                 terminal_buffer = []
                 next_state_buffer = []
-
-                if actor_noise != None:
-                    actor_noise.reset()
+                actor_noise.reset()
 
                 for j in range(max_episode_len):
+                    # Predict the optimal actions over the horizon.
                     action_sequence = self.actor.predict(
                         np.expand_dims(state, axis=0))
 
+                    # MPC action selection.
                     action = action_sequence[0][0]
 
-                    if self.use_discrete_actions:
-                        # Epsilon-greedy exploration for discrete actions.
-                        if np.random.random() < epsilon:
-                            action = np.random.random(self.action_dim)
-                            action = action / np.sum(action)
-                    else:
-                        # Added exploration noise.
-                        if actor_noise != None:
-                            action += actor_noise()
+                    # Added exploration noise.
+                    action += actor_noise()
 
-                    critique = self.critic.predict(
-                        np.expand_dims(state, axis=0), action_sequence)[0]
-
-                    (next_state, action) = env.Step(state, action, critique)
-                    terminal = env.Terminal(next_state, action)
-                    reward = env.Reward(next_state, action)
+                    # Take a step.
+                    (next_state, action) = env.step(state, action)
+                    terminal = env.terminal(next_state, action)
+                    reward = env.reward(next_state, action)
 
                     # Add to episode buffer.
                     state_buffer.append(state)
@@ -200,6 +212,8 @@ class DeepDeterministicPolicyGradients:
                     if terminal:
                         break
 
+                # For our entire episode add our experience with our target
+                # model rewards and future actions to our experience replay buffer.
                 for t in range(len(state_buffer)):
                     y_i = np.zeros((self.horizon, 2))
                     a_i = np.zeros((self.horizon, self.action_dim))
@@ -214,38 +228,39 @@ class DeepDeterministicPolicyGradients:
                                       terminal_buffer[t], next_state_buffer[t])
 
                 epoch_rewards.append(episode_reward)
-
-                if np.isnan(episode_reward):
-                    print("Reward is NaN. Exiting...")
-                    sys.exit(0)
-
                 print('| Reward: {:4f} | Episode: {:d} |'.format(
                     episode_reward, i))
 
-            print("Finished data collection for epoch %d." % epoch)
             print("Experience buffer size: %s" % replay_buffer.size())
-            if replay_buffer.size() < minibatch_size:
+            if replay_buffer.size() < self.minibatch_size:
                 continue
 
+            # Output epoch statistics.
+            average_epoch_reward = np.mean(epoch_rewards)
+            epoch_reward_stddev = np.std(epoch_rewards)
+            print('| Reward: {:4f} ({:4f})| Epoch: {:d} |'.format(
+                average_epoch_reward, epoch_reward_stddev, epoch))
+
+            print("Finished data collection for epoch %d." % epoch)
             print("Starting policy optimization.")
             for optimization_step in range(optimization_steps):
-                batch_size = min(minibatch_size, replay_buffer.size())
+                batch_size = min(self.minibatch_size, replay_buffer.size())
                 (s_batch, a_batch, r_batch, t_batch,
                  s2_batch) = replay_buffer.sample_batch(batch_size)
 
                 # Calculate targets
                 target_q = self.critic.predict_target(
                     s2_batch, self.actor.predict_target(s2_batch))
+
+                # Convert our collision targets to probability.
                 target_q[:, :, 0] = 1.0 / (
                     1.0 + np.exp(-np.array(target_q[:, :, 0])))
 
                 # Prefer sooner task rewards more than later ones.
                 time_decay = self.gamma**np.arange(1, self.horizon + 1)
 
-                # Y represents the probability of flight without collision
-                #   between time t and t + h.
-                # B represents the best-case future likelihood of flight
-                #   without collosion.
+                # Y represents our model targets.
+                # B represents our critic targets.
                 y_coll_i = np.zeros((batch_size, self.horizon))
                 b_coll_i = np.zeros(batch_size)
                 y_task_i = np.zeros((batch_size, self.horizon))
@@ -262,19 +277,17 @@ class DeepDeterministicPolicyGradients:
                         b_task_i[k] = (r_batch[k, 0, 1] + np.inner(
                             target_q[k, :self.horizon, 1], time_decay))
 
-                # Update the critic given the targets
+                # Update the model and critic given the targets.
                 (critic_loss, collision_model_loss, task_model_loss,
                  expected_collision_reward,
                  expected_task_reward) = self.critic.train(
-                     s_batch,
-                     a_batch,
+                     s_batch, a_batch,
                      np.reshape(y_coll_i, (batch_size, self.horizon)),
                      np.reshape(b_coll_i, (batch_size, 1)),
                      np.reshape(y_task_i, (batch_size, self.horizon)),
-                     np.reshape(b_task_i, (batch_size, 1)),
-                 )
+                     np.reshape(b_task_i, (batch_size, 1)))
 
-                # Update the actor policy using the sampled gradient
+                # Update the actor policy using the sampled gradient.
                 a_outs = self.actor.predict(s_batch)
                 grads = self.critic.action_gradients(s_batch, a_outs)
                 self.actor.train(s_batch, grads[0])
@@ -283,19 +296,12 @@ class DeepDeterministicPolicyGradients:
                 self.actor.update_target_network()
                 self.critic.update_target_network()
 
-            # Output training statistics.
-            print(
-                "[%d] Critic Loss: %.4f, Exp Collision Reward: %.4f, Exp Task Reward: %.4f"
-                % (optimization_step, critic_loss, expected_collision_reward,
-                   expected_task_reward))
-
-            average_epoch_reward = np.mean(epoch_rewards)
-            epoch_reward_stddev = np.std(epoch_rewards)
-            if np.isnan(average_epoch_reward):
-                print("Reward is NaN. Exiting...")
-                sys.exit(0)
-            print('| Reward: {:4f} ({:4f})| Epoch: {:d} |'.format(
-                average_epoch_reward, epoch_reward_stddev, epoch))
+                # Output training statistics.
+                if optimization_step % 20 == 0:
+                    print(
+                        "[%d] Critic Loss: %.4f, Exp Collision Reward: %.4f, Exp Task Reward: %.4f"
+                        % (optimization_step, critic_loss,
+                           expected_collision_reward, expected_task_reward))
 
             # Write episode summary statistics.
             summary_str = self.sess.run(
@@ -308,7 +314,6 @@ class DeepDeterministicPolicyGradients:
                     summary_vars[4]: collision_model_loss,
                     summary_vars[5]: task_model_loss,
                 })
-
             writer.add_summary(summary_str, epoch)
             writer.flush()
 
@@ -318,74 +323,6 @@ class DeepDeterministicPolicyGradients:
             saver.save(
                 self.sess, summary_dir + '/model.ckpt', global_step=epoch)
             self.sess.run(increment_global_step)
-
-
-class Environment:
-
-    def __init__(self, reset, step, reward, terminal):
-        self.reset = reset
-        self.step = step
-        self.reward = reward
-        self.terminal = terminal
-
-    def Reset(self):
-        return self.reset()
-
-    def Step(self, state, action, critique):
-        return self.step(state, action, critique)
-
-    def Reward(self, state, action):
-        return self.reward(state, action)
-
-    def Terminal(self, state, action):
-        return self.terminal(state, action)
-
-
-class ReplayBuffer:
-
-    def __init__(self, buffer_size=1000000):
-        self.buffer_size = buffer_size
-        self.count = 0
-        self.buffer = deque()
-
-    def add(self, s, a, r, t, s2):
-        experience = (s, a, r, t, s2)
-        if self.count < self.buffer_size:
-            self.buffer.append(experience)
-            self.count += 1
-        else:
-            self.buffer.popleft()
-            self.buffer.append(experience)
-
-    def size(self):
-        return self.count
-
-    def sample_batch(self, batch_size):
-        '''
-        batch_size specifies the number of experiences to add
-        to the batch. If the replay buffer has less than batch_size
-        elements, simply return all of the elements within the buffer.
-        Generally, you'll want to wait until the buffer has at least
-        batch_size elements before beginning to sample from it.
-        '''
-        batch = []
-
-        if self.count < batch_size:
-            batch = random.sample(list(self.buffer), self.count)
-        else:
-            batch = random.sample(list(self.buffer), batch_size)
-
-        s_batch = np.array([_[0] for _ in batch])
-        a_batch = np.array([_[1] for _ in batch])
-        r_batch = np.array([_[2] for _ in batch])
-        t_batch = np.array([_[3] for _ in batch])
-        s2_batch = np.array([_[4] for _ in batch])
-
-        return s_batch, a_batch, r_batch, t_batch, s2_batch
-
-    def clear(self):
-        self.buffer.clear()
-        self.count = 0
 
 
 class ActorNetwork:
@@ -437,22 +374,21 @@ class ActorNetwork:
     def train(self, inputs, a_gradient):
         self.sess.run(
             self.optimize,
-            feed_dict={
-                self.inputs: inputs,
-                self.action_gradient: a_gradient
-            })
+            feed_dict={self.inputs: inputs,
+                       self.action_gradient: a_gradient})
 
     def predict(self, inputs):
         return self.sess.run(self.actions, feed_dict={self.inputs: inputs})
 
     def predict_target(self, inputs):
         return self.sess.run(
-            self.target_actions, feed_dict={
-                self.target_inputs: inputs
-            })
+            self.target_actions, feed_dict={self.target_inputs: inputs})
 
     def update_target_network(self):
         self.sess.run(self.update_target_network_params)
+
+    def get_action_dim(self):
+        return self.actions.shape[2]
 
     def get_num_trainable_vars(self):
         return self.num_trainable_vars
@@ -493,11 +429,11 @@ class CriticNetwork:
 
         # Network target (y_i)
         # Obtained from the target networks
-        self.predicted_y_coll_value = tf.placeholder(tf.float32,
-                                                     (None, horizon))
+        self.predicted_y_coll_value = tf.placeholder(tf.float32, (None,
+                                                                  horizon))
         self.predicted_b_coll_value = tf.placeholder(tf.float32, (None, 1))
-        self.predicted_y_task_value = tf.placeholder(tf.float32,
-                                                     (None, horizon))
+        self.predicted_y_task_value = tf.placeholder(tf.float32, (None,
+                                                                  horizon))
         self.predicted_b_task_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
@@ -553,10 +489,8 @@ class CriticNetwork:
                 self.y_coll_out, self.b_coll_out, self.y_task_out,
                 self.b_task_out
             ],
-            feed_dict={
-                self.inputs: inputs,
-                self.actions: actions
-            })
+            feed_dict={self.inputs: inputs,
+                       self.actions: actions})
         y_coll_out = np.array(preds[0])
         b_coll_out = np.array(preds[1])
         y_task_out = np.array(preds[2])
@@ -591,10 +525,8 @@ class CriticNetwork:
     def action_gradients(self, inputs, actions):
         return self.sess.run(
             self.action_grads,
-            feed_dict={
-                self.inputs: inputs,
-                self.actions: actions
-            })
+            feed_dict={self.inputs: inputs,
+                       self.actions: actions})
 
 
 class OrnsteinUhlenbeckActionNoise:
