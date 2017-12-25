@@ -91,7 +91,7 @@ class NavigationPlannerNode:
 
                 # Angular velocity in the XY plane.
                 vel_msg.angular.z = np.clip(
-                    4 * (np.arctan2(g[1] - x[1], g[0] - x[0]) - yaw), -1, 1)
+                    -4 * (np.arctan2(g[1] - x[1], g[0] - x[0]) - yaw), -1, 1)
 
             # Linear velocity in the up axis.
             vel_msg.linear.z = np.clip(0.2 * np.linalg.norm(g[2] - x[2]), -1, 1)
