@@ -28,13 +28,10 @@ actions with respect to our critic's evaluation of our model.
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
-import random
 import os
 import sys
 import traceback
 import tensorflow as tf
-import time
-from collections import deque
 from environment import Environment
 from replay_buffer import ReplayBuffer
 
@@ -118,6 +115,10 @@ class DeepDeterministicPolicyGradients:
 
             print("Episode over.")
             print("Reward: %.4f" % total_reward)
+
+    def load_model(self, model_dir):
+        saver = tf.train.Saver()
+        saver.restore(self.sess, model_dir)
 
     def train(self,
               env,

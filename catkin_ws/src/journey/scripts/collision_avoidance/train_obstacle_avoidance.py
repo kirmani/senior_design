@@ -430,12 +430,6 @@ class DeepDronePlanner:
         metric[1] = action[1] * self.max_angular_velocity
         return metric
 
-    def eval(self, model_dir, num_attempts):
-        env = Environment(self.reset, self.step, self.reward, self.terminal)
-        model_dir = os.path.join(os.getcwd(), model_dir)
-        self.ddpg.eval(
-            env, model_dir, num_attempts=num_attempts, max_episode_len=1000)
-
     def train(self, model_dir=None):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
         if model_dir != None:
@@ -445,34 +439,24 @@ class DeepDronePlanner:
             os.path.dirname(__file__), '../../../../learning/deep_drone/')
         self.ddpg.train(env, logdir=logdir, model_dir=model_dir)
 
+    def eval(self, model_dir, num_attempts):
+        env = Environment(self.reset, self.step, self.reward, self.terminal)
+        model_dir = os.path.join(os.getcwd(), model_dir)
+        self.ddpg.eval(
+            env, model_dir, num_attempts=num_attempts, max_episode_len=1000)
 
-class Control:
-
-    def __init__(self, max_linear_velocity, max_angular_velocity, dt, horizon,
-                 action_dim):
-        self.max_linear_velocity = max_linear_velocity
-        self.max_angular_velcity = max_angular_velocity
-        self.dt = dt
-        self.horizon = horizon
-        self.action_dim = action_dim
-        self.action = np.zeros((horizon, action_dim))
-
-    def set_action(self, action):
-        self.action = action
-
-    def get_metric(self):
-        metric = np.zeros((self.horizon, self.action_dim))
-        metric[:, 0] = self.action[:, 0] * self.max_linear_velocity
-        metric[:, 1] = self.action[:, 1] * self.max_angular_velocity
-        return metric
-
-    def visualize_trajectory(self):
-        pass
+    def plan(self, model_dir):
+        # Load our model.
+        model_dir = os.path.join(os.getcwd(), model_dir)
+        self.ddpg.load_model(model_dir)
+        exit()
 
 
 def main(args):
     deep_drone_planner = DeepDronePlanner()
-    if args.eval:
+    if args.plan:
+        deep_drone_planner.plan(args.model)
+    elif args.eval:
         attempts = 1
         if args.num_attempts:
             attempts = int(args.num_attempts)
@@ -499,6 +483,12 @@ if __name__ == '__main__':
             action='store_true',
             default=False,
             help='evaluate model')
+        parser.add_argument(
+            '-p',
+            '--plan',
+            action='store_true',
+            default=False,
+            help='load model and use for publishing and planning')
         parser.add_argument(
             '-n',
             '--num_attempts',
