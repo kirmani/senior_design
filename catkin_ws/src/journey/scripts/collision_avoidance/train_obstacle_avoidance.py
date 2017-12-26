@@ -28,6 +28,7 @@ from gazebo_msgs.msg import ContactsState
 from gazebo_msgs.msg import ModelState
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image
+from simulation_randomization import SimulationRandomizer
 from std_msgs.msg import Empty as EmptyMessage
 from std_msgs.msg import String
 from std_srvs.srv import Empty as EmptyService
@@ -89,10 +90,6 @@ class DeepDronePlanner:
         self.land_publisher = rospy.Publisher(
             '/ardrone/land', EmptyMessage, queue_size=10)
 
-        # Publish model state.
-        self.model_state_publisher = rospy.Publisher(
-            '/gazebo/set_model_state', ModelState, queue_size=10)
-
         # Publish the collision state.
         self.collision_state_publisher = rospy.Publisher(
             '/ardrone/collision_state', CollisionState, queue_size=10)
@@ -100,9 +97,8 @@ class DeepDronePlanner:
         # The rate which we publish commands.
         self.rate = rospy.Rate(self.update_rate)
 
-        # Reset count.
-        self.reset_count = 0
-        self.reset_limit = 100
+        # Simulation reset randomization.
+        self.randomize_simulation = SimulationRandomizer()
 
         # Set up policy search network.
         self.action_dim = 2
@@ -333,42 +329,8 @@ class DeepDronePlanner:
     def reset(self):
         self.velocity_publisher.publish(Twist())
 
-        # Reset our drone.
-        model_state = ModelState()
-        model_state.model_name = 'quadrotor'
-        model_state.reference_frame = 'world'
-
-        position = (self.last_collision_pose.position.x,
-                    self.last_collision_pose.position.y,
-                    self.last_collision_pose.position.z)
-
-        quaternion = (self.last_collision_pose.orientation.x,
-                      self.last_collision_pose.orientation.y,
-                      self.last_collision_pose.orientation.z,
-                      self.last_collision_pose.orientation.w)
-        _, _, yaw = transform.transformations.euler_from_quaternion(quaternion)
-        if self.reset_count == 0:
-            position = (0, 0, 1)
-            quaternion = transform.transformations.quaternion_from_euler(
-                0, 0, 0)
-        else:
-            position = (position[0], position[1], 1)
-            quaternion = transform.transformations.quaternion_from_euler(
-                0, 0, yaw)
-        self.reset_count = (self.reset_count + 1) % self.reset_limit
-
-        reset_pose = Pose()
-        reset_pose.position.x = position[0]
-        reset_pose.position.y = position[1]
-        reset_pose.position.z = position[2]
-        reset_pose.orientation.w = quaternion[3]
-        reset_pose.orientation.x = quaternion[0]
-        reset_pose.orientation.y = quaternion[1]
-        reset_pose.orientation.z = quaternion[2]
-
-        model_state.pose = reset_pose
-        self.model_state_publisher.publish(model_state)
-        rospy.sleep(1.)
+        # Randomize simulation environment.
+        self.randomize_simulation()
 
         # Take-off.
         self.takeoff_publisher.publish(EmptyMessage())
@@ -379,7 +341,6 @@ class DeepDronePlanner:
 
         # Reset collision state.
         self.collided = False
-
         return state
 
     def step(self, state, action):
