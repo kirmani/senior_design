@@ -253,10 +253,6 @@ class DeepDeterministicPolicyGradients:
                 target_q = self.critic.predict_target(
                     s2_batch, self.actor.predict_target(s2_batch))
 
-                # Convert our collision targets to probability.
-                target_q[:, :, 0] = 1.0 / (
-                    1.0 + np.exp(-np.array(target_q[:, :, 0])))
-
                 # Prefer sooner task rewards more than later ones.
                 time_decay = self.gamma**np.arange(1, self.horizon + 1)
 
@@ -298,7 +294,8 @@ class DeepDeterministicPolicyGradients:
                 self.critic.update_target_network()
 
                 # Output training statistics.
-                if optimization_step % 20 == 0:
+                if ((optimization_step % 20 == 0) or
+                    (optimization_step == optimization_steps - 1)):
                     print(
                         "[%d] Critic Loss: %.4f, Exp Collision Reward: %.4f, Exp Task Reward: %.4f"
                         % (optimization_step, critic_loss,
@@ -492,7 +489,9 @@ class CriticNetwork:
             ],
             feed_dict={self.inputs: inputs,
                        self.actions: actions})
+
         y_coll_out = np.array(preds[0])
+        y_coll_out = 1.0 / (1.0 + np.exp(-y_coll_out))
         b_coll_out = np.array(preds[1])
         y_task_out = np.array(preds[2])
         b_task_out = np.array(preds[3])
@@ -512,6 +511,7 @@ class CriticNetwork:
                 self.target_actions: actions
             })
         y_coll_out = np.array(preds[0])
+        y_coll_out = 1.0 / (1.0 + np.exp(-y_coll_out))
         b_coll_out = np.array(preds[1])
         y_task_out = np.array(preds[2])
         b_task_out = np.array(preds[3])
