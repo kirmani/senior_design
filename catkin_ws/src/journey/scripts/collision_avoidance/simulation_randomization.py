@@ -67,6 +67,7 @@ class SimulationRandomizer:
         self.wall_width = 0.1
         self.wall_length = 100.0
         self.quadrotor_width = 0.5
+        self.max_quadrotor_start_yaw = 45  # degrees
 
         # Publish model state.
         self.model_state_publisher = rospy.Publisher(
@@ -89,6 +90,8 @@ class SimulationRandomizer:
         quadrotor_ty = (np.random.random() *
                         (hallway_width - self.quadrotor_width) -
                         (hallway_width - self.quadrotor_width) / 2)
+        quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw
+                         - self.max_quadrotor_start_yaw) * np.pi / 180.0
 
         # Delete models.
         rospy.wait_for_service('gazebo/delete_model')
@@ -158,7 +161,10 @@ class SimulationRandomizer:
             sz=wall_height,
             material=random.choice(MATERIALS))
 
-        self.spawn_quadrotor(ty=quadrotor_ty)
+        self.spawn_quadrotor(ty=quadrotor_ty, yaw=quadrotor_yaw)
+
+        # Wait a little bit for environment to stabilize.
+        rospy.sleep(2.)
 
     def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
         position = (tx, ty, ty)
@@ -215,9 +221,6 @@ class SimulationRandomizer:
         pose.orientation.w = quaternion[3]
 
         self.spawn_model(model_name, s, pose)
-
-        # Wait a little bit for environment to stabilize.
-        rospy.sleep(2.)
 
     def spawn_model(self, model_name, model_xml, initial_pose):
         rospy.wait_for_service('gazebo/spawn_sdf_model')
