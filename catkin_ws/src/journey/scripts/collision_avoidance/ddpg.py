@@ -103,7 +103,7 @@ class DeepDeterministicPolicyGradients:
                 action = action_sequence[0][0]
 
                 # Take a step.
-                (next_state, action) = env.step(state, action)
+                next_state = env.step(state, action)
                 terminal = env.terminal(next_state, action)
                 reward = env.reward(next_state, action)
 
@@ -195,8 +195,11 @@ class DeepDeterministicPolicyGradients:
                     # Added exploration noise.
                     action += actor_noise()
 
+                    # Bound action within [-1, 1]
+                    action = np.clip(action, -1, 1)
+
                     # Take a step.
-                    (next_state, action) = env.step(state, action)
+                    next_state = env.step(state, action)
                     terminal = env.terminal(next_state, action)
                     reward = env.reward(next_state, action)
 

@@ -344,13 +344,13 @@ class DeepDronePlanner:
         return state
 
     def step(self, state, action):
-        action[0] = max(action[0], 0.1)
+        control = self.action_to_control(action)
 
         vel_msg = Twist()
-        vel_msg.linear.x = action[0]
+        vel_msg.linear.x = control[0]
         vel_msg.linear.y = 0
         vel_msg.linear.z = 0
-        vel_msg.angular.z = action[1]
+        vel_msg.angular.z = control[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -369,10 +369,10 @@ class DeepDronePlanner:
         # plt.show()
         # exit()
 
-        return (next_state, action)
+        return next_state
 
     def reward(self, state, action):
-        metric = self.action_to_metric(action)
+        metric = self.control_to_metric(self.action_to_control(action))
         collision_reward = 1 if not self.collided else 0
         task_reward = metric[0] * np.cos(metric[1])
         return (collision_reward, task_reward)
@@ -390,10 +390,16 @@ class DeepDronePlanner:
             self.velocity_publisher.publish(Twist())
         return self.collided
 
-    def action_to_metric(self, action):
+    def action_to_control(self, action):
+        control = np.zeros(2)
+        control[0] = (action[0] + 1.0) / 2.0
+        control[1] = action[1]
+        return control
+
+    def control_to_metric(self, control):
         metric = np.zeros(2)
-        metric[0] = action[0] * self.max_linear_velocity
-        metric[1] = action[1] * self.max_angular_velocity
+        metric[0] = control[0] * self.max_linear_velocity
+        metric[1] = control[1] * self.max_angular_velocity
         return metric
 
     def train(self, model_dir=None):
