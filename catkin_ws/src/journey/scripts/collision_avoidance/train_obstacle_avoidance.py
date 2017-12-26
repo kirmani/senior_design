@@ -334,6 +334,7 @@ class DeepDronePlanner:
 
         # Take-off.
         self.takeoff_publisher.publish(EmptyMessage())
+        rospy.sleep(2.)
 
         # Clear our frame buffer.
         self.frame_buffer.clear()
