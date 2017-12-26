@@ -21,6 +21,7 @@ import tf as transform
 import time
 import traceback
 from collections import deque
+from journey.msg import CollisionState
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
 from gazebo_msgs.msg import ContactsState
@@ -91,6 +92,10 @@ class DeepDronePlanner:
         # Publish model state.
         self.model_state_publisher = rospy.Publisher(
             '/gazebo/set_model_state', ModelState, queue_size=10)
+
+        # Publish the collision state.
+        self.collision_state_publisher = rospy.Publisher(
+            '/ardrone/collision_state', CollisionState, queue_size=10)
 
         # The rate which we publish commands.
         self.rate = rospy.Rate(self.update_rate)
@@ -430,12 +435,6 @@ class DeepDronePlanner:
         metric[1] = action[1] * self.max_angular_velocity
         return metric
 
-    def eval(self, model_dir, num_attempts):
-        env = Environment(self.reset, self.step, self.reward, self.terminal)
-        model_dir = os.path.join(os.getcwd(), model_dir)
-        self.ddpg.eval(
-            env, model_dir, num_attempts=num_attempts, max_episode_len=1000)
-
     def train(self, model_dir=None):
         env = Environment(self.reset, self.step, self.reward, self.terminal)
         if model_dir != None:
@@ -445,34 +444,55 @@ class DeepDronePlanner:
             os.path.dirname(__file__), '../../../../learning/deep_drone/')
         self.ddpg.train(env, logdir=logdir, model_dir=model_dir)
 
+    def eval(self, model_dir, num_attempts):
+        env = Environment(self.reset, self.step, self.reward, self.terminal)
+        model_dir = os.path.join(os.getcwd(), model_dir)
+        self.ddpg.eval(
+            env, model_dir, num_attempts=num_attempts, max_episode_len=1000)
 
-class Control:
+    def plan(self, model_dir):
+        # Load our model.
+        model_dir = os.path.join(os.getcwd(), model_dir)
+        self.ddpg.load_model(model_dir)
 
-    def __init__(self, max_linear_velocity, max_angular_velocity, dt, horizon,
-                 action_dim):
-        self.max_linear_velocity = max_linear_velocity
-        self.max_angular_velcity = max_angular_velocity
-        self.dt = dt
-        self.horizon = horizon
-        self.action_dim = action_dim
-        self.action = np.zeros((horizon, action_dim))
+        # Take-off.
+        rospy.sleep(1.)
+        self.takeoff_publisher.publish(EmptyMessage())
 
-    def set_action(self, action):
-        self.action = action
+        # Clear our frame buffer.
+        self.frame_buffer.clear()
+        state = self.get_current_state()
 
-    def get_metric(self):
-        metric = np.zeros((self.horizon, self.action_dim))
-        metric[:, 0] = self.action[:, 0] * self.max_linear_velocity
-        metric[:, 1] = self.action[:, 1] * self.max_angular_velocity
-        return metric
+        while not rospy.is_shutdown():
+            # Predict the optimal actions over the horizon and the model and
+            # critic metrics over the horizon.
+            action_sequence = self.ddpg.actor.predict(
+                np.expand_dims(state, axis=0))
+            critique = self.ddpg.critic.predict(
+                np.expand_dims(state, axis=0), action_sequence)
 
-    def visualize_trajectory(self):
-        pass
+            # Create and publish collision state message.
+            # TODO(kirmani): Determine what other useful information we'd
+            # like to include in our collision state estimator.
+            collision_state = CollisionState()
+            collision_state.horizon = self.horizon
+            collision_state.action_dimensionality = self.action_dim
+            collision_state.collision_probability = 1.0 - np.mean(
+                critique[0, :self.horizon, 0])
+            collision_state.action = list(action_sequence[0, 0, :])
+            self.collision_state_publisher.publish(collision_state)
+
+            # Wait.
+            self.rate.sleep()
+
+            state = self.get_current_state()
 
 
 def main(args):
     deep_drone_planner = DeepDronePlanner()
-    if args.eval:
+    if args.plan:
+        deep_drone_planner.plan(args.model)
+    elif args.eval:
         attempts = 1
         if args.num_attempts:
             attempts = int(args.num_attempts)
@@ -500,11 +520,17 @@ if __name__ == '__main__':
             default=False,
             help='evaluate model')
         parser.add_argument(
+            '-p',
+            '--plan',
+            action='store_true',
+            default=False,
+            help='load model and use for publishing and planning')
+        parser.add_argument(
             '-n',
             '--num_attempts',
             action='store',
             help='number of attempts to run model for')
-        args = parser.parse_args()
+        args = parser.parse_args(rospy.myargv()[1:])
         #if len(args) < 1:
         #    parser.error ('missing argument')
         if args.verbose:

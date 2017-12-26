@@ -5,6 +5,14 @@
 # Copyright © 2017 Sean Kirmani <sean@kirmani.io>
 #
 # Distributed under terms of the MIT license.
+"""
+Experience replay buffer.
+"""
+import numpy as np
+import random
+from collections import deque
+
+
 class ReplayBuffer:
 
     def __init__(self, buffer_size=1000000):

@@ -5,10 +5,17 @@
     <arg name="world_name" value="$(find journey)/worlds/hallway2.world"/>
   </include>
 
-
+  <!-- Spawn drone. -->
   <include file="$(find cvg_sim_gazebo)/launch/spawn_quadrotor.launch" >
     <arg name="model" value="$(find journey)/urdf/quadrotor_sensors.urdf.xacro"/>
   </include>
 
-  <node name="drone_stateestimation" pkg="tum_ardrone" type="drone_stateestimation"></node>
+  <!-- Start obstacle avoidance detection. -->
+  <node name="obstacle_avoidance" pkg="journey" type="train_obstacle_avoidance.py"
+    args="-p -m $(find journey)/tensorflow/models/collision_avoidance/model.ckpt-8"
+    output="screen" respawn="true"></node>
+
+  <!-- Start navigation planner. -->
+  <node name="nav_planner" pkg="journey" type="nav_planner.py"
+    output="screen" respawn="true"></node>
 </launch>
