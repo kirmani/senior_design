@@ -91,6 +91,44 @@ class SimulationRandomizer:
             sz=wall_height,
             material=random.choice(MATERIALS))
 
+        # Create floor.
+        self.spawn_box(
+            model_name='floor',
+            tz=(-wall_width / 2),
+            sx=wall_length,
+            sy=hallway_width,
+            sz=wall_width,
+            material=random.choice(MATERIALS))
+
+        # Create ceiling.
+        self.spawn_box(
+            model_name='ceiling',
+            tz=(wall_height + wall_width / 2),
+            sx=wall_length,
+            sy=hallway_width,
+            sz=wall_width,
+            material=random.choice(MATERIALS))
+
+        # Create dead-end (front).
+        self.spawn_box(
+            model_name='deadend_front',
+            tx=(wall_length / 2),
+            tz=(wall_height / 2),
+            sx=wall_width,
+            sy=hallway_width,
+            sz=wall_height,
+            material=random.choice(MATERIALS))
+
+        # Create dead-end (back).
+        self.spawn_box(
+            model_name='deadend_back',
+            tx=(-wall_length / 2),
+            tz=(wall_height / 2),
+            sx=wall_width,
+            sy=hallway_width,
+            sz=wall_height,
+            material=random.choice(MATERIALS))
+
     def spawn_box(self,
                   model_name="box",
                   tx=0,
