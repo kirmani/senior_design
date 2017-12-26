@@ -449,7 +449,29 @@ class DeepDronePlanner:
         # Load our model.
         model_dir = os.path.join(os.getcwd(), model_dir)
         self.ddpg.load_model(model_dir)
-        exit()
+
+        # Take-off.
+        rospy.sleep(1.)
+        self.takeoff_publisher.publish(EmptyMessage())
+
+        # Clear our frame buffer.
+        self.frame_buffer.clear()
+        state = self.get_current_state()
+
+        while not rospy.is_shutdown():
+            # Predict the optimal actions over the horizon.
+            action_sequence = self.ddpg.actor.predict(
+                np.expand_dims(state, axis=0))
+            critique = self.ddpg.critic.predict(
+                np.expand_dims(state, axis=0), action_sequence)
+            print(critique)
+            exit()
+
+            # TODO(kirmani): Publish probability of collision and optimal
+            # actions.
+
+            # Wait.
+            self.rate.sleep()
 
 
 def main(args):
