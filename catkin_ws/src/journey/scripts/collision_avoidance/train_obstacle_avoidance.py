@@ -477,7 +477,7 @@ class DeepDronePlanner:
             collision_state = CollisionState()
             collision_state.horizon = self.horizon
             collision_state.action_dimensionality = self.action_dim
-            collision_state.collision_probability = np.mean(
+            collision_state.collision_probability = 1.0 - np.mean(
                 critique[0, :self.horizon, 0])
             collision_state.action = list(action_sequence[0, 0, :])
             self.collision_state_publisher.publish(collision_state)
