@@ -6,7 +6,13 @@
 #
 # Distributed under terms of the MIT license.
 """
-TODO(kirmani): DESCRIPTION GOES HERE
+Simulation randomization.
+
+When called, our simulation environment resets to some random configuration
+to start training a new episode.
+
+If the model sees enough simulated variation, the real world may look just like
+the next simulator.
 """
 import argparse
 import numpy as np
@@ -209,6 +215,9 @@ class SimulationRandomizer:
         pose.orientation.w = quaternion[3]
 
         self.spawn_model(model_name, s, pose)
+
+        # Wait a little bit for environment to stabilize.
+        rospy.sleep(2.)
 
     def spawn_model(self, model_name, model_xml, initial_pose):
         rospy.wait_for_service('gazebo/spawn_sdf_model')
