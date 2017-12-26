@@ -13,6 +13,7 @@ import rospy
 import sys
 import traceback
 import time
+import tf
 from gazebo_msgs.srv import SpawnModel
 from geometry_msgs.msg import Pose
 
@@ -29,44 +30,47 @@ class SimulationRandomizer:
 
     def __call__(self):
         print("Randomized simulation.")
-        hallway_width = 1.0
+        hallway_width = 2.0
+        wall_length = 100.0
         wall_width = 0.1
-        wall_height = 4.0
-        left_wall_xml = self.create_box(
+        wall_height = 3.0
+
+        # Create left wall.
+        self.spawn_box(
             model_name='left_wall',
-            ty=-(hallway_width + wall_width) / 2,
-            tz=wall_height / 2,
+            ty=(-(hallway_width + wall_width) / 2),
+            tz=(wall_height / 2),
+            sx=wall_length,
             sy=wall_width,
             sz=wall_height,
             material='Gazebo/Blue')
-        self.spawn_model('left_wall', left_wall_xml, Pose())
 
-        right_wall_xml = self.create_box(
+        # Create right wall.
+        self.spawn_box(
             model_name='right_wall',
-            ty=(hallway_width + wall_width) / 2,
-            tz=wall_height / 2,
+            ty=((hallway_width + wall_width) / 2),
+            tz=(wall_height / 2),
+            sx=wall_length,
             sy=wall_width,
             sz=wall_height,
             material='Gazebo/Red')
-        self.spawn_model('right_wall', right_wall_xml, Pose())
 
-    def create_box(self,
-                   model_name="box",
-                   tx=0,
-                   ty=0,
-                   tz=0.5,
-                   yaw=0,
-                   pitch=0,
-                   roll=0,
-                   sx=1,
-                   sy=1,
-                   sz=1,
-                   static=True,
-                   material='Gazebo/Blue'):
+    def spawn_box(self,
+                  model_name="box",
+                  tx=0,
+                  ty=0,
+                  tz=0.5,
+                  yaw=0,
+                  pitch=0,
+                  roll=0,
+                  sx=1,
+                  sy=1,
+                  sz=1,
+                  static=True,
+                  material='Gazebo/Blue'):
         s = '<?xml version="1.0" ?><sdf version="1.4"><model name="%s">' % model_name
         s += '<static>%s</static>' % ('true' if static else 'false')
-        s += '<pose> %.4f %.4f %.4f %.4f %.4f %.4f</pose>' % (tx, ty, tz, yaw,
-                                                              pitch, roll)
+        s += '<pose>0 0 0 0 0 0</pose>'
         s += '<link name="link"><collision name="collision"><geometry><box>'
 
         s += '<size>%.4f %.4f %.4f</size>' % (sx, sy, sz)
@@ -75,7 +79,18 @@ class SimulationRandomizer:
         s += '</box></geometry>'
         s += '<material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>%s</name></material>' % material
         s += '</visual></link></model></sdf>'
-        return s
+
+        pose = Pose()
+        pose.position.x = tx
+        pose.position.y = ty
+        pose.position.z = tz
+        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+        pose.orientation.x = quaternion[0]
+        pose.orientation.y = quaternion[1]
+        pose.orientation.z = quaternion[2]
+        pose.orientation.w = quaternion[3]
+
+        self.spawn_model(model_name, s, pose)
 
 
 def main(args):
