@@ -16,6 +16,8 @@ import sys
 import traceback
 import time
 import tf
+from gazebo_msgs.srv import DeleteModel
+from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SpawnModel
 from geometry_msgs.msg import Pose
 
@@ -58,10 +60,18 @@ class SimulationRandomizer:
         self.max_wall_height = 5.0
         self.wall_width = 0.1
         self.wall_length = 100.0
+        self.quadrotor_width = 0.5
+
+        # Publish model state.
+        self.model_state_publisher = rospy.Publisher(
+            '/gazebo/set_model_state', ModelState, queue_size=10)
+
         print("Initialized simulation randomizer.")
 
     def __call__(self):
         print("Randomized simulation.")
+
+        # Pick randomized parameters.
         hallway_width = (np.random.random() *
                          (self.max_hallway_width - self.min_hallway_width) +
                          self.min_hallway_width)
@@ -70,6 +80,19 @@ class SimulationRandomizer:
                        self.min_wall_height)
         wall_length = self.wall_length
         wall_width = self.wall_width
+        quadrotor_ty = (np.random.random() *
+                        (hallway_width - self.quadrotor_width) -
+                        (hallway_width - self.quadrotor_width) / 2)
+
+        # Delete models.
+        rospy.wait_for_service('gazebo/delete_model')
+        delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
+        delete_model('left_wall')
+        delete_model('right_wall')
+        delete_model('floor')
+        delete_model('ceiling')
+        delete_model('deadend_front')
+        delete_model('deadend_back')
 
         # Create left wall.
         self.spawn_box(
@@ -128,6 +151,28 @@ class SimulationRandomizer:
             sy=hallway_width,
             sz=wall_height,
             material=random.choice(MATERIALS))
+
+        self.spawn_quadrotor(ty=quadrotor_ty)
+
+    def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
+        position = (tx, ty, ty)
+        quaternion = transform.transformations.quaternion_from_euler(
+            roll, pitch, yaw)
+
+        reset_pose = Pose()
+        reset_pose.position.x = position[0]
+        reset_pose.position.y = position[1]
+        reset_pose.position.z = position[2]
+        reset_pose.orientation.x = quaternion[0]
+        reset_pose.orientation.y = quaternion[1]
+        reset_pose.orientation.z = quaternion[2]
+        reset_pose.orientation.w = quaternion[3]
+
+        model_state = ModelState()
+        model_state.model_name = 'quadrotor'
+        model_state.reference_frame = 'world'
+        model_state.pose = reset_pose
+        self.model_state_publisher.publish(model_state)
 
     def spawn_box(self,
                   model_name="box",
