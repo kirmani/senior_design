@@ -9,7 +9,9 @@
 TODO(kirmani): DESCRIPTION GOES HERE
 """
 import argparse
+import numpy as np
 import rospy
+import random
 import sys
 import traceback
 import time
@@ -17,18 +19,57 @@ import tf
 from gazebo_msgs.srv import SpawnModel
 from geometry_msgs.msg import Pose
 
+MATERIALS = [
+    'Gazebo/White',
+    'Gazebo/Black',
+    'Gazebo/Grey',
+    'Gazebo/Blue',
+    'Gazebo/Red',
+    'Gazebo/Green',
+    'Gazebo/Purple',
+    'Gazebo/Yellow',
+    'Gazebo/Turquoise',
+    'Gazebo/Grey',
+    'Gazebo/WoodFloor',
+    'Gazebo/CeilingTiled',
+    'Gazebo/PaintedWall',
+    'Gazebo/CloudySky'
+    'Gazebo/GrassFloor',
+    'Gazebo/Rockwall',
+    'Gazebo/RustyBarrel',
+    'Gazebo/WoodPallet',
+    'Gazebo/LightWood'
+    'Gazebo/WoodTile',
+    'Gazebo/Brick',
+    'Gazebo/Gold',
+    'Gazebo/RustySteel',
+    'Gazebo/Chrome',
+    'Gazebo/BumpyMetal',
+    'Gazebo/Rocky',
+]
+
 
 class SimulationRandomizer:
 
     def __init__(self):
+        self.min_hallway_width = 2.0
+        self.max_hallway_width = 4.0
+        self.min_wall_height = 2.0
+        self.max_wall_height = 5.0
+        self.wall_width = 0.1
+        self.wall_length = 100.0
         print("Initialized simulation randomizer.")
 
     def __call__(self):
         print("Randomized simulation.")
-        hallway_width = 2.0
-        wall_length = 100.0
-        wall_width = 0.1
-        wall_height = 3.0
+        hallway_width = (np.random.random() *
+                         (self.max_hallway_width - self.min_hallway_width) +
+                         self.min_hallway_width)
+        wall_height = (np.random.random() *
+                       (self.max_wall_height - self.min_wall_height) +
+                       self.min_wall_height)
+        wall_length = self.wall_length
+        wall_width = self.wall_width
 
         # Create left wall.
         self.spawn_box(
@@ -38,7 +79,7 @@ class SimulationRandomizer:
             sx=wall_length,
             sy=wall_width,
             sz=wall_height,
-            material='Gazebo/Blue')
+            material=random.choice(MATERIALS))
 
         # Create right wall.
         self.spawn_box(
@@ -48,7 +89,7 @@ class SimulationRandomizer:
             sx=wall_length,
             sy=wall_width,
             sz=wall_height,
-            material='Gazebo/Red')
+            material=random.choice(MATERIALS))
 
     def spawn_box(self,
                   model_name="box",
