@@ -21,6 +21,7 @@ import tf as transform
 import time
 import traceback
 from collections import deque
+from journey.msg import CollisionState
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose
 from gazebo_msgs.msg import ContactsState
@@ -91,6 +92,10 @@ class DeepDronePlanner:
         # Publish model state.
         self.model_state_publisher = rospy.Publisher(
             '/gazebo/set_model_state', ModelState, queue_size=10)
+
+        # Publish the collision state.
+        self.collision_state_publisher = rospy.Publisher(
+            '/ardrone/collision_state', CollisionState, queue_size=10)
 
         # The rate which we publish commands.
         self.rate = rospy.Rate(self.update_rate)
@@ -459,19 +464,28 @@ class DeepDronePlanner:
         state = self.get_current_state()
 
         while not rospy.is_shutdown():
-            # Predict the optimal actions over the horizon.
+            # Predict the optimal actions over the horizon and the model and
+            # critic metrics over the horizon.
             action_sequence = self.ddpg.actor.predict(
                 np.expand_dims(state, axis=0))
             critique = self.ddpg.critic.predict(
                 np.expand_dims(state, axis=0), action_sequence)
-            print(critique)
-            exit()
 
-            # TODO(kirmani): Publish probability of collision and optimal
-            # actions.
+            # Create and publish collision state message.
+            # TODO(kirmani): Determine what other useful information we'd
+            # like to include in our collision state estimator.
+            collision_state = CollisionState()
+            collision_state.horizon = self.horizon
+            collision_state.action_dimensionality = self.action_dim
+            collision_state.collision_probability = np.mean(
+                critique[0, :self.horizon, 0])
+            collision_state.action = list(action_sequence[0, 0, :])
+            self.collision_state_publisher.publish(collision_state)
 
             # Wait.
             self.rate.sleep()
+
+            state = self.get_current_state()
 
 
 def main(args):
@@ -516,7 +530,7 @@ if __name__ == '__main__':
             '--num_attempts',
             action='store',
             help='number of attempts to run model for')
-        args = parser.parse_args()
+        args = parser.parse_args(rospy.myargv()[1:])
         #if len(args) < 1:
         #    parser.error ('missing argument')
         if args.verbose:
