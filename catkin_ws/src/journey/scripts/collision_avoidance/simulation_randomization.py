@@ -156,8 +156,7 @@ class SimulationRandomizer:
 
     def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
         position = (tx, ty, ty)
-        quaternion = transform.transformations.quaternion_from_euler(
-            roll, pitch, yaw)
+        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
 
         reset_pose = Pose()
         reset_pose.position.x = position[0]
@@ -219,6 +218,9 @@ class SimulationRandomizer:
 
 def main(args):
     """ Main function. """
+    # Initialize our ROS node.
+    rospy.init_node('simulation_randomization', anonymous=True)
+
     randomize_simulation = SimulationRandomizer()
     randomize_simulation()
 
