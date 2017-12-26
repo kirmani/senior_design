@@ -23,11 +23,6 @@ class SimulationRandomizer:
     def __init__(self):
         print("Initialized simulation randomizer.")
 
-    def spawn_model(self, model_name, model_xml, initial_pose):
-        rospy.wait_for_service('gazebo/spawn_sdf_model')
-        spawn_model = rospy.ServiceProxy('gazebo/spawn_sdf_model', SpawnModel)
-        spawn_model(model_name, model_xml, "quadrotor", initial_pose, "world")
-
     def __call__(self):
         print("Randomized simulation.")
         hallway_width = 2.0
@@ -91,6 +86,11 @@ class SimulationRandomizer:
         pose.orientation.w = quaternion[3]
 
         self.spawn_model(model_name, s, pose)
+
+    def spawn_model(self, model_name, model_xml, initial_pose):
+        rospy.wait_for_service('gazebo/spawn_sdf_model')
+        spawn_model = rospy.ServiceProxy('gazebo/spawn_sdf_model', SpawnModel)
+        spawn_model(model_name, model_xml, "quadrotor", initial_pose, "world")
 
 
 def main(args):
