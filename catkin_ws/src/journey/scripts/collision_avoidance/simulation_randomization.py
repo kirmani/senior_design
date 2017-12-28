@@ -179,6 +179,8 @@ class SimulationRandomizer:
         print(floorplan)
         exit()
 
+        return floorplan
+
     def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
         position = (tx, ty, ty)
         quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
