@@ -112,9 +112,9 @@ class NavigationPlannerNode:
                 if self.collision_state:
                     # Factor in our collision information into our navigation
                     # plan.
-                    vel_msg.angular.x = (
+                    vel_msg.linear.x = (
                         self.collision_weight * self.collision_state.action[0] +
-                        (1 - self.collision_weight) * vel_msg.angular.x)
+                        (1 - self.collision_weight) * vel_msg.linear.x)
                     vel_msg.angular.z = (
                         self.collision_weight * self.collision_state.action[1] +
                         (1 - self.collision_weight) * vel_msg.angular.z)
