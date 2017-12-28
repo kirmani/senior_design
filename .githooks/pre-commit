@@ -30,7 +30,7 @@ pip3_install_if_missing () {
 
 for file in $files
 do
-  filename=$project_dir/$(basename $file)
+  filename=$project_dir/$file
   if [[ $file == *.py ]]; then
     pip3_install_if_missing yapf
     echo "yapf: $filename"
