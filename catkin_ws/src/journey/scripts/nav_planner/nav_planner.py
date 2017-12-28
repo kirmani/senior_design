@@ -12,6 +12,7 @@ Navigation planner.
 import rospy
 import numpy as np
 import tf
+from journey.msg import CollisionState
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist
@@ -38,6 +39,15 @@ class NavigationPlannerNode:
         self.velocity_publisher = rospy.Publisher(
             '/cmd_vel', Twist, queue_size=10)
 
+        # Subscribe to collision state.
+        self.collision_state_subscriber = rospy.Subscriber(
+            '/ardrone/collision_state', CollisionState, self.on_new_collision)
+        self.collision_state = None
+
+        # How much to consider collision evidence in our nav planner relative
+        # to our PID control for the goal.
+        self.collision_weight = 0.1
+
         # Takeoff publisher.
         self.takeoff_publisher = rospy.Publisher(
             '/ardrone/takeoff', EmptyMessage, queue_size=10)
@@ -59,6 +69,9 @@ class NavigationPlannerNode:
 
     def on_new_pose(self, state):
         self.pose = state.pose.pose
+
+    def on_new_collision_state(self, collision_state):
+        self.collision_state = collision_state
 
     def set_nav_goal(self, nav_delta):
         self.nav_goal.position.x = self.pose.position.x + nav_delta.x
@@ -92,6 +105,18 @@ class NavigationPlannerNode:
                 # Angular velocity in the XY plane.
                 vel_msg.angular.z = np.clip(
                     -1.0 * (np.arctan2(g[1] - x[1], g[0] - x[0]) - yaw), -1, 1)
+
+                # Only weight obstacle avoidance if we've received information
+                # from our collision avoidance network.
+                if self.collision_state:
+                    # Factor in our collision information into our navigation
+                    # plan.
+                    vel_msg.angular.x = (
+                        self.collision_weight * self.collision_state.action[0] +
+                        (1 - self.collision_weight) * vel_msg.angular.x)
+                    vel_msg.angular.z = (
+                        self.collision_weight * self.collision_state.action[1] +
+                        (1 - self.collision_weight) * vel_msg.angular.z)
 
             # Linear velocity in the up axis.
             vel_msg.linear.z = np.clip(0.2 * np.linalg.norm(g[2] - x[2]), -1, 1)
