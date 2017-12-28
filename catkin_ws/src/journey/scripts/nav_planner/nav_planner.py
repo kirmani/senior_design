@@ -41,7 +41,8 @@ class NavigationPlannerNode:
 
         # Subscribe to collision state.
         self.collision_state_subscriber = rospy.Subscriber(
-            '/ardrone/collision_state', CollisionState, self.on_new_collision)
+            '/ardrone/collision_state', CollisionState,
+            self.on_new_collision_state)
         self.collision_state = None
 
         # How much to consider collision evidence in our nav planner relative
