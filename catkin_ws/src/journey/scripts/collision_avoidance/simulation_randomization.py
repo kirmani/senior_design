@@ -78,6 +78,8 @@ class SimulationRandomizer:
     def __call__(self):
         print("Randomized simulation.")
 
+        self.generate_floorplan()
+
         # Pick randomized parameters.
         hallway_width = (np.random.random() *
                          (self.max_hallway_width - self.min_hallway_width) +
@@ -165,6 +167,17 @@ class SimulationRandomizer:
 
         # Wait a little bit for environment to stabilize.
         rospy.sleep(2.)
+
+    def generate_floorplan(self, rows=10, cols=18):
+        print("Generate floorplan.")
+        floorplan = np.zeros((rows, cols))
+
+        # TODO(armand): Generate floorplan here. Set grid cells that we
+        # consider hallways to 1.
+
+        # Visualize the generated floorplan.
+        print(floorplan)
+        exit()
 
     def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
         position = (tx, ty, ty)
