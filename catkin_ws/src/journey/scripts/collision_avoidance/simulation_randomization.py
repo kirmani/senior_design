@@ -77,7 +77,9 @@ class SimulationRandomizer:
 
     def __call__(self):
         print("Randomized simulation.")
+
         twoD_floorplan = self.generate_floorplan() #TODO for testing only
+
         # Pick randomized parameters.
         hallway_width = (np.random.random() *
                          (self.max_hallway_width - self.min_hallway_width) +
@@ -331,8 +333,6 @@ class SimulationRandomizer:
         print(floorplan)
 
         return floorplan
-
-
 
     def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
         position = (tx, ty, ty)

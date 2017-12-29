@@ -33,7 +33,6 @@ from std_msgs.msg import Empty as EmptyMessage
 from std_msgs.msg import String
 from std_srvs.srv import Empty as EmptyService
 from visualization_msgs.msg import Marker
-#from tum_ardrone.msg import filter_state
 from ddpg import DeepDeterministicPolicyGradients
 from environment import Environment
 from multiplicative_integration_lstm import MultiplicativeIntegrationLSTMCell
