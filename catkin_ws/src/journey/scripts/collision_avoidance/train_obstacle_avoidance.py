@@ -343,23 +343,24 @@ class DeepDronePlanner:
         vel_msg.angular.z = control[1]
         self.velocity_publisher.publish(vel_msg)
 
+        # Debug.
+        self.visualize_state_and_action(state, action)
+
         # Wait.
         self.rate.sleep()
 
-        next_state = self.get_current_state()
+        return self.get_current_state()
 
-        # DEBUG.
-        # for i in range(self.sequence_length):
-        #     plt.subplot(2, self.sequence_length, i + 1)
-        #     plt.imshow(state[:, :, i], cmap="gray")
-        #     plt.title('state_%d' % i)
-        #     plt.subplot(2, self.sequence_length, i + self.sequence_length + 1)
-        #     plt.imshow(next_state[:, :, i], cmap="gray")
-        #     plt.title('next_state_%d' % i)
-        # plt.show()
-        # exit()
-
-        return next_state
+    def visualize_state_action(self, state, action):
+        for i in reversed(range(state.shape[2])):
+            plt.subplot(1, state.shape[2], i + 1)
+            plt.imshow(state[:, :, i], cmap="gray")
+            if i > 0:
+                plt.title('Frame at t - %d' % i)
+            else:
+                plt.title('Frame at t')
+        plt.show()
+        exit()
 
     def reward(self, state, action):
         metric = self.control_to_metric(self.action_to_control(action))
