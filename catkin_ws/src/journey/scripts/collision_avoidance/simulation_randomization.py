@@ -71,14 +71,12 @@ class SimulationRandomizer:
         self.num_boxes = 0
         # Publish model state.
         self.model_state_publisher = rospy.Publisher(
-            '/gazebo/set_model_state', ModelState, queue_size=10)
+            '/gazebo/set_model_state', ModelState, queue_size=20) #TODO changed queue size from 10 as a test
 
         print("Initialized simulation randomizer.")
 
     def __call__(self):
         print("Randomized simulation.")
-
-        twoD_floorplan = self.generate_floorplan() #TODO for testing only
 
         # Pick randomized parameters.
         hallway_width = (np.random.random() *
@@ -95,120 +93,120 @@ class SimulationRandomizer:
         quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw
                          - self.max_quadrotor_start_yaw) * np.pi / 180.0
 
-        #randomized params for pillars
-#        pillar_height = wall_height
-#        if (hallway_width - self.quadrotor_width * 1.5) / 2 > 1:
-#                pillar_max_rad = 1
-#        else:
-#                pillar_max_rad = hallway_width - self.quadrotor_width * 1.5) / 2
-        
+        floorplan_2d, rows, cols = self.generate_floorplan()
+
         #turn 2d floorplan into 3D
-        #TODO later optimize the display of multiple boxes in a row as 1 big box
+        #TODO: optimization - display a couple of big boxes instead of many small boxes 
 
         #delete all objects already there
         rospy.wait_for_service('gazebo/delete_model')
         delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
+        delete_model('floor')
+        delete_model('bottom_border')
+        delete_model('top_border')
+        delete_model('left_border')
+        delete_model('right_border')
+        delete_model('ceiling')
 
         for i in range(0,self.num_boxes):
                 string = 'box%d' %(i)
                 delete_model(string)
         self.num_boxes = 0
 
-        #turn new floorplan into 3D
-        for row in range(0,10):
-                for col in range(0,18): #TODO need to change these bounds to rows and cols that were used in randomizer 
-                        if(twoD_floorplan[row,col] == 2):
+        #turn new floorplan into 3D, left corner starts at 0,0
+        for row in range(1,rows-1):
+                for col in range(1,cols-1):
+                        if(floorplan_2d[row,col] == 0):
                                 self.spawn_box(model_name='box%d' % (self.num_boxes),
-                                               tx= hallway_width*row,
-                                               ty= hallway_width*col,
+                                               tx= hallway_width*col+hallway_width/2,
+                                               ty= hallway_width*row+hallway_width/2,
                                                tz= wall_height/2,
                                                sx= hallway_width,
                                                sy= hallway_width,
                                                sz= wall_height, 
                                                material=random.choice(MATERIALS))
                                 self.num_boxes += 1
-        exit() #TODO remove this exit
+        #bottom border
+        self.spawn_box(model_name='bottom_border',
+                       tx= hallway_width*cols/2,
+                       ty= hallway_width/2,
+                       tz= wall_height/2,
+                       sx= hallway_width*cols,
+                       sy= hallway_width,
+                       sz= wall_height, 
+                       material=random.choice(MATERIALS))
+        #top border
+        self.spawn_box(model_name='top_border',
+                       tx= hallway_width*cols/2,
+                       ty= hallway_width*rows - hallway_width/2,
+                       tz= wall_height/2,
+                       sx= hallway_width*cols,
+                       sy= hallway_width,
+                       sz= wall_height, 
+                       material=random.choice(MATERIALS))
 
+        #left border
+        self.spawn_box(model_name='left_border',
+                       tx= hallway_width/2,
+                       ty= hallway_width*rows/2,
+                       tz= wall_height/2,
+                       sx= hallway_width,
+                       sy= hallway_width*(rows-2),
+                       sz= wall_height, 
+                       material=random.choice(MATERIALS))
 
-        # Delete models.
-#        rospy.wait_for_service('gazebo/delete_model')
-#        delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
-#        delete_model('left_wall')
-#        delete_model('right_wall')
-#        delete_model('floor')
-#        delete_model('ceiling')
-#        delete_model('deadend_front')
-#        delete_model('deadend_back')
-#        delete_model('pillar')
+        #right border
+        self.spawn_box(model_name='right_border',
+                       tx= hallway_width*cols - hallway_width/2,
+                       ty= hallway_width*rows/2,
+                       tz= wall_height/2,
+                       sx= hallway_width,
+                       sy= hallway_width*(rows-2),
+                       sz= wall_height, 
+                       material=random.choice(MATERIALS))
 
-        # Create left wall.
+        #Create floor
+        self.spawn_box(
+             model_name='floor',
+             tx= hallway_width*float(cols)/2,
+             ty= hallway_width*float(rows)/2,
+             tz= -0.1,
+             sx= hallway_width*cols,
+             sy= hallway_width*rows,
+             sz= 0.2,
+             material=random.choice(MATERIALS))   
+
+        #Create ceiling
 #        self.spawn_box(
-#            model_name='left_wall',
-#            ty=(-(hallway_width + wall_width) / 2),
-#            tz=(wall_height / 2),
-#            sx=wall_length,
-#            sy=wall_width,
-#            sz=wall_height,
-#            material=random.choice(MATERIALS))
+#             model_name='ceiling',
+#             tx= hallway_width*float(cols)/2,
+#             ty= hallway_width*float(rows)/2,
+#             tz=0.1 + wall_height,
+#             sx=hallway_width*cols,
+#             sy=hallway_width*rows,
+#             sz=0.2,
+#             material=random.choice(MATERIALS))
 
-        # Create right wall.
-#        self.spawn_box(
-#            model_name='right_wall',
-#            ty=((hallway_width + wall_width) / 2),
-#            tz=(wall_height / 2),
-#            sx=wall_length,
-#            sy=wall_width,
-#            sz=wall_height,
-#            material=random.choice(MATERIALS))
+        #TODO: choose starting place for drone 
+        #choose safe location for quadrotor to spawn
+        drone_row = np.random.randint(1,rows) 
+        drone_col = np.random.randint(1,cols)        
+        while(floorplan_2d[drone_row,drone_col] != 1):
+                drone_row = np.random.randint(1,rows) 
+                drone_col = np.random.randint(1,cols)
 
-        # Create floor.
-#        self.spawn_box(
-#            model_name='floor',
-#            tz=(-wall_width / 2),
-#            sx=wall_length,
-#            sy=hallway_width,
-#            sz=wall_width,
-#            material=random.choice(MATERIALS))
+        slack = 0.5 #min amount of room on each side  
+        #where offset is from bottom left corner             
+        drone_offsetrow = slack + self.quadrotor_width/2 + np.random.random() * ( (hallway_width - slack*2-self.quadrotor_width) - 0 ) + 0     
+        drone_offsetcol = slack + self.quadrotor_width/2 + np.random.random() * ( (hallway_width - slack*2-self.quadrotor_width) - 0 ) + 0   
 
-        # Create ceiling.
-#        self.spawn_box(
-#            model_name='ceiling',
-#            tz=(wall_height + wall_width / 2),
-#            sx=wall_length,
-#            sy=hallway_width,
-#            sz=wall_width,
-#            material=random.choice(MATERIALS))
 
-        # Create dead-end (front).
-#        self.spawn_box(
-#            model_name='deadend_front',
-#            tx=(wall_length / 2),
-#            tz=(wall_height / 2),
-#            sx=wall_width,
-#            sy=hallway_width,
-#            sz=wall_height,
-#            material=random.choice(MATERIALS))
+        self.spawn_quadrotor(tx = hallway_width*drone_col + drone_offsetcol,
+                             ty = hallway_width*drone_row + drone_offsetrow,
+                             tz = 1.0,
+                             yaw = quadrotor_yaw)
 
-        # Create dead-end (back).
-#        self.spawn_box(
-#            model_name='deadend_back',
-#            tx=(-wall_length / 2),
-#            tz=(wall_height / 2),
-#            sx=wall_width,
-#            sy=hallway_width,
-#            sz=wall_height,
-#            material=random.choice(MATERIALS))
-
-        # Create Cylinder close to end of the room
-#        self.spawn_cylinder(
-#            model_name='pillar',
-#            tx=((-wall_length / 2)+.5),
-#            tz=(wall_height / 2),
-#            radius=.1, #use something fixed for now
-#            length=wall_height,
-#            material=random.choice(MATERIALS))
-
-        self.spawn_quadrotor(ty=quadrotor_ty, yaw=quadrotor_yaw)
+    
 
         # Wait a little bit for environment to stabilize.
         rospy.sleep(2.)
@@ -216,20 +214,15 @@ class SimulationRandomizer:
 
     def generate_floorplan(self, rows=10, cols=18):
         print("Generate floorplan.")
+        #How it works:
+        #For horizontal hallways (same idea for vertical) 
+        #1. Start at one end of the grid, go straight until you hit the other end of the grid or a vertical hallway
+        #2. if you hit another hallway, change your row and keep going in the same direction
+        #3. Do 1 and 2 until you hit the end of the grid
+        #4. Now do same with vertical
+        #5. Handle corner cases
+        #^chose bc it was relatively simple and created more randomization than just starting from a wall and drawing a line until you hit something and repeat
 
-
-        # TODO(armand): Generate floorplan here. Set grid cells that we
-        # consider hallways to 1.
-        
-        ##algorithm (I want the grid to map to real space) TODO: see if generating 10 small boxes is easier than generating 1 big box
-                #maybe 3 way or 4 way hallways are helpful
-                #can end up with hanging hallways, (have to fix that)
-                #hallways should be able to connect to one another (not just from the edge) like a square
-        #Step1
-        #have a chunk, split it into 2 chunks with a horizontal hallway
-        #split each of those chunks into 2 with a vertical hallway
-        #split each of those chunks into 2 with a horizontal hallway
-        #...
 
         #have a bunch of 0's
         floorplan = np.zeros((rows, cols))
@@ -245,9 +238,8 @@ class SimulationRandomizer:
         for x in range(0, rows):
                 floorplan[x,0] = 2
                 floorplan[x, cols-1] = 2
-        #print(floorplan)
-        #exit()
-        row_or_col = np.random.randint(0,1) #define row as 0, col as 1, pick direction of 1st hallway
+
+        row_or_col = np.random.randint(0,2) #define row as 0, col as 1, pick direction of 1st hallway
         ROW = 0
         COL = 1        
         for i in range(0, num_hallways):
@@ -260,23 +252,33 @@ class SimulationRandomizer:
                         else:
                                 x = 1
 
-                        #TODO take into account variable width of the walls
+                        #TODO LATER try to make hallways different sizes from one another
                         #corner case when it can't find a suitable row and does endless loop - added the calls var
                         #MATH CHECKS OUT corner case where hallway it runs into is on the last possible row - changed code to have x += direction at end of loop if floorplan(x,y) == 1
-                        #TODO fix hanging hallways
+                        #probs works, need extensive test - fix hanging hallways
                         #TODO if hallway is on the edge rows, it breaks your hallway sensing scheme to decide if it's ok to put a hallway, look 1 square deeper
-                        rand_num = np.random.randint(1,rows-1) #which row to create hallway
+                        rand_num = np.random.randint(1,rows-1)
                         while(floorplan[rand_num,x] != 2):
+
+                                #find valid row to create hallway, if can't find valid row, stop trying after 10 to avoid infinite loop
                                 rand_num = np.random.randint(1,rows-1) #need to do it again b/c code not super clean
                                 calls = 0
                                 while not ( floorplan[rand_num-1, x] != 1 and floorplan[rand_num, x] != 1 and floorplan[rand_num+1, x] != 1):
                                         rand_num = np.random.randint(1,rows-1) #it's for which row to start on
                                         calls += 1
-                                        if(calls == 10):
+                                        if(calls == 10): #could change so it doesn't call 10x but instead gets 10 numbers and tries them all
                                                 break
                                 if(calls == 10):
                                         print('calls rows == 10')
                                         break
+
+                                #hanging hallway corner case, if hallway is hanging, connect it to the end or another hallway behind it
+                                behind = -direction
+                                while(floorplan[rand_num,x+behind] == 0):
+                                        floorplan[rand_num,x+behind] = 1
+                                        behind -= direction                                                                                                                                
+
+                                #create the hallway
                                 while(floorplan[rand_num,x] == 0): #while we're not at the end of array or at another hallway                                
                                         floorplan[rand_num,x] += 1
                                         x += direction
@@ -295,14 +297,15 @@ class SimulationRandomizer:
                         else:
                                 x = 1
 
-                        #TODO take into account variable width of the walls
-                        # corner case when it can't find a suitable row - added the calls var
+                        #TODO LATER try to make hallways different sizes from one another
+                        #corner case when it can't find a suitable row - added the calls var
                         #MATH CHECKS OUT corner case where hallway it runs into is on the last possible row - changed code to have x += direction at end of loop if floorplan(x,y) == 1
-                        #TODO fix hanging hallways
+                        #probs works, need extensive test - fix hanging hallways
                         #TODO if hallway is on the edge rows, it breaks your hallway sensing scheme to decide if it's ok to put a hallway, look 1 square deeper
                         rand_num = np.random.randint(1,cols-1) #which row to create hallway
                         while(floorplan[x,rand_num] != 2):
                                 rand_num = np.random.randint(1,cols-1) #need to do it again b/c code not super clean
+                                calls = 0;
                                 while not ( floorplan[x,rand_num-1] != 1 and floorplan[x,rand_num] != 1 and floorplan[x,rand_num+1] != 1):
                                         rand_num = np.random.randint(1,cols-1) #it's for which row to start on
                                         calls += 1
@@ -311,6 +314,14 @@ class SimulationRandomizer:
                                 if(calls == 10):
                                         print('calls cols == 10')
                                         break
+
+                                #hanging hallway corner case, if hallway is hanging, connect it to the end or another hallway behind it
+                                behind = -direction
+                                while(floorplan[x+behind,rand_num] == 0):
+                                        floorplan[x+behind,rand_num] = 1
+                                        behind -= direction   
+                                
+                                #create the hallway
                                 while(floorplan[x,rand_num] == 0): #while we're not at the end of array or at another hallway                                
                                         floorplan[x,rand_num] += 1
                                         x += direction
@@ -319,23 +330,30 @@ class SimulationRandomizer:
                         row_or_col = ROW
 
         #add walls on the outside of the hallways
-        print(floorplan)
-        print(' ')
-        print(' ')
-        for row in range(1,rows-1):
-                for col in range(1,cols-1):
-                        if(floorplan[row,col] == 0):
-                                if(floorplan[row+1,col] == 1 or floorplan[row-1,col] == 1 or floorplan[row,col+1] == 1 or floorplan[row,col-1] == 1): #if adjacent to a 1
-                                        floorplan[row,col] = 2
+        for x in range(0, cols-1):
+                floorplan[0,x] = 0
+                floorplan[rows-1,x] = 0
+
+#        for x in range(0, rows):
+#                floorplan[x,0] = 0
+#                floorplan[x, cols-1] = 0
+
+# Has the potential to reduce the number of boxes displayed (which is a plus b/c they take much time to display), greater returns with a larger array (need to bring back 2's)       
+#        for row in range(1,rows-1):
+#                for col in range(1,cols-1):
+#                        if(floorplan[row,col] == 0):
+#                                floorplan[row,col] = 2
+#                                if(floorplan[row+1,col] == 1 or floorplan[row-1,col] == 1 or floorplan[row,col+1] == 1 or floorplan[row,col-1] == 1): #if adjacent to a 1
+#                                        floorplan[row,col] = 2
 
 
         # Visualize the generated floorplan.
         print(floorplan)
 
-        return floorplan
+        return floorplan, rows, cols
 
     def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
-        position = (tx, ty, ty)
+        position = (tx, ty, tz)
         quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
 
         reset_pose = Pose()
