@@ -35,6 +35,9 @@ sudo apt-get -y install freeglut3-dev
 sudo apt-get -y install liblapack-dev
 sudo apt-get -y install libopenblas-dev
 
+# Upgrade to Gazebo 7.
+sudo apt-get -y purge gazebo*
+sudo apt-get -y install ros-indigo-gazebo7-ros-pkgs ros-indigo-gazebo7-ros-control
 
 # Build catkin workspace.
 cd ~/catkin_ws
