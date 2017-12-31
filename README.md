@@ -52,13 +52,32 @@ catkin
 roslaunch journey train_obstacle_avoidance.py
 ```
 
-### Sending navigation goals.
+### Sending navigation goals in simulation.
 
 To run the simulation, open a terminal, and run the following commands:
 
 ```
 catkin
 roslaunch journey journey_simulator.launch
+```
+
+To set a navigation goal with some delta x, delta y, at a fixed altitude z,
+just open a new terminal window and run the follow:
+
+```
+catkin
+ardrone_goal x y z
+```
+
+where x, y, and z are in meters.
+
+### Sending navigation goals on a real drone.
+
+To run the simulation, open a terminal, and run the following commands:
+
+```
+catkin
+roslaunch journey journey.launch
 ```
 
 To set a navigation goal with some delta x, delta y, at a fixed altitude z,
