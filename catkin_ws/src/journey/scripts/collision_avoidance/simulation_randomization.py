@@ -15,9 +15,11 @@ If the model sees enough simulated variation, the real world may look just like
 the next simulator.
 """
 import argparse
+import matplotlib.pyplot as plt
 import numpy as np
 import rospy
 import random
+from scipy import ndimage
 import sys
 import traceback
 import time
@@ -68,7 +70,7 @@ class SimulationRandomizer:
         self.wall_width = 0.1
         self.wall_length = 100.0
         self.quadrotor_width = 0.5
-        self.max_quadrotor_start_yaw = 45  # degrees
+        self.max_quadrotor_start_yaw = 180  # degrees
         self.num_boxes = 0
 
         # Publish model state.
@@ -111,11 +113,15 @@ class SimulationRandomizer:
         quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw
                          - self.max_quadrotor_start_yaw) * np.pi / 180.0
 
-        floorplan_2d, rows, cols = self.generate_floorplan()
+        floorplan_2d = self.generate_floorplan()
+        rows = floorplan_2d.shape[0]
+        cols = floorplan_2d.shape[1]
+
+        # Extract bounding boxes from connected components.
+        (labeled, _) = ndimage.label(floorplan_2d)
+        boxes = ndimage.find_objects(labeled)
 
         # Create a 3D world that corresponds to our 2D floorplan.
-        # TODO(armandb): Display a couple of big boxes instead of many small
-        #                boxes as an optimization.
 
         # Delete existing objects.
         self.delete_model('floor')
@@ -131,28 +137,28 @@ class SimulationRandomizer:
 
         # Transform our floorplan into 3D boxes.
         # Left corner starts at (0, 0).
-        for row in range(1, rows - 1):
-            for col in range(1, cols - 1):
-                if (floorplan_2d[row, col] == 0):
-                    self.spawn_box(
-                        model_name='box%d' % (self.num_boxes),
-                        tx=hallway_width * col + hallway_width / 2,
-                        ty=hallway_width * row + hallway_width / 2,
-                        tz=wall_height / 2,
-                        sx=hallway_width,
-                        sy=hallway_width,
-                        sz=wall_height,
-                        material=random.choice(MATERIALS))
-                    self.num_boxes += 1
+        for box in boxes:
+            start = [x.start for x in box]
+            size = [(x.stop - x.start) for x in box]
+            self.spawn_box(
+                model_name='box%d' % (self.num_boxes),
+                tx=hallway_width * start[1] + (hallway_width * size[1]) / 2,
+                ty=hallway_width * start[0] + (hallway_width * size[0]) / 2,
+                tz=wall_height / 2,
+                sx=hallway_width * size[1],
+                sy=hallway_width * size[0],
+                sz=wall_height,
+                material=random.choice(MATERIALS))
+            self.num_boxes += 1
 
         # Bottom border.
         self.spawn_box(
             model_name='bottom_border',
             tx=hallway_width * cols / 2,
-            ty=hallway_width / 2,
+            ty=-0.1,
             tz=wall_height / 2,
             sx=hallway_width * cols,
-            sy=hallway_width,
+            sy=0.2,
             sz=wall_height,
             material=random.choice(MATERIALS))
 
@@ -160,32 +166,32 @@ class SimulationRandomizer:
         self.spawn_box(
             model_name='top_border',
             tx=hallway_width * cols / 2,
-            ty=hallway_width * rows - hallway_width / 2,
+            ty=hallway_width * rows + 0.1,
             tz=wall_height / 2,
             sx=hallway_width * cols,
-            sy=hallway_width,
+            sy=0.2,
             sz=wall_height,
             material=random.choice(MATERIALS))
 
         # Left border.
         self.spawn_box(
             model_name='left_border',
-            tx=hallway_width / 2,
+            tx=-0.1,
             ty=hallway_width * rows / 2,
             tz=wall_height / 2,
-            sx=hallway_width,
-            sy=hallway_width * (rows - 2),
+            sx=0.2,
+            sy=hallway_width * rows,
             sz=wall_height,
             material=random.choice(MATERIALS))
 
         # Right border.
         self.spawn_box(
             model_name='right_border',
-            tx=hallway_width * cols - hallway_width / 2,
+            tx=hallway_width * cols + 0.1,
             ty=hallway_width * rows / 2,
             tz=wall_height / 2,
-            sx=hallway_width,
-            sy=hallway_width * (rows - 2),
+            sx=0.2,
+            sy=hallway_width * rows,
             sz=wall_height,
             material=random.choice(MATERIALS))
 
@@ -205,18 +211,15 @@ class SimulationRandomizer:
             model_name='ceiling',
             tx=hallway_width * float(cols) / 2,
             ty=hallway_width * float(rows) / 2,
-            tz=0.1 + wall_height,
+            tz=wall_height + 0.1,
             sx=hallway_width * cols,
             sy=hallway_width * rows,
             sz=0.2,
             material=random.choice(MATERIALS))
 
         # Choose safe location for quadrotor to spawn.
-        drone_row = np.random.randint(1, rows)
-        drone_col = np.random.randint(1, cols)
-        while (floorplan_2d[drone_row, drone_col] != 1):
-            drone_row = np.random.randint(1, rows)
-            drone_col = np.random.randint(1, cols)
+        hallways = np.transpose(np.where(floorplan_2d == 0))
+        (drone_row, drone_col) = random.choice([(x[0], x[1]) for x in hallways])
 
         # Min amount of room on each side.
         slack = 0.5
@@ -258,6 +261,8 @@ class SimulationRandomizer:
         decides.
         """
         print("Generate floorplan.")
+        rows += 2
+        cols += 2
         floorplan = np.zeros((rows, cols))
 
         # Set the border all to 2's, so we know when to stop on our hallway
@@ -413,10 +418,12 @@ class SimulationRandomizer:
             floorplan[0, x] = 0
             floorplan[rows - 1, x] = 0
 
-        # Visualize the generated floorplan.
-        print(floorplan)
+        # Set walls to 1 and hallways to 0. Shape our floor plan back to our
+        # desired grid size.
+        floorplan[floorplan > 0] = 1
+        floorplan = 1 - floorplan[1:-1, 1:-1]
 
-        return floorplan, rows, cols
+        return floorplan
 
     def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
         position = (tx, ty, tz)
