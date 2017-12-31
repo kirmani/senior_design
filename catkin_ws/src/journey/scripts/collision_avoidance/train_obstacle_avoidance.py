@@ -99,6 +99,17 @@ class DeepDronePlanner:
         # Simulation reset randomization.
         self.randomize_simulation = SimulationRandomizer()
 
+        # Unpause physics.
+        rospy.wait_for_service('gazebo/unpause_physics')
+        self.unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics',
+                                                  EmptyService)
+
+        # Pause physics.
+        rospy.wait_for_service('gazebo/pause_physics')
+        self.pause_physics = rospy.ServiceProxy('gazebo/pause_physics',
+                                                EmptyService)
+        self.pause_physics()
+
         # Set up policy search network.
         self.action_dim = 2
         scale = 0.1
@@ -321,17 +332,16 @@ class DeepDronePlanner:
         # Randomize simulation environment.
         self.randomize_simulation()
 
-        # Take-off.
-        self.takeoff_publisher.publish(EmptyMessage())
-        rospy.sleep(2.)
-
         # Clear our frame buffer.
         self.frame_buffer.clear()
-        state = self.get_current_state()
 
         # Reset collision state.
         self.collided = False
-        return state
+
+        # Take-off.
+        self.unpause_physics()
+        self.takeoff_publisher.publish(EmptyMessage())
+        return self.get_current_state()
 
     def step(self, state, action):
         control = self.action_to_control(action)
@@ -380,13 +390,7 @@ class DeepDronePlanner:
 
     def terminal(self, state, action):
         if self.collided:
-            vel_msg = Twist()
-            vel_msg.linear.x = -self.backup_velocity
-            vel_msg.linear.y = 0
-            vel_msg.linear.z = 0
-            vel_msg.angular.z = 0
-            self.velocity_publisher.publish(vel_msg)
-            rospy.sleep(2.0)
+            self.pause_physics()
             self.last_collision_pose = self.pose
             self.velocity_publisher.publish(Twist())
         return self.collided
@@ -429,7 +433,6 @@ class DeepDronePlanner:
         self.ddpg.load_model(model_dir)
 
         # Take-off.
-        rospy.sleep(1.)
         self.takeoff_publisher.publish(EmptyMessage())
 
         # Clear our frame buffer.
