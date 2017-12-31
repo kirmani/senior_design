@@ -26,6 +26,7 @@ from gazebo_msgs.srv import DeleteModel
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SpawnModel
 from geometry_msgs.msg import Pose
+from std_srvs.srv import Empty
 
 MATERIALS = [
     'Gazebo/White',
@@ -74,10 +75,26 @@ class SimulationRandomizer:
         self.model_state_publisher = rospy.Publisher(
             '/gazebo/set_model_state', ModelState, queue_size=10)
 
+        # Delete models.
+        rospy.wait_for_service('gazebo/delete_model')
+        self.delete_model = rospy.ServiceProxy('gazebo/delete_model',
+                                               DeleteModel)
+
+        # Pause physics.
+        rospy.wait_for_service('gazebo/pause_physics')
+        self.pause_physics = rospy.ServiceProxy('gazebo/pause_physics', Empty)
+
+        # Unpause physics.
+        rospy.wait_for_service('gazebo/unpause_physics')
+        self.unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics',
+                                                  Empty)
+
         print("Initialized simulation randomizer.")
 
     def __call__(self):
         print("Randomized simulation.")
+
+        self.pause_physics()
 
         # Pick randomized parameters.
         hallway_width = (np.random.random() *
@@ -101,17 +118,15 @@ class SimulationRandomizer:
         #                boxes as an optimization.
 
         # Delete existing objects.
-        rospy.wait_for_service('gazebo/delete_model')
-        delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
-        delete_model('floor')
-        delete_model('bottom_border')
-        delete_model('top_border')
-        delete_model('left_border')
-        delete_model('right_border')
-        delete_model('ceiling')
+        self.delete_model('floor')
+        self.delete_model('bottom_border')
+        self.delete_model('top_border')
+        self.delete_model('left_border')
+        self.delete_model('right_border')
+        self.delete_model('ceiling')
         for i in range(self.num_boxes):
             string = 'box%d' % i
-            delete_model(string)
+            self.delete_model(string)
         self.num_boxes = 0
 
         # Transform our floorplan into 3D boxes.
@@ -219,8 +234,8 @@ class SimulationRandomizer:
             tz=1.0,
             yaw=quadrotor_yaw)
 
-        # Wait a little bit for environment to stabilize.
-        rospy.sleep(2.)
+        # Unpause physics.
+        self.unpause_physics()
 
     def generate_floorplan(self, rows=10, cols=18, num_hallways=6):
         """
