@@ -204,6 +204,8 @@ class DeepDeterministicPolicyGradients:
                     reward = env.reward(next_state, action)
 
                     # DEBUG.
+                    # self.critic.predict(
+                    #     np.expand_dims(state, axis=0), action_sequence)
                     # env.visualize(state, action_sequence[0])
 
                     # Add to episode buffer.
@@ -275,8 +277,12 @@ class DeepDeterministicPolicyGradients:
                         b_coll_i[k] = r_batch[k, 0, 0]
                         b_task_i[k] = r_batch[k, 0, 1]
                     else:
+                        # TODO(kirmani): Figure out a less hacky way to do
+                        # velocity-dependent collision cost for
+                        # uncertainty-aware coliision avoidance.
                         b_coll_i[k] = (r_batch[k, 0, 0] + np.inner(
-                            target_q[k, :self.horizon, 0], time_decay))
+                            target_q[k, :self.horizon, 0] *
+                            (a_batch[k, :, 0] + 1.0) / 2.0, time_decay))
                         b_task_i[k] = (r_batch[k, 0, 1] + np.inner(
                             target_q[k, :self.horizon, 1], time_decay))
 
@@ -406,9 +412,11 @@ class CriticNetwork:
                  horizon,
                  num_actor_vars,
                  collision_weight=0.01,
+                 uncertainty_weight=1.0,
                  tau=0.001,
                  learning_rate=0.001):
         self.sess = sess
+        self.uncertainty_weight = uncertainty_weight
 
         # Critic network.
         (self.inputs, self.actions, self.y_coll_out, self.b_coll_out,
@@ -487,40 +495,66 @@ class CriticNetwork:
         return (loss, collision_model_loss, task_model_loss,
                 expected_collision_reward, expected_task_reward)
 
-    def predict(self, inputs, actions):
+    def predict(self, inputs, actions, bootstraps=50):
+        collision_probability = []
+        for b in range(bootstraps):
+            collision_probability.append(
+                self.sess.run(
+                    self.y_coll_out,
+                    feed_dict={self.inputs: inputs,
+                               self.actions: actions}))
+        collision_samples = np.stack(collision_probability, axis=-1)
+        collision_samples = 1.0 / (1.0 + np.exp(-collision_samples))
+        collision_expectation = np.mean(collision_samples, axis=-1)
+        collision_std = np.std(collision_samples, axis=-1)
+        print(collision_expectation)  # DEBUG: Print expectation.
+        print(collision_std)  # DEBUG: Print uncertainty.
+        y_coll_out = (
+            collision_expectation - self.uncertainty_weight * collision_std)
+        y_coll_out = np.clip(y_coll_out, 0, 1)
+
         preds = self.sess.run(
-            [
-                self.y_coll_out, self.b_coll_out, self.y_task_out,
-                self.b_task_out
-            ],
+            [self.b_coll_out, self.y_task_out, self.b_task_out],
             feed_dict={self.inputs: inputs,
                        self.actions: actions})
-
-        y_coll_out = np.array(preds[0])
-        y_coll_out = 1.0 / (1.0 + np.exp(-y_coll_out))
-        b_coll_out = np.array(preds[1])
-        y_task_out = np.array(preds[2])
-        b_task_out = np.array(preds[3])
+        b_coll_out = np.array(preds[0])
+        y_task_out = np.array(preds[1])
+        b_task_out = np.array(preds[2])
         coll_preds = np.concatenate([y_coll_out, b_coll_out], axis=1)
         task_preds = np.concatenate([y_task_out, b_task_out], axis=1)
         preds = np.stack([coll_preds, task_preds], axis=-1)
         return preds
 
-    def predict_target(self, inputs, actions):
+    def predict_target(self, inputs, actions, bootstraps=50):
+        collision_probability = []
+        for b in range(bootstraps):
+            collision_probability.append(
+                self.sess.run(
+                    self.target_y_coll_out,
+                    feed_dict={
+                        self.target_inputs: inputs,
+                        self.target_actions: actions
+                    }))
+        collision_samples = np.stack(collision_probability, axis=-1)
+        collision_samples = 1.0 / (1.0 + np.exp(-collision_samples))
+        collision_expectation = np.mean(collision_samples, axis=-1)
+        collision_std = np.std(collision_samples, axis=-1)
+        y_coll_out = (
+            collision_expectation - self.uncertainty_weight * collision_std)
+        y_coll_out = np.clip(y_coll_out, 0, 1)
+
         preds = self.sess.run(
             [
-                self.target_y_coll_out, self.target_b_coll_out,
-                self.target_y_task_out, self.target_b_task_out
+                self.target_b_coll_out, self.target_y_task_out,
+                self.target_b_task_out
             ],
             feed_dict={
                 self.target_inputs: inputs,
                 self.target_actions: actions
             })
-        y_coll_out = np.array(preds[0])
-        y_coll_out = 1.0 / (1.0 + np.exp(-y_coll_out))
-        b_coll_out = np.array(preds[1])
-        y_task_out = np.array(preds[2])
-        b_task_out = np.array(preds[3])
+        b_coll_out = np.array(preds[0])
+        y_task_out = np.array(preds[1])
+        b_task_out = np.array(preds[2])
         coll_preds = np.concatenate([y_coll_out, b_coll_out], axis=1)
         task_preds = np.concatenate([y_task_out, b_task_out], axis=1)
         preds = np.stack([coll_preds, task_preds], axis=-1)

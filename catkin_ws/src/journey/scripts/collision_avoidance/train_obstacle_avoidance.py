@@ -99,17 +99,6 @@ class DeepDronePlanner:
         # Simulation reset randomization.
         self.randomize_simulation = SimulationRandomizer()
 
-        # Unpause physics.
-        rospy.wait_for_service('gazebo/unpause_physics')
-        self.unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics',
-                                                  EmptyService)
-
-        # Pause physics.
-        rospy.wait_for_service('gazebo/pause_physics')
-        self.pause_physics = rospy.ServiceProxy('gazebo/pause_physics',
-                                                EmptyService)
-        self.pause_physics()
-
         # Set up policy search network.
         self.action_dim = 2
         scale = 0.1
@@ -261,6 +250,7 @@ class DeepDronePlanner:
         y_coll = tf.contrib.layers.batch_norm(y_coll)
         y_coll = tf.nn.relu(y_coll)
         y_coll = tf.reshape(y_coll, [-1, 16 * self.horizon])
+        y_coll = tf.nn.dropout(y_coll, 0.2)
         y_coll_weights = tf.Variable(
             tf.random_uniform([16 * self.horizon, self.horizon], -3e-4, 3e-4))
         y_coll_bias = tf.Variable(
@@ -463,6 +453,19 @@ class DeepDronePlanner:
             self.rate.sleep()
 
             state = self.get_current_state()
+
+    def pause_physics(self):
+        # Pause physics.
+        rospy.wait_for_service('gazebo/pause_physics')
+        pause_physics = rospy.ServiceProxy('gazebo/pause_physics', EmptyService)
+        pause_physics()
+
+    def unpause_physics(self):
+        # Unpause physics.
+        rospy.wait_for_service('gazebo/unpause_physics')
+        unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics',
+                                             EmptyService)
+        unpause_physics()
 
 
 def main(args):
