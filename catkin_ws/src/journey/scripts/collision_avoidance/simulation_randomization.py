@@ -177,7 +177,6 @@ class SimulationRandomizer:
 
         # Visualize the generated floorplan.
         print(floorplan)
-        exit()
 
         return floorplan
 

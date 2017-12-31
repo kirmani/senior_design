@@ -7,11 +7,12 @@
 # Distributed under terms of the MIT license.
 class Environment:
 
-    def __init__(self, reset, step, reward, terminal):
+    def __init__(self, reset, step, reward, terminal, visualize=None):
         self.reset = reset
         self.step = step
         self.reward = reward
         self.terminal = terminal
+        self.visualize = visualize
 
     def reset(self):
         return self.reset()
@@ -24,3 +25,7 @@ class Environment:
 
     def terminal(self, state, action):
         return self.terminal(state, action)
+
+    def visualize(self, state, action):
+        if self.visualize:
+            self.visualize(state, action)

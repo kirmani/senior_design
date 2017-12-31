@@ -343,22 +343,32 @@ class DeepDronePlanner:
         vel_msg.angular.z = control[1]
         self.velocity_publisher.publish(vel_msg)
 
-        # Debug.
-        self.visualize_state_and_action(state, action)
-
         # Wait.
         self.rate.sleep()
 
         return self.get_current_state()
 
-    def visualize_state_action(self, state, action):
-        for i in reversed(range(state.shape[2])):
-            plt.subplot(1, state.shape[2], i + 1)
+    def visualize(self, state, actions):
+        for i in range(state.shape[2]):
+            plt.subplot(1, state.shape[2] + 1, state.shape[2] - i + 1)
             plt.imshow(state[:, :, i], cmap="gray")
             if i > 0:
                 plt.title('Frame at t - %d' % i)
             else:
                 plt.title('Frame at t')
+
+        x = np.zeros(actions.shape[0])
+        y = np.zeros(actions.shape[0])
+        forward = np.zeros(actions.shape[0])
+        for t in range(actions.shape[0]):
+            (linear, angular
+            ) = self.control_to_metric(self.action_to_control(actions[t]))
+            forward[t + 1] = forward[t] + angular
+            x[t + 1] = x[t] + np.cos(forward[t + 1]) * linear
+            y[t + 1] = y[t] + np.sin(forward[t + 1]) * linear
+
+        plt.subplot(1, state.shape[2] + 1, state.shape[2] + 1)
+        plt.plot(y, x, 'k-', lw=2)
         plt.show()
         exit()
 
@@ -394,7 +404,12 @@ class DeepDronePlanner:
         return metric
 
     def train(self, model_dir=None):
-        env = Environment(self.reset, self.step, self.reward, self.terminal)
+        env = Environment(
+            self.reset,
+            self.step,
+            self.reward,
+            self.terminal,
+            visualize=self.visualize)
         if model_dir != None:
             model_dir = os.path.join(os.getcwd(), model_dir)
             print("model_dir is %s" % model_dir)
