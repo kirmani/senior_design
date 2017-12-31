@@ -15,7 +15,7 @@ git config core.hooksPath .githooks
 git submodule update --init --recursive
 
 # Create a journey workspace.
-mkdir ~/journey_ws
+mkdir -p ~/journey_ws/src
 
 # Install ROS.
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
@@ -45,28 +45,35 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
   # To install this tool and other dependencies for building ROS packages, run:
   sudo apt-get -y install python-rosinstall python-rosinstall-generator python-wstool build-essential
 
-  # Remove Gazebo 2 and install Gazebo 7.
-  sudo apt-get -y purge gazebo2*
+  # Remove Gazebo 2.
+  sudo apt-get -y remove gazebo2*
+
+  # Install Gazebo 7.
+  sudo sh -c 'echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable `lsb_release -cs` main" > /etc/apt/sources.list.d/gazebo-stable.list'
+  wget http://packages.osrfoundation.org/gazebo.key -O - | sudo apt-key add -
+  sudo apt-get update
   sudo apt-get -y install ros-indigo-gazebo7-ros-pkgs ros-indigo-gazebo7-ros-control
 
   # Install ardrone_autonomy.
-  sudo apt-get -y install ros-indigo-ardrone-autonomy
-  # sudo apt-get -y install freeglut3-dev
-  # sudo apt-get -y install liblapack-dev
-  # sudo apt-get -y install libopenblas-dev
+  sudo apt-get -y install ros-indigo-ardrone-autonomy freeglut3-dev liblapack-dev libopenblas-dev
 
   # Link this project to your journey workspace.
-  # unlink ~/journey_ws/src/journey
-  # ln -s $PROECT_DIR ~/journey_ws/src/journey
+  unlink ~/journey_ws/src/journey
+  ln -s $PROJECT_DIR ~/journey_ws/src/journey
 
-  # Add some convenient bash commands.
-  # echo "source ~/journey_ws/src/journey/journey.bash" >> ~/.bashrc
-  # source ~/.bashrc
+  # # Add some convenient bash commands.
+  echo "source ~/journey_ws/src/journey/journey.bash" >> ~/.bashrc
+  bash ~/.bashrc
 
   # Build journey workspace.
-  # cd ~/journey_ws
-  # source /opt/ros/kinetic/setup.bash
-  # catkin_make
+  cd ~/journey_ws
+  catkin init
+  catkin clean --yes
+  cd src
+  wstool update
+  rosdep install tum_ardrone
+  cd ..
+  catkin build
 elif [[ "$OSTYPE" == "darwin"* ]]; then
   # Use homebrew to install additional software.
   brew update
