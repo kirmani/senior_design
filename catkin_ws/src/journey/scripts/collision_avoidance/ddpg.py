@@ -280,9 +280,11 @@ class DeepDeterministicPolicyGradients:
                         # TODO(kirmani): Figure out a less hacky way to do
                         # velocity-dependent collision cost for
                         # uncertainty-aware coliision avoidance.
-                        b_coll_i[k] = (r_batch[k, 0, 0] + np.inner(
-                            target_q[k, :self.horizon, 0] *
-                            (a_batch[k, :, 0] + 1.0) / 2.0, time_decay))
+                        b_coll_i[k] = (
+                            (r_batch[k, 0, 0] *
+                             (a_batch[k, 0, 0] + 1.0) / 2.0) + np.inner(
+                                 target_q[k, :self.horizon, 0] *
+                                 (a_batch[k, :, 0] + 1.0) / 2.0, time_decay))
                         b_task_i[k] = (r_batch[k, 0, 1] + np.inner(
                             target_q[k, :self.horizon, 1], time_decay))
 
