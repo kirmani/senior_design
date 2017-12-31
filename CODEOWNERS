@@ -2,28 +2,20 @@
 # Order is important. The last matching pattern has the most precedence.
 # So if a pull request only touches the highest-level directory, only those
 # owners will be requested to review.
-*                           @kirmani @yursky
-
-# Repository management.
-.githooks/*                 @kirmani
-scripts/*                   @kirmani
+*                                                                   @kirmani
 
 # Catkin workspace.
-catkin_ws/src/journey/*     @patil215
+journey/scripts/collision_avoidance/*                               @patil215
+journey/scripts/collision_avoidance/simulation_randomization.py     @armandb
+journey/scripts/nav_planner/nav_planner.py                          @alioup @jishminor
 
 # Experimental directories
-experimental/armandb/*      @armandb
-experimental/alioup/*       @alioup
-experimental/jishminor/*    @jishminor
-experimental/kirmani/*      @kirmani
-experimental/taylorzhao/*   @taylorzhao
-experimental/yursky/*       @yursky
-
-# Technical breakdown.
-hardware/*                  @armandb
-learning/*                  @kirmani
-navigation/*                @kirmani
-perception/*                @yursky @kirmani
+experimental/armandb/*                                              @armandb
+experimental/alioup/*                                               @alioup
+experimental/jishminor/*                                            @jishminor
+experimental/kirmani/*                                              @kirmani
+experimental/taylorzhao/*                                           @taylorzhao
+experimental/yursky/*                                               @yursky
 
 # Miscellanous book-keeping.
-papers/*                    @alioup @kirmani
+papers/*                                                            @alioup @kirmani
