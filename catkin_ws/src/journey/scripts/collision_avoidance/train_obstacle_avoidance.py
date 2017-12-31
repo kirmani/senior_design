@@ -63,9 +63,9 @@ class DeepDronePlanner:
         rospy.init_node('deep_drone_planner', anonymous=True)
 
         # Inputs.
-        self.depth_subscriber = rospy.Subscriber(
-            '/ardrone/front/depth/image_raw', Image, self.on_new_depth)
-        self.depth_msg = None
+        self.image_subscriber = rospy.Subscriber('/ardrone/front/image_raw',
+                                                 Image, self.on_new_image)
+        self.image_msg = None
 
         # Subscribe to ground truth pose.
         self.ground_truth_subscriber = rospy.Subscriber(
@@ -107,7 +107,7 @@ class DeepDronePlanner:
         self.sequence_length = 4
         self.horizon = 16
         self.frame_buffer = deque(maxlen=self.sequence_length)
-        self.linear_velocity = 1.0
+        self.backup_velocity = 0.5
         self.ddpg = DeepDeterministicPolicyGradients(
             self.create_actor_network,
             self.create_critic_network,
@@ -115,8 +115,8 @@ class DeepDronePlanner:
 
         print("Deep drone planner initialized.")
 
-    def on_new_depth(self, depth):
-        self.depth_msg = depth
+    def on_new_image(self, image):
+        self.image_msg = image
 
     def on_new_contact_data(self, contact):
         # Surprisingly, this works pretty well for collision detection
@@ -130,40 +130,40 @@ class DeepDronePlanner:
         inputs = tf.placeholder(tf.float32,
                                 (None, self.image_height, self.image_width,
                                  self.sequence_length))
-        depth = tf.contrib.layers.conv2d(
+        image = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
             activation_fn=None,
             kernel_size=(8, 8),
             stride=(4, 4),
             weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.batch_norm(depth)
-        depth = tf.nn.relu(depth)
-        depth = tf.contrib.layers.conv2d(
-            depth,
+        image = tf.contrib.layers.batch_norm(image)
+        image = tf.nn.relu(image)
+        image = tf.contrib.layers.conv2d(
+            image,
             num_outputs=32,
             activation_fn=None,
             kernel_size=(4, 4),
             stride=(2, 2),
             weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.batch_norm(depth)
-        depth = tf.nn.relu(depth)
-        depth = tf.contrib.layers.conv2d(
-            depth,
+        image = tf.contrib.layers.batch_norm(image)
+        image = tf.nn.relu(image)
+        image = tf.contrib.layers.conv2d(
+            image,
             num_outputs=32,
             activation_fn=None,
             kernel_size=(3, 3),
             stride=(1, 1),
             weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.batch_norm(depth)
-        depth = tf.nn.relu(depth)
-        depth = tf.contrib.layers.flatten(depth)
-        depth = tf.contrib.layers.fully_connected(
-            depth, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.batch_norm(depth)
-        depth = tf.nn.relu(depth)
-        depth = tf.stack([depth for _ in range(self.horizon)], axis=1)
-        lstm_inputs = depth
+        image = tf.contrib.layers.batch_norm(image)
+        image = tf.nn.relu(image)
+        image = tf.contrib.layers.flatten(image)
+        image = tf.contrib.layers.fully_connected(
+            image, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        image = tf.contrib.layers.batch_norm(image)
+        image = tf.nn.relu(image)
+        image = tf.stack([image for _ in range(self.horizon)], axis=1)
+        lstm_inputs = image
         lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
         lstm_outputs, lstm_states = tf.nn.dynamic_rnn(
             lstm_cell, lstm_inputs, dtype=tf.float32, scope=scope)
@@ -193,38 +193,38 @@ class DeepDronePlanner:
                                  self.sequence_length))
         actions = tf.placeholder(tf.float32, (None, self.horizon,
                                               self.action_dim))
-        depth = tf.contrib.layers.conv2d(
+        image = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
             activation_fn=None,
             kernel_size=(8, 8),
             stride=(4, 4),
             weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.batch_norm(depth)
-        depth = tf.nn.relu(depth)
-        depth = tf.contrib.layers.conv2d(
-            depth,
+        image = tf.contrib.layers.batch_norm(image)
+        image = tf.nn.relu(image)
+        image = tf.contrib.layers.conv2d(
+            image,
             num_outputs=32,
             activation_fn=None,
             kernel_size=(4, 4),
             stride=(2, 2),
             weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.batch_norm(depth)
-        depth = tf.nn.relu(depth)
-        depth = tf.contrib.layers.conv2d(
-            depth,
+        image = tf.contrib.layers.batch_norm(image)
+        image = tf.nn.relu(image)
+        image = tf.contrib.layers.conv2d(
+            image,
             num_outputs=32,
             activation_fn=None,
             kernel_size=(3, 3),
             stride=(1, 1),
             weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.batch_norm(depth)
-        depth = tf.nn.relu(depth)
-        depth = tf.contrib.layers.flatten(depth)
-        depth = tf.contrib.layers.fully_connected(
-            depth, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        depth = tf.contrib.layers.batch_norm(depth)
-        depth = tf.nn.relu(depth)
+        image = tf.contrib.layers.batch_norm(image)
+        image = tf.nn.relu(image)
+        image = tf.contrib.layers.flatten(image)
+        image = tf.contrib.layers.fully_connected(
+            image, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
+        image = tf.contrib.layers.batch_norm(image)
+        image = tf.nn.relu(image)
 
         act = tf.contrib.layers.fully_connected(
             actions, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
@@ -235,8 +235,8 @@ class DeepDronePlanner:
         act = tf.contrib.layers.batch_norm(act)
         act = tf.nn.relu(act)
 
-        depth = tf.stack([depth for _ in range(self.horizon)], axis=1)
-        lstm_inputs = tf.concat([depth, act], axis=-1)
+        image = tf.stack([image for _ in range(self.horizon)], axis=1)
+        lstm_inputs = tf.concat([image, act], axis=-1)
         lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
         lstm_outputs, lstm_states = tf.nn.dynamic_rnn(
             lstm_cell, lstm_inputs, dtype=tf.float32, scope=scope)
@@ -300,19 +300,11 @@ class DeepDronePlanner:
         return inputs, actions, y_coll, b_coll, y_task, b_task
 
     def get_current_frame(self):
-        depth_data = ros_numpy.numpify(self.depth_msg)
-        depth_data[np.isnan(depth_data)] = 0.0
-        # print(depth_data.shape)
-        # r, g, b = depth_data[:, :, 0], depth_data[:, :, 1], depth_data[:, :, 2]
-        # depth_data = 0.2989 * r + 0.5870 * g + 0.1140 * b
-        # plt.imshow(depth_data, cmap="gray")
-        # plt.show()
-        # exit()
-
-        depth = scipy.misc.imresize(
-            depth_data, [self.image_height, self.image_width], mode='F')
-        frame = depth
-        return frame
+        image_data = ros_numpy.numpify(self.image_msg)
+        r, g, b = image_data[:, :, 0], image_data[:, :, 1], image_data[:, :, 2]
+        greyscale = 0.2989 * r + 0.5870 * g + 0.1140 * b
+        return scipy.misc.imresize(
+            greyscale, [self.image_height, self.image_width], mode='F')
 
     def get_current_state(self):
         frame = self.get_current_frame()
@@ -321,9 +313,7 @@ class DeepDronePlanner:
             self.rate.sleep()
             frame = self.get_current_frame()
             self.frame_buffer.append(frame)
-        depth = np.stack(list(self.frame_buffer), axis=-1)
-        state = depth
-        return state
+        return np.stack(list(self.frame_buffer), axis=-1)
 
     def reset(self):
         self.velocity_publisher.publish(Twist())
@@ -356,20 +346,31 @@ class DeepDronePlanner:
         # Wait.
         self.rate.sleep()
 
-        next_state = self.get_current_state()
+        return self.get_current_state()
 
-        # DEBUG.
-        # for i in range(4):
-        #     plt.subplot(2, 4, i + 1)
-        #     plt.imshow(state[:, :, i], cmap="gray")
-        #     plt.title('state_%d' % i)
-        #     plt.subplot(2, 4, i + 5)
-        #     plt.imshow(next_state[:, :, i], cmap="gray")
-        #     plt.title('next_state_%d' % i)
-        # plt.show()
-        # exit()
+    def visualize(self, state, actions):
+        for i in range(state.shape[2]):
+            plt.subplot(1, state.shape[2] + 1, state.shape[2] - i)
+            plt.imshow(state[:, :, i], cmap="gray")
+            if i > 0:
+                plt.title('Frame at t - %d' % i)
+            else:
+                plt.title('Frame at t')
 
-        return next_state
+        x = np.zeros(actions.shape[0] + 1)
+        y = np.zeros(actions.shape[0] + 1)
+        forward = np.zeros(actions.shape[0] + 1)
+        for t in range(actions.shape[0]):
+            (linear, angular
+            ) = self.control_to_metric(self.action_to_control(actions[t]))
+            forward[t + 1] = forward[t] + angular
+            x[t + 1] = x[t] + np.cos(forward[t + 1]) * linear
+            y[t + 1] = y[t] + np.sin(forward[t + 1]) * linear
+
+        plt.subplot(1, state.shape[2] + 1, state.shape[2] + 1)
+        plt.plot(y, x, 'k-', lw=2)
+        plt.show()
+        exit()
 
     def reward(self, state, action):
         metric = self.control_to_metric(self.action_to_control(action))
@@ -380,7 +381,7 @@ class DeepDronePlanner:
     def terminal(self, state, action):
         if self.collided:
             vel_msg = Twist()
-            vel_msg.linear.x = -self.linear_velocity
+            vel_msg.linear.x = -self.backup_velocity
             vel_msg.linear.y = 0
             vel_msg.linear.z = 0
             vel_msg.angular.z = 0
@@ -403,7 +404,12 @@ class DeepDronePlanner:
         return metric
 
     def train(self, model_dir=None):
-        env = Environment(self.reset, self.step, self.reward, self.terminal)
+        env = Environment(
+            self.reset,
+            self.step,
+            self.reward,
+            self.terminal,
+            visualize=self.visualize)
         if model_dir != None:
             model_dir = os.path.join(os.getcwd(), model_dir)
             print("model_dir is %s" % model_dir)
