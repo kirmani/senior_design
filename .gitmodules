@@ -1,10 +1,10 @@
-[submodule "catkin_ws/src/tum_ardrone"]
-	path = catkin_ws/src/tum_ardrone
-  url = https://github.com/tum-vision/tum_ardrone.git
+[submodule "include/tum_ardrone"]
+  path = include/tum_ardrone
+  url = https://github.com/tum-vision/tum_ardrone
   branch = indigo-devel
-[submodule "catkin_ws/src/ros_numpy"]
-	path = catkin_ws/src/ros_numpy
-	url = https://github.com/eric-wieser/ros_numpy.git
-[submodule "catkin_ws/src/ardrone_simulator_gazebo7"]
-	path = catkin_ws/src/ardrone_simulator_gazebo7
-	url = https://github.com/iolyp/ardrone_simulator_gazebo7
+[submodule "include/ros_numpy"]
+  path = include/ros_numpy
+  url = https://github.com/eric-wieser/ros_numpy.git
+[submodule "include/ardrone_simulator_gazebo7"]
+  path = include/ardrone_simulator_gazebo7
+  url = https://github.com/iolyp/ardrone_simulator_gazebo7

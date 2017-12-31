@@ -16,6 +16,7 @@ from tensorflow.python.ops import rnn_cell_impl
 from tensorflow.python.ops import variable_scope as vs
 from tensorflow.python.util import nest
 
+
 class MultiplicativeIntegrationLSTMCell(rnn_cell_impl.RNNCell):
     """Multiplicative Integration LSTM(Long short-term memory cell)
   recurrent network cell.
