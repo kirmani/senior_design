@@ -77,21 +77,25 @@ class SimulationRandomizer:
         self.model_state_publisher = rospy.Publisher(
             '/gazebo/set_model_state', ModelState, queue_size=10)
 
+        print("Initialized simulation randomizer.")
+
+    def delete_model(self, model):
         # Delete models.
         rospy.wait_for_service('gazebo/delete_model')
-        self.delete_model = rospy.ServiceProxy('gazebo/delete_model',
-                                               DeleteModel)
+        delete_model = rospy.ServiceProxy('gazebo/delete_model', DeleteModel)
+        delete_model(model)
 
+    def pause_physics(self):
         # Pause physics.
         rospy.wait_for_service('gazebo/pause_physics')
-        self.pause_physics = rospy.ServiceProxy('gazebo/pause_physics', Empty)
+        pause_physics = rospy.ServiceProxy('gazebo/pause_physics', Empty)
+        pause_physics()
 
+    def unpause_physics(self):
         # Unpause physics.
         rospy.wait_for_service('gazebo/unpause_physics')
-        self.unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics',
-                                                  Empty)
-
-        print("Initialized simulation randomizer.")
+        unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics', Empty)
+        unpause_physics()
 
     def __call__(self):
         print("Randomized simulation.")
