@@ -12,11 +12,6 @@ xmlns:xacro="http://ros.org/wiki/xacro"
   <!-- Main quadrotor link -->
   <xacro:macro name="quadrotor_base_macro" params="sim_name">
     <link name="base_link">
-      <inertial>
-        <mass value="1.477" />
-        <origin xyz="0 0 0" />
-        <inertia ixx="0.01152" ixy="0.0" ixz="0.0" iyy="0.01152" iyz="0.0" izz="0.0218" />
-      </inertial>
 
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0" />
@@ -25,7 +20,7 @@ xmlns:xacro="http://ros.org/wiki/xacro"
         </geometry>
       </visual>
 
-      <collision name="quadrotor_base_collision">
+      <collision>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
           <mesh filename="package://cvg_sim_gazebo/meshes/quadrotor/quadrotor_4.stl"/>
@@ -34,6 +29,18 @@ xmlns:xacro="http://ros.org/wiki/xacro"
 
     </link>
 
+    <link name="dummy_link">
+      <inertial>
+        <mass value="1.477" />
+        <origin xyz="0 0 0" />
+        <inertia ixx="0.01152" ixy="0.0" ixz="0.0" iyy="0.01152" iyz="0.0" izz="0.0218" />
+      </inertial>
+    </link>
+
+    <joint name="dummy_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="dummy_link"/>
+    </joint>
 
     <gazebo reference="base_link">
       <turnGravityOff>false</turnGravityOff>
@@ -47,7 +54,7 @@ xmlns:xacro="http://ros.org/wiki/xacro"
         <plugin name="bumper_plugin" filename="libgazebo_ros_bumper.so">
           <bumperTopicName>${sim_name}/crash_sensor</bumperTopicName>
           <frameName>${sim_name}/crash_sensor</frameName>
-        </plugin>       
+        </plugin>
       </sensor>
     </gazebo>
 
