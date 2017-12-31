@@ -19,3 +19,73 @@ optimized to work for [ROS Indigo](http://wiki.ros.org/indigo) on
 
 It may be possible to build on other versions of ROS for different
 distributions, but do so at your own risk.
+
+## Installation
+
+On Ubuntu 14.04:
+
+```
+git clone https://github.com/kirmani/ee364d
+cd ee364d
+bash setup.sh
+```
+
+This setup script will install ROS Indigo on your machine, upgrade to Gazebo 7
+install the dependencies for the ROS Journey package, and build your
+environment.
+
+## Usage
+
+### Train Collision Avoidance Model
+
+To run the simulation, open a terminal, and run the following commands:
+
+```
+catkin
+roslaunch journey simulation_randomization.launch
+```
+
+To start training, open terminal, and run the following:
+
+```
+catkin
+roslaunch journey train_obstacle_avoidance.py
+```
+
+### Sending navigation goals in simulation.
+
+To run the simulation, open a terminal, and run the following commands:
+
+```
+catkin
+roslaunch journey journey_simulator.launch
+```
+
+To set a navigation goal with some delta x, delta y, at a fixed altitude z,
+just open a new terminal window and run the follow:
+
+```
+catkin
+ardrone_goal x y z
+```
+
+where x, y, and z are in meters.
+
+### Sending navigation goals on a real drone.
+
+To run the simulation, open a terminal, and run the following commands:
+
+```
+catkin
+roslaunch journey journey.launch
+```
+
+To set a navigation goal with some delta x, delta y, at a fixed altitude z,
+just open a new terminal window and run the follow:
+
+```
+catkin
+ardrone_goal x y z
+```
+
+where x, y, and z are in meters.

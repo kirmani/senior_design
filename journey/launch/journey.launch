@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Connect to drone. -->
+  <arg name="droneip" default="192.168.1.1" />
+  <node name="ardrone_driver" pkg="ardrone_autonomy" type="ardrone_driver" output="screen" args="-ip $(arg droneip)">
+    <param name="navdata_demo" value="False" />
+    <param name="realtime_navdata" value="True" />
+    <param name="realtime_video" value="True" />
+    <param name="looprate" value="30" />
+  </node>
+
+  <!-- Get drone localization information -->
+  <node name="drone_stateestimation" pkg="tum_ardrone" type="drone_stateestimation"></node>
+
+  <!-- Start obstacle avoidance detection. -->
+  <node name="obstacle_avoidance" pkg="journey" type="train_obstacle_avoidance.py"
+    args="-p -m $(find journey)/tensorflow/models/collision_avoidance/model.ckpt-26"
+    output="screen" respawn="true"></node>
+
+  <!-- Start navigation planner. -->
+  <node name="nav_planner" pkg="journey" type="nav_planner.py"
+    output="screen" respawn="true"></node>
+</launch>
