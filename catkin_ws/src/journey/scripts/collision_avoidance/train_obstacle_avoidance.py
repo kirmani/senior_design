@@ -350,16 +350,16 @@ class DeepDronePlanner:
 
     def visualize(self, state, actions):
         for i in range(state.shape[2]):
-            plt.subplot(1, state.shape[2] + 1, state.shape[2] - i + 1)
+            plt.subplot(1, state.shape[2] + 1, state.shape[2] - i)
             plt.imshow(state[:, :, i], cmap="gray")
             if i > 0:
                 plt.title('Frame at t - %d' % i)
             else:
                 plt.title('Frame at t')
 
-        x = np.zeros(actions.shape[0])
-        y = np.zeros(actions.shape[0])
-        forward = np.zeros(actions.shape[0])
+        x = np.zeros(actions.shape[0] + 1)
+        y = np.zeros(actions.shape[0] + 1)
+        forward = np.zeros(actions.shape[0] + 1)
         for t in range(actions.shape[0]):
             (linear, angular
             ) = self.control_to_metric(self.action_to_control(actions[t]))

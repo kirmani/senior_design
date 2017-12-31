@@ -204,7 +204,7 @@ class DeepDeterministicPolicyGradients:
                     reward = env.reward(next_state, action)
 
                     # DEBUG.
-                    env.visualize(state, action_sequence[0])
+                    # env.visualize(state, action_sequence[0])
 
                     # Add to episode buffer.
                     state_buffer.append(state)
