@@ -69,6 +69,7 @@ class SimulationRandomizer:
         self.quadrotor_width = 0.5
         self.max_quadrotor_start_yaw = 45  # degrees
         self.num_boxes = 0
+
         # Publish model state.
         self.model_state_publisher = rospy.Publisher(
             '/gazebo/set_model_state', ModelState, queue_size=10)
