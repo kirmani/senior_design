@@ -78,11 +78,38 @@ class NavigationPlannerNode:
         self.nav_goal.position.x = self.pose.position.x + nav_delta.x
         self.nav_goal.position.y = self.pose.position.y + nav_delta.y
         self.nav_goal.position.z = nav_delta.z
+
+        # Reset PID integrals and priors.
+        self.forward_integral = 0.0
+        self.forward_prior = 0.0
+        self.up_integral = 0.0
+        self.up_prior = 0.0
+        self.yaw_integral = 0.0
+        self.yaw_prior = 0.0
+
         print("Set navigation goal: (%.4f, %.4f, %.4f)" %
               (self.nav_goal.position.x, self.nav_goal.position.y,
                self.nav_goal.position.z))
 
     def planning_loop(self):
+        # Velocity control scaling constant.
+        forward_kp = 0.6
+        forward_ki = 0.001
+        forward_kd = 0.1
+
+        # Gaz PID variables.
+        up_kp = 0.6
+        up_ki = 0.001
+        up_kd = 0.1
+
+        # Yaw PID variables.
+        yaw_kp = 0.6
+        yaw_ki = 0.001
+        yaw_kd = 0.1
+
+        # Tolerance around nav goal in meters.
+        distance_threshold = 0.3
+
         while not rospy.is_shutdown():
             x = np.array([
                 self.pose.position.x, self.pose.position.y, self.pose.position.z
@@ -98,14 +125,28 @@ class NavigationPlannerNode:
             # Proportional controller.
             vel_msg = Twist()
 
-            if np.linalg.norm(g[:2] - x[:2]) > 0.5:
-                # Linear velocity in the forward axis.
-                vel_msg.linear.x = np.clip(0.2 * np.linalg.norm(g[:2] - x[:2]),
-                                           -1, 1)
-
+            distance = np.linalg.norm(g[:2] - x[:2])
+            if distance > distance_threshold:
                 # Angular velocity in the XY plane.
+                angle = np.arctan2(g[1] - x[1], g[0] - x[0])
+                yaw_error = angle - yaw
+                self.yaw_integral += yaw_error / self.update_rate
+                yaw_derivative = (yaw_error - self.yaw_prior) * self.update_rate
                 vel_msg.angular.z = np.clip(
-                    -1.0 * (np.arctan2(g[1] - x[1], g[0] - x[0]) - yaw), -1, 1)
+                    yaw_kp * yaw_error + yaw_ki * self.yaw_integral +
+                    yaw_kd * yaw_derivative, -1, 1)
+                self.yaw_prior = yaw_error
+
+                # Linear velocity in the forward axis
+                forward_error = distance * np.cos(yaw_error)
+                self.forward_integral += forward_error / self.update_rate
+                forward_derivative = (
+                    forward_error - self.forward_prior) * self.update_rate
+                vel_msg.linear.x = np.clip(forward_kp * forward_error +
+                                           forward_ki * self.forward_integral +
+                                           forward_kd * forward_derivative, -1,
+                                           1)
+                self.forward_prior = forward_error
 
                 # Only weight obstacle avoidance if we've received information
                 # from our collision avoidance network.
@@ -120,7 +161,13 @@ class NavigationPlannerNode:
                         (1 - self.collision_weight) * vel_msg.angular.z)
 
             # Linear velocity in the up axis.
-            vel_msg.linear.z = np.clip(0.2 * np.linalg.norm(g[2] - x[2]), -1, 1)
+            up_error = g[2] - x[2]
+            self.up_integral += up_error / self.update_rate
+            up_derivative = (up_error - self.up_prior) * self.update_rate
+            vel_msg.linear.z = np.clip(
+                up_kp * up_error + up_ki * self.up_integral +
+                up_kd * up_derivative, -1, 1)
+            self.up_prior = up_error
 
             # Publish our velocity message.
             self.velocity_publisher.publish(vel_msg)
