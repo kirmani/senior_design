@@ -103,9 +103,9 @@ class NavigationPlannerNode:
         up_kd = 0.1
 
         # Yaw PID variables.
-        yaw_kp = -0.6
-        yaw_ki = -0.001
-        yaw_kd = -0.1
+        yaw_kp = 0.6
+        yaw_ki = 0.001
+        yaw_kd = 0.1
 
         # Tolerance around nav goal in meters.
         distance_threshold = 0.3
@@ -150,15 +150,15 @@ class NavigationPlannerNode:
 
                 # Only weight obstacle avoidance if we've received information
                 # from our collision avoidance network.
-                # if self.collision_state:
-                #     # Factor in our collision information into our navigation
-                #     # plan.
-                #     vel_msg.linear.x = (
-                #         self.collision_weight * self.collision_state.action[0] +
-                #         (1 - self.collision_weight) * vel_msg.linear.x)
-                #     vel_msg.angular.z = (
-                #         self.collision_weight * self.collision_state.action[1] +
-                #         (1 - self.collision_weight) * vel_msg.angular.z)
+                if self.collision_state:
+                    # Factor in our collision information into our navigation
+                    # plan.
+                    vel_msg.linear.x = (
+                        self.collision_weight * self.collision_state.action[0] +
+                        (1 - self.collision_weight) * vel_msg.linear.x)
+                    vel_msg.angular.z = (
+                        self.collision_weight * self.collision_state.action[1] +
+                        (1 - self.collision_weight) * vel_msg.angular.z)
 
             # Linear velocity in the up axis.
             up_error = g[2] - x[2]
