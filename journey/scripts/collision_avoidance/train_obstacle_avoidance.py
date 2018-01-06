@@ -270,35 +270,7 @@ class DeepDronePlanner:
         b_coll_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
         b_coll = tf.matmul(b_coll, b_coll_weights) + b_coll_bias
 
-        # Task reward prediction.
-        y_task = tf.contrib.layers.fully_connected(
-            lstm_outputs,
-            16,
-            activation_fn=None,
-            weights_regularizer=tf.nn.l2_loss)
-        y_task = tf.contrib.layers.batch_norm(y_task)
-        y_task = tf.nn.relu(y_task)
-        y_task = tf.reshape(y_task, [-1, 16 * self.horizon])
-        y_task_weights = tf.Variable(
-            tf.random_uniform([16 * self.horizon, self.horizon], -3e-4, 3e-4))
-        y_task_bias = tf.Variable(
-            tf.random_uniform([self.horizon], -3e-4, 3e-4))
-        y_task = tf.matmul(y_task, y_task_weights) + y_task_bias
-
-        b_task = tf.contrib.layers.fully_connected(
-            lstm_outputs,
-            16,
-            activation_fn=None,
-            weights_regularizer=tf.nn.l2_loss)
-        b_task = tf.contrib.layers.batch_norm(b_task)
-        b_task = tf.nn.relu(b_task)
-        b_task = tf.reshape(b_task, [-1, 16 * self.horizon])
-        b_task_weights = tf.Variable(
-            tf.random_uniform([16 * self.horizon, 1], -3e-4, 3e-4))
-        b_task_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
-        b_task = tf.matmul(b_task, b_task_weights) + b_task_bias
-
-        return inputs, actions, y_coll, b_coll, y_task, b_task
+        return inputs, actions, y_coll, b_coll
 
     def get_current_frame(self):
         image_data = ros_numpy.numpify(self.image_msg)
@@ -379,7 +351,7 @@ class DeepDronePlanner:
     def reward(self, state, action):
         metric = self.control_to_metric(self.action_to_control(action))
         collision_reward = 1 if not self.collided else 0
-        task_reward = metric[0] * np.cos(metric[1])
+        task_reward = metric[0]  # * np.cos(metric[1])
         return (collision_reward, task_reward)
 
     def terminal(self, state, action):

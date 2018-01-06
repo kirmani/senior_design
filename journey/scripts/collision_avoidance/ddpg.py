@@ -66,22 +66,16 @@ class DeepDeterministicPolicyGradients:
 
     def build_summaries(self):
         episode_reward = tf.Variable(0.)
-        tf.summary.scalar("Reward", episode_reward)
-        critic_loss = tf.Variable(0.)
-        tf.summary.scalar("Critic_loss", critic_loss)
-        expected_collision_reward = tf.Variable(0.)
-        tf.summary.scalar("expected_collision_reward",
-                          expected_collision_reward)
-        expected_task_reward = tf.Variable(0.)
-        tf.summary.scalar("expected_task_reward", expected_task_reward)
-        collision_model_loss = tf.Variable(0.)
-        tf.summary.scalar("collision_model_loss", collision_model_loss)
-        task_model_loss = tf.Variable(0.)
-        tf.summary.scalar("task_model_loss", task_model_loss)
+        tf.summary.scalar("reward", episode_reward)
+        loss = tf.Variable(0.)
+        tf.summary.scalar("loss", loss)
+        expected_reward = tf.Variable(0.)
+        tf.summary.scalar("expected_reward", expected_reward)
 
         summary_vars = [
-            episode_reward, critic_loss, expected_collision_reward,
-            expected_task_reward, collision_model_loss, task_model_loss
+            episode_reward,
+            loss,
+            expected_reward,
         ]
         summary_ops = tf.summary.merge_all()
 
@@ -268,35 +262,21 @@ class DeepDeterministicPolicyGradients:
                 # B represents our critic targets.
                 y_coll_i = np.zeros((batch_size, self.horizon))
                 b_coll_i = np.zeros(batch_size)
-                y_task_i = np.zeros((batch_size, self.horizon))
-                b_task_i = np.zeros(batch_size)
                 for k in range(batch_size):
                     y_coll_i[k, :] = r_batch[k, :, 0]
-                    y_task_i[k, :] = r_batch[k, :, 1]
                     if t_batch[k]:
                         b_coll_i[k] = r_batch[k, 0, 0]
-                        b_task_i[k] = r_batch[k, 0, 1]
                     else:
-                        # TODO(kirmani): Figure out a less hacky way to do
-                        # velocity-dependent collision cost for
-                        # uncertainty-aware coliision avoidance.
                         b_coll_i[k] = (
-                            (r_batch[k, 0, 0] *
-                             (a_batch[k, 0, 0] + 1.0) / 2.0) + np.inner(
-                                 target_q[k, :self.horizon, 0] *
-                                 (a_batch[k, :, 0] + 1.0) / 2.0, time_decay))
-                        b_task_i[k] = (r_batch[k, 0, 1] + np.inner(
-                            target_q[k, :self.horizon, 1], time_decay))
+                            r_batch[k, 0, 0] * r_batch[k, 0, 1] + np.inner(
+                                target_q[k, :self.horizon] * r_batch[k, :, 1],
+                                time_decay))
 
                 # Update the model and critic given the targets.
-                (critic_loss, collision_model_loss, task_model_loss,
-                 expected_collision_reward,
-                 expected_task_reward) = self.critic.train(
-                     s_batch, a_batch,
-                     np.reshape(y_coll_i, (batch_size, self.horizon)),
-                     np.reshape(b_coll_i, (batch_size, 1)),
-                     np.reshape(y_task_i, (batch_size, self.horizon)),
-                     np.reshape(b_task_i, (batch_size, 1)))
+                (loss, model_loss, expected_reward) = self.critic.train(
+                    s_batch, a_batch,
+                    np.reshape(y_coll_i, (batch_size, self.horizon)),
+                    np.reshape(b_coll_i, (batch_size, 1)))
 
                 # Update the actor policy using the sampled gradient.
                 a_outs = self.actor.predict(s_batch)
@@ -310,21 +290,16 @@ class DeepDeterministicPolicyGradients:
                 # Output training statistics.
                 if ((optimization_step % 20 == 0) or
                     (optimization_step == optimization_steps - 1)):
-                    print(
-                        "[%d] Critic Loss: %.4f, Exp Collision Reward: %.4f, Exp Task Reward: %.4f"
-                        % (optimization_step, critic_loss,
-                           expected_collision_reward, expected_task_reward))
+                    print("[%d] Loss: %.4f, Exp Reward: %.4f" %
+                          (optimization_step, loss, expected_reward))
 
             # Write episode summary statistics.
             summary_str = self.sess.run(
                 summary_ops,
                 feed_dict={
                     summary_vars[0]: average_epoch_reward,
-                    summary_vars[1]: critic_loss,
-                    summary_vars[2]: expected_collision_reward,
-                    summary_vars[3]: expected_task_reward,
-                    summary_vars[4]: collision_model_loss,
-                    summary_vars[5]: task_model_loss,
+                    summary_vars[1]: loss,
+                    summary_vars[2]: expected_reward,
                 })
             writer.add_summary(summary_str, epoch)
             writer.flush()
@@ -425,17 +400,15 @@ class CriticNetwork:
         self.uncertainty_weight = uncertainty_weight
 
         # Critic network.
-        (self.inputs, self.actions, self.y_coll_out, self.b_coll_out,
-         self.y_task_out,
-         self.b_task_out) = create_critic_network("critic_source")
+        (self.inputs, self.actions, self.y_coll_out,
+         self.b_coll_out) = create_critic_network("critic_source")
         network_params = tf.trainable_variables()[num_actor_vars:]
         print("Critic network has %s parameters." % np.sum(
             [v.get_shape().num_elements() for v in network_params]))
 
         # Target network.
         (self.target_inputs, self.target_actions, self.target_y_coll_out,
-         self.target_b_coll_out, self.target_y_task_out,
-         self.target_b_task_out) = create_critic_network("critic_target")
+         self.target_b_coll_out) = create_critic_network("critic_target")
         target_network_params = tf.trainable_variables()[(
             len(network_params) + num_actor_vars):]
 
@@ -450,58 +423,37 @@ class CriticNetwork:
         self.predicted_y_coll_value = tf.placeholder(tf.float32,
                                                      (None, horizon))
         self.predicted_b_coll_value = tf.placeholder(tf.float32, (None, 1))
-        self.predicted_y_task_value = tf.placeholder(tf.float32,
-                                                     (None, horizon))
-        self.predicted_b_task_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
-        y_coll_loss = tf.reduce_sum(
+        self.model_loss = tf.reduce_sum(
             tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=self.predicted_y_coll_value, logits=self.y_coll_out),
             axis=1)
-        b_coll_loss = tf.reduce_sum(
+        self.reward_loss = tf.reduce_sum(
             (self.predicted_b_coll_value - self.b_coll_out)**2, axis=1)
-        self.collision_loss = tf.reduce_mean(y_coll_loss + b_coll_loss)
-
-        y_task_loss = tf.reduce_sum(
-            (self.predicted_y_task_value - self.y_task_out)**2, axis=1)
-        b_task_loss = tf.reduce_sum(
-            (self.predicted_b_task_value - self.b_task_out)**2, axis=1)
-        self.task_loss = tf.reduce_mean(y_task_loss + b_task_loss)
-
-        # self.loss = self.task_loss + collision_weight * self.collision_loss
-        self.loss = self.collision_loss
+        self.loss = tf.reduce_mean(self.model_loss + self.reward_loss)
 
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
 
         # Metrics
-        self.expected_collision_reward = tf.reduce_mean(self.b_coll_out)
-        self.expected_task_reward = tf.reduce_mean(self.b_task_out)
+        self.expected_reward = tf.reduce_mean(self.b_coll_out)
 
         # Get the gradient of the net w.r.t. the action
         # critic_influence = self.b_task_out + collision_weight * self.b_coll_out
         critic_influence = self.b_coll_out
         self.action_grads = tf.gradients(critic_influence, self.actions)
 
-    def train(self, inputs, actions, y_coll, b_coll, y_task, b_task):
-        (loss, collision_model_loss, task_model_loss, expected_collision_reward,
-         expected_task_reward, _) = self.sess.run(
-             [
-                 self.loss, self.collision_loss, self.task_loss,
-                 self.expected_collision_reward, self.expected_task_reward,
-                 self.optimize
-             ],
-             feed_dict={
-                 self.inputs: inputs,
-                 self.actions: actions,
-                 self.predicted_y_coll_value: y_coll,
-                 self.predicted_b_coll_value: b_coll,
-                 self.predicted_y_task_value: y_task,
-                 self.predicted_b_task_value: b_task,
-             })
-        return (loss, collision_model_loss, task_model_loss,
-                expected_collision_reward, expected_task_reward)
+    def train(self, inputs, actions, y_coll, b_coll):
+        (loss, model_loss, expected_reward, _) = self.sess.run(
+            [self.loss, self.model_loss, self.expected_reward, self.optimize],
+            feed_dict={
+                self.inputs: inputs,
+                self.actions: actions,
+                self.predicted_y_coll_value: y_coll,
+                self.predicted_b_coll_value: b_coll,
+            })
+        return (loss, model_loss, expected_reward)
 
     def predict(self, inputs, actions, bootstraps=50):
         collision_probability = []
@@ -521,18 +473,14 @@ class CriticNetwork:
             collision_expectation - self.uncertainty_weight * collision_std)
         y_coll_out = np.clip(y_coll_out, 0, 1)
 
-        preds = self.sess.run(
-            [self.b_coll_out, self.y_task_out, self.b_task_out],
+        expected_reward = self.sess.run(
+            self.b_coll_out,
             feed_dict={
                 self.inputs: inputs,
                 self.actions: actions
             })
-        b_coll_out = np.array(preds[0])
-        y_task_out = np.array(preds[1])
-        b_task_out = np.array(preds[2])
-        coll_preds = np.concatenate([y_coll_out, b_coll_out], axis=1)
-        task_preds = np.concatenate([y_task_out, b_task_out], axis=1)
-        preds = np.stack([coll_preds, task_preds], axis=-1)
+        b_coll_out = np.array(expected_reward)
+        preds = np.concatenate([y_coll_out, b_coll_out], axis=1)
         return preds
 
     def predict_target(self, inputs, actions, bootstraps=50):
@@ -553,21 +501,14 @@ class CriticNetwork:
             collision_expectation - self.uncertainty_weight * collision_std)
         y_coll_out = np.clip(y_coll_out, 0, 1)
 
-        preds = self.sess.run(
-            [
-                self.target_b_coll_out, self.target_y_task_out,
-                self.target_b_task_out
-            ],
+        expected_reward = self.sess.run(
+            self.target_b_coll_out,
             feed_dict={
                 self.target_inputs: inputs,
                 self.target_actions: actions
             })
-        b_coll_out = np.array(preds[0])
-        y_task_out = np.array(preds[1])
-        b_task_out = np.array(preds[2])
-        coll_preds = np.concatenate([y_coll_out, b_coll_out], axis=1)
-        task_preds = np.concatenate([y_task_out, b_task_out], axis=1)
-        preds = np.stack([coll_preds, task_preds], axis=-1)
+        b_coll_out = np.array(expected_reward)
+        preds = np.concatenate([y_coll_out, b_coll_out], axis=1)
         return preds
 
     def update_target_network(self):
