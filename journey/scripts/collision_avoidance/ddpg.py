@@ -126,7 +126,7 @@ class DeepDeterministicPolicyGradients:
               logdir='log',
               optimization_steps=40,
               num_epochs=3200,
-              episodes_in_epoch=1,
+              episodes_in_epoch=8,
               max_episode_len=1000,
               model_dir=None):
 
@@ -141,8 +141,8 @@ class DeepDeterministicPolicyGradients:
             saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
             print("Restoring model: %s" % model_dir)
             last_step = int(
-                os.path.basename(tf.train.latest_checkpoint(model_dir)).split(
-                    '-')[1])
+                os.path.basename(
+                    tf.train.latest_checkpoint(model_dir)).split('-')[1])
 
         # Set up summary Ops
         summary_ops, summary_vars = self.build_summaries()
@@ -386,15 +386,19 @@ class ActorNetwork:
     def train(self, inputs, a_gradient):
         self.sess.run(
             self.optimize,
-            feed_dict={self.inputs: inputs,
-                       self.action_gradient: a_gradient})
+            feed_dict={
+                self.inputs: inputs,
+                self.action_gradient: a_gradient
+            })
 
     def predict(self, inputs):
         return self.sess.run(self.actions, feed_dict={self.inputs: inputs})
 
     def predict_target(self, inputs):
         return self.sess.run(
-            self.target_actions, feed_dict={self.target_inputs: inputs})
+            self.target_actions, feed_dict={
+                self.target_inputs: inputs
+            })
 
     def update_target_network(self):
         self.sess.run(self.update_target_network_params)
@@ -443,11 +447,11 @@ class CriticNetwork:
 
         # Network target (y_i)
         # Obtained from the target networks
-        self.predicted_y_coll_value = tf.placeholder(tf.float32, (None,
-                                                                  horizon))
+        self.predicted_y_coll_value = tf.placeholder(tf.float32,
+                                                     (None, horizon))
         self.predicted_b_coll_value = tf.placeholder(tf.float32, (None, 1))
-        self.predicted_y_task_value = tf.placeholder(tf.float32, (None,
-                                                                  horizon))
+        self.predicted_y_task_value = tf.placeholder(tf.float32,
+                                                     (None, horizon))
         self.predicted_b_task_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
@@ -503,8 +507,10 @@ class CriticNetwork:
             collision_probability.append(
                 self.sess.run(
                     self.y_coll_out,
-                    feed_dict={self.inputs: inputs,
-                               self.actions: actions}))
+                    feed_dict={
+                        self.inputs: inputs,
+                        self.actions: actions
+                    }))
         collision_samples = np.stack(collision_probability, axis=-1)
         collision_samples = 1.0 / (1.0 + np.exp(-collision_samples))
         collision_expectation = np.mean(collision_samples, axis=-1)
@@ -517,8 +523,10 @@ class CriticNetwork:
 
         preds = self.sess.run(
             [self.b_coll_out, self.y_task_out, self.b_task_out],
-            feed_dict={self.inputs: inputs,
-                       self.actions: actions})
+            feed_dict={
+                self.inputs: inputs,
+                self.actions: actions
+            })
         b_coll_out = np.array(preds[0])
         y_task_out = np.array(preds[1])
         b_task_out = np.array(preds[2])
@@ -568,8 +576,10 @@ class CriticNetwork:
     def action_gradients(self, inputs, actions):
         return self.sess.run(
             self.action_grads,
-            feed_dict={self.inputs: inputs,
-                       self.actions: actions})
+            feed_dict={
+                self.inputs: inputs,
+                self.actions: actions
+            })
 
 
 class OrnsteinUhlenbeckActionNoise:

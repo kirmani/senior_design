@@ -31,32 +31,9 @@ from geometry_msgs.msg import Pose
 from std_srvs.srv import Empty
 
 MATERIALS = [
-    'Gazebo/White',
-    'Gazebo/Black',
-    'Gazebo/Grey',
-    'Gazebo/Blue',
-    'Gazebo/Red',
-    'Gazebo/Green',
-    'Gazebo/Purple',
-    'Gazebo/Yellow',
-    'Gazebo/Turquoise',
-    'Gazebo/Grey',
     'Gazebo/WoodFloor',
     'Gazebo/CeilingTiled',
-    'Gazebo/PaintedWall',
-    'Gazebo/CloudySky'
-    'Gazebo/GrassFloor',
-    'Gazebo/Rockwall',
-    'Gazebo/RustyBarrel',
     'Gazebo/WoodPallet',
-    'Gazebo/LightWood'
-    'Gazebo/WoodTile',
-    'Gazebo/Brick',
-    'Gazebo/Gold',
-    'Gazebo/RustySteel',
-    'Gazebo/Chrome',
-    'Gazebo/BumpyMetal',
-    'Gazebo/Rocky',
 ]
 
 
@@ -204,7 +181,7 @@ class SimulationRandomizer:
             model_name='floor',
             tx=hallway_width * float(cols) / 2,
             ty=hallway_width * float(rows) / 2,
-            tz=-0.1,
+            tz=0.0,
             sx=hallway_width * cols,
             sy=hallway_width * rows,
             sz=0.2,

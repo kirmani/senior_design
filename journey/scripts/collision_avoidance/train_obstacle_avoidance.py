@@ -127,9 +127,9 @@ class DeepDronePlanner:
         self.pose = state.pose.pose
 
     def create_actor_network(self, scope):
-        inputs = tf.placeholder(tf.float32,
-                                (None, self.image_height, self.image_width,
-                                 self.sequence_length))
+        inputs = tf.placeholder(
+            tf.float32,
+            (None, self.image_height, self.image_width, self.sequence_length))
         image = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
@@ -177,9 +177,9 @@ class DeepDronePlanner:
         actions = tf.nn.relu(actions)
         actions = tf.reshape(actions, [-1, 16 * self.horizon])
         actions_weights = tf.Variable(
-            tf.random_uniform([
-                16 * self.horizon, self.horizon * self.action_dim
-            ], -3e-4, 3e-4))
+            tf.random_uniform(
+                [16 * self.horizon, self.horizon * self.action_dim], -3e-4,
+                3e-4))
         actions_bias = tf.Variable(
             tf.random_uniform([self.horizon * self.action_dim], -3e-4, 3e-4))
         actions = tf.matmul(actions, actions_weights) + actions_bias
@@ -188,11 +188,11 @@ class DeepDronePlanner:
         return inputs, actions
 
     def create_critic_network(self, scope):
-        inputs = tf.placeholder(tf.float32,
-                                (None, self.image_height, self.image_width,
-                                 self.sequence_length))
-        actions = tf.placeholder(tf.float32, (None, self.horizon,
-                                              self.action_dim))
+        inputs = tf.placeholder(
+            tf.float32,
+            (None, self.image_height, self.image_width, self.sequence_length))
+        actions = tf.placeholder(tf.float32,
+                                 (None, self.horizon, self.action_dim))
         image = tf.contrib.layers.conv2d(
             inputs,
             num_outputs=32,
@@ -325,13 +325,17 @@ class DeepDronePlanner:
         # Clear our frame buffer.
         self.frame_buffer.clear()
 
-        # Reset collision state.
-        self.collided = False
-
         # Take-off.
         self.unpause_physics()
         self.takeoff_publisher.publish(EmptyMessage())
-        return self.get_current_state()
+
+        # Get state.
+        state = self.get_current_state()
+
+        # Reset collision state.
+        self.collided = False
+
+        return state
 
     def step(self, state, action):
         control = self.action_to_control(action)
@@ -361,8 +365,8 @@ class DeepDronePlanner:
         y = np.zeros(actions.shape[0] + 1)
         forward = np.zeros(actions.shape[0] + 1)
         for t in range(actions.shape[0]):
-            (linear, angular
-            ) = self.control_to_metric(self.action_to_control(actions[t]))
+            (linear, angular) = self.control_to_metric(
+                self.action_to_control(actions[t]))
             forward[t + 1] = forward[t] + angular
             x[t + 1] = x[t] + np.cos(forward[t + 1]) * linear
             y[t + 1] = y[t] + np.sin(forward[t + 1]) * linear
