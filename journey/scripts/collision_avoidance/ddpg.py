@@ -469,7 +469,8 @@ class CriticNetwork:
             (self.predicted_b_task_value - self.b_task_out)**2, axis=1)
         self.task_loss = tf.reduce_mean(y_task_loss + b_task_loss)
 
-        self.loss = self.task_loss + collision_weight * self.collision_loss
+        # self.loss = self.task_loss + collision_weight * self.collision_loss
+        self.loss = self.collision_loss
 
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
@@ -479,7 +480,8 @@ class CriticNetwork:
         self.expected_task_reward = tf.reduce_mean(self.b_task_out)
 
         # Get the gradient of the net w.r.t. the action
-        critic_influence = self.b_task_out + collision_weight * self.b_coll_out
+        # critic_influence = self.b_task_out + collision_weight * self.b_coll_out
+        critic_influence = self.b_coll_out
         self.action_grads = tf.gradients(critic_influence, self.actions)
 
     def train(self, inputs, actions, y_coll, b_coll, y_task, b_task):
