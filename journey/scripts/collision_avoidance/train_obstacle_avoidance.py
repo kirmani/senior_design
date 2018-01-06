@@ -349,10 +349,10 @@ class DeepDronePlanner:
         exit()
 
     def reward(self, state, action):
-        metric = self.control_to_metric(self.action_to_control(action))
-        collision_reward = 1 if not self.collided else 0
-        task_reward = metric[0]  # * np.cos(metric[1])
-        return (collision_reward, task_reward)
+        control = self.action_to_control(action)
+        collision_cost = 0 if not self.collided else 1
+        task_cost = control[0]
+        return (collision_cost, task_cost)
 
     def terminal(self, state, action):
         if self.collided:
