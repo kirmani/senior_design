@@ -515,8 +515,6 @@ class CriticNetwork:
         collision_samples = 1.0 / (1.0 + np.exp(-collision_samples))
         collision_expectation = np.mean(collision_samples, axis=-1)
         collision_std = np.std(collision_samples, axis=-1)
-        print(collision_expectation)  # DEBUG: Print expectation.
-        print(collision_std)  # DEBUG: Print uncertainty.
         y_coll_out = (
             collision_expectation - self.uncertainty_weight * collision_std)
         y_coll_out = np.clip(y_coll_out, 0, 1)

@@ -412,7 +412,7 @@ class DeepDronePlanner:
             model_dir = os.path.join(os.getcwd(), model_dir)
             print("model_dir is %s" % model_dir)
         logdir = os.path.join(
-            os.path.dirname(__file__), '../../../../learning/deep_drone/')
+            os.path.dirname(__file__), '../../../../../learning/deep_drone/')
         self.ddpg.train(env, logdir=logdir, model_dir=model_dir)
 
     def eval(self, model_dir, num_attempts):
