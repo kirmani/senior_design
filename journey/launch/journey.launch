@@ -14,7 +14,7 @@
 
   <!-- Start obstacle avoidance detection. -->
   <node name="obstacle_avoidance" pkg="journey" type="train_obstacle_avoidance.py"
-    args="-p -m $(find journey)/tensorflow/models/collision_avoidance/model.ckpt-26"
+    args="-p -m $(find journey)/tensorflow/models/collision_avoidance/model.ckpt-51"
     output="screen" respawn="true"></node>
 
   <!-- Start navigation planner. -->
