@@ -288,7 +288,7 @@ class DeepDeterministicPolicyGradients:
                 # Output training statistics.
                 if ((optimization_step % 20 == 0) or
                     (optimization_step == optimization_steps - 1)):
-                    print("[%d] Loss: %.4f, Exp Cost: %.4f" %
+                    print("[%d] Loss: %.4f, Exp Reward: %.4f" %
                           (optimization_step, loss, expected_reward))
 
             # Write episode summary statistics.
