@@ -16,7 +16,7 @@ export JOURNEY_WS=${HOME}/journey_ws
 # Quickly go to the Catkin workspace and configure the build environment.
 function journey() {
   if [[ "$OSTYPE" == "linux-gnu" ]]; then
-    source /opt/ros/indigo/setup.bash
+    source /opt/ros/kinetic/setup.bash
     source ${JOURNEY_WS}/devel/setup.bash
     cd ${JOURNEY_WS}
   elif [[ "$OSTYPE" == "darwin"* ]]; then
