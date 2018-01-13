@@ -30,7 +30,7 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
 
   # Desktop-Full Install: (Recommended) : ROS, rqt, rviz, robot-generic
   # libraries, 2D/3D simulators, navigation and 2D/3D perception
-  sudo apt-get -y install ros-indigo-desktop-full
+  sudo apt-get -y install ros-kinetic-desktop-full
 
   # In order to use rosdep, we have to initialize it.
   sudo rosdep init
@@ -43,19 +43,10 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
   # source trees for ROS packages with one command.
 
   # To install this tool and other dependencies for building ROS packages, run:
-  sudo apt-get -y install python-rosinstall python-rosinstall-generator python-wstool build-essential
-
-  # Remove Gazebo 2.
-  sudo apt-get -y remove gazebo2*
-
-  # Install Gazebo 7.
-  sudo sh -c 'echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable `lsb_release -cs` main" > /etc/apt/sources.list.d/gazebo-stable.list'
-  wget http://packages.osrfoundation.org/gazebo.key -O - | sudo apt-key add -
-  sudo apt-get update
-  sudo apt-get -y install ros-indigo-gazebo7-ros-pkgs ros-indigo-gazebo7-ros-control
+  sudo apt-get -y install python-rosinstall python-rosinstall-generator python-wstool build-essential python-catkin-tools
 
   # Install ardrone_autonomy.
-  sudo apt-get -y install ros-indigo-ardrone-autonomy freeglut3-dev liblapack-dev libopenblas-dev
+  sudo apt-get -y install ros-kinetic-ardrone-autonomy freeglut3-dev liblapack-dev libopenblas-dev
 
   # Link this project to your journey workspace.
   unlink ~/journey_ws/src/journey
