@@ -1,7 +1,3 @@
-[submodule "include/tum_ardrone"]
-  path = include/tum_ardrone
-  url = https://github.com/tum-vision/tum_ardrone
-  branch = indigo-devel
 [submodule "include/ros_numpy"]
   path = include/ros_numpy
   url = https://github.com/eric-wieser/ros_numpy.git
