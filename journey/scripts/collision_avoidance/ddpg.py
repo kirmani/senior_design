@@ -119,8 +119,8 @@ class DeepDeterministicPolicyGradients:
               actor_noise=None,
               logdir='log',
               optimization_steps=40,
-              num_epochs=3200,
-              episodes_in_epoch=8,
+              num_epochs=1000,
+              episodes_in_epoch=16,
               max_episode_len=1000,
               model_dir=None):
 
