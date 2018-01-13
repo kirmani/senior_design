@@ -45,6 +45,9 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
   # To install this tool and other dependencies for building ROS packages, run:
   sudo apt-get -y install python-rosinstall python-rosinstall-generator python-wstool build-essential python-catkin-tools
 
+  # Install hector quadrotor suite.
+  sudo apt-get -y install ros-kinetic-hector-*
+
   # Install ardrone_autonomy.
   sudo apt-get -y install ros-kinetic-ardrone-autonomy freeglut3-dev liblapack-dev libopenblas-dev
 
