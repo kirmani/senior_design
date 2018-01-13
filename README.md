@@ -14,15 +14,15 @@
 ## Requirements
 
 For stability and compatibility with open-source ROS packages, our system is
-optimized to work for [ROS Indigo](http://wiki.ros.org/indigo) on
-[Ubuntu 14.04 LTS (Trusty Tahr)](http://releases.ubuntu.com/14.04/).
+optimized to work for [ROS Kinetic](http://wiki.ros.org/kinetic) on
+[Ubuntu 16.04 LTS (Xenial Xerus)](http://releases.ubuntu.com/16.04/).
 
 It may be possible to build on other versions of ROS for different
 distributions, but do so at your own risk.
 
 ## Installation
 
-On Ubuntu 14.04:
+On Ubuntu 16.04:
 
 ```
 git clone https://github.com/kirmani/ee364d
