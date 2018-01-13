@@ -350,7 +350,7 @@ class DeepDronePlanner:
 
     def reward(self, state, action):
         control = self.action_to_control(action)
-        collision_cost = 0 if not self.collided else 1
+        collision_cost = 1 if not self.collided else 0
         task_cost = control[0]
         return (collision_cost, task_cost)
 
@@ -362,8 +362,10 @@ class DeepDronePlanner:
         return self.collided
 
     def action_to_control(self, action):
+        max_control = 1.0
+        min_control = 0.4
         control = np.zeros(2)
-        control[0] = (action[0] + 1.0) / 2.0
+        control[0] = ((max_control - min_control) * (action[0] + 1.0) / 2.0 + min_control)
         control[1] = action[1]
         return control
 

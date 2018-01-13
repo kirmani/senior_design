@@ -70,7 +70,7 @@ class DeepDeterministicPolicyGradients:
         loss = tf.Variable(0.)
         tf.summary.scalar("loss", loss)
         expected_reward = tf.Variable(0.)
-        tf.summary.scalar("expected_cost", expected_reward)
+        tf.summary.scalar("expected_reward", expected_reward)
 
         summary_vars = [
             episode_reward,
@@ -102,7 +102,7 @@ class DeepDeterministicPolicyGradients:
                 reward = env.reward(next_state, action)
 
                 state = next_state
-                episode_reward += reward[1]
+                episode_reward += reward[0]
 
                 if terminal:
                     break
@@ -210,7 +210,7 @@ class DeepDeterministicPolicyGradients:
                     next_state_buffer.append(next_state)
 
                     state = next_state
-                    episode_reward += reward[1]
+                    episode_reward += reward[0]
 
                     if terminal:
                         break
@@ -267,12 +267,8 @@ class DeepDeterministicPolicyGradients:
                     if t_batch[k]:
                         b_coll_i[k] = r_batch[k, 0, 0]
                     else:
-                        b_coll_i[k] = (
-                            (1.0 - r_batch[k, 0, 1]) + self.collision_weight *
-                            r_batch[k, 0, 0] * r_batch[k, 0, 1] + np.inner(
-                                (1.0 - r_batch[k, :, 1]) + self.collision_weight
-                                * target_q[k, :self.horizon] * r_batch[k, :, 1],
-                                time_decay))
+                        b_coll_i[k] = (r_batch[k, 0, 0] + np.inner(
+                                target_q[k, :self.horizon], time_decay))
 
                 # Update the model and critic given the targets.
                 (loss, model_loss, expected_reward) = self.critic.train(
@@ -349,7 +345,7 @@ class ActorNetwork:
 
         # Combine the gradients here
         unnormalized_actor_gradients = tf.gradients(
-            self.actions, network_params, self.action_gradient)
+            self.actions, network_params, -self.action_gradient)
         self.actor_gradients = list(
             map(lambda x: tf.div(x, batch_size), unnormalized_actor_gradients))
 
