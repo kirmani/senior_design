@@ -84,7 +84,7 @@ To set a navigation goal with some delta x, delta y, at a fixed altitude z,
 just open a new terminal window and run the follow:
 
 ```
-catkin
+journey
 ardrone_goal x y z
 ```
 
