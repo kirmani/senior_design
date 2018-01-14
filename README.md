@@ -41,14 +41,14 @@ environment.
 To run the simulation, open a terminal, and run the following commands:
 
 ```
-catkin
+journey
 roslaunch journey simulation_randomization.launch
 ```
 
 To start training, open terminal, and run the following:
 
 ```
-catkin
+journey
 roslaunch journey train_obstacle_avoidance.py
 ```
 
@@ -57,7 +57,7 @@ roslaunch journey train_obstacle_avoidance.py
 To run the simulation, open a terminal, and run the following commands:
 
 ```
-catkin
+journey
 roslaunch journey journey_simulator.launch
 ```
 
@@ -65,7 +65,7 @@ To set a navigation goal with some delta x, delta y, at a fixed altitude z,
 just open a new terminal window and run the follow:
 
 ```
-catkin
+journey
 ardrone_goal x y z
 ```
 
@@ -76,7 +76,7 @@ where x, y, and z are in meters.
 To run the simulation, open a terminal, and run the following commands:
 
 ```
-catkin
+journey
 roslaunch journey journey.launch
 ```
 
