@@ -30,7 +30,7 @@ class TagTrackerNode:
 
         # Toggle camera to bottom.
         rospy.wait_for_service('/ardrone/togglecam')
-        # rospy.sleep(5.)
+        rospy.sleep(2.)
         toggle_cam = rospy.ServiceProxy('/ardrone/togglecam', Empty)
         toggle_cam()
 
@@ -94,7 +94,6 @@ class TagTrackerNode:
                     kp * yaw_error + ki * self.yaw_integral +
                     kd * yaw_derivative, -1, 1)
                 self.yaw_prior = yaw_error
-                print(yaw_error)
 
                 # Linear velocity in the forward axis
                 forward_error = distance * np.cos(angle)
