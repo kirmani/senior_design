@@ -20,9 +20,15 @@ from std_srvs.srv import Empty
 
 class TagTrackerNode:
 
-    def __init__(self, rate=4):
+    def __init__(self, rate=10):
         # Initialize ROS node.
         rospy.init_node('tag_tracker', anonymous=True)
+
+        # Desired altitude. It is difficult to see the AR tag from too high.
+        self.hover_altitude = 0.5
+        rospy.set_param('altitude', self.hover_altitude * 1000)
+        print("Hover altitude (mm): %s" %
+              rospy.get_param('altitude'))
 
         # Nav command update frequency in Hz.
         self.update_rate = rate
@@ -43,9 +49,6 @@ class TagTrackerNode:
         # Actions.
         self.velocity_publisher = rospy.Publisher(
             '/cmd_vel', Twist, queue_size=10)
-
-        # Desired altitude.
-        self.hover_altitude = 0.5
 
         # Reset PID integrals and priors.
         self.yaw_integral = 0.0
@@ -118,6 +121,7 @@ class TagTrackerNode:
                 self.right_prior = right_error
 
                 # Up axis.
+                print("Tag visible: %.4f" % self.marker_pose.position.z)
                 up_error = self.hover_altitude - self.marker_pose.position.z
                 self.up_integral += up_error / self.update_rate
                 up_derivative = (up_error - self.up_prior) * self.update_rate
