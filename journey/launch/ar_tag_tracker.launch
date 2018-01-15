@@ -27,6 +27,8 @@
   </node>
 
   <!-- Start tag tracking script. -->
+  <!--
   <node name="tag_tracker" pkg="journey" type="tag_tracker.py"
     output="screen" respawn="true"></node>
+  -->
 </launch>
