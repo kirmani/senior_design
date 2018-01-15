@@ -10,3 +10,6 @@
 [submodule "include/turtlebot3"]
 	path = include/turtlebot3
 	url = https://github.com/ROBOTIS-GIT/turtlebot3.git
+[submodule "tools/ardrone-wpa2"]
+	path = tools/ardrone-wpa2
+	url = https://github.com/daraosn/ardrone-wpa2
