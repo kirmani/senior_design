@@ -9,8 +9,9 @@
 AR tag tracker.
 """
 
-import rospy
 import numpy as np
+import rospy
+import tf
 from ar_track_alvar_msgs.msg import AlvarMarkers
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist
@@ -19,9 +20,15 @@ from std_srvs.srv import Empty
 
 class TagTrackerNode:
 
-    def __init__(self, rate=4):
+    def __init__(self, rate=10):
         # Initialize ROS node.
         rospy.init_node('tag_tracker', anonymous=True)
+
+        # Desired altitude. It is difficult to see the AR tag from too high.
+        self.hover_altitude = 0.5
+        rospy.set_param('altitude', self.hover_altitude * 1000)
+        print("Hover altitude (mm): %s" %
+              rospy.get_param('altitude'))
 
         # Nav command update frequency in Hz.
         self.update_rate = rate
@@ -29,7 +36,7 @@ class TagTrackerNode:
 
         # Toggle camera to bottom.
         rospy.wait_for_service('/ardrone/togglecam')
-        rospy.sleep(5.)
+        rospy.sleep(2.)
         toggle_cam = rospy.ServiceProxy('/ardrone/togglecam', Empty)
         toggle_cam()
 
@@ -43,16 +50,15 @@ class TagTrackerNode:
         self.velocity_publisher = rospy.Publisher(
             '/cmd_vel', Twist, queue_size=10)
 
-        # Desired altitude.
-        self.hover_altitude = 0.5
-
         # Reset PID integrals and priors.
-        self.x_integral = 0.0
-        self.x_prior = 0.0
-        self.y_integral = 0.0
-        self.y_prior = 0.0
-        self.z_integral = 0.0
-        self.z_prior = 0.0
+        self.yaw_integral = 0.0
+        self.yaw_prior = 0.0
+        self.forward_integral = 0.0
+        self.forward_prior = 0.0
+        self.right_integral = 0.0
+        self.right_prior = 0.0
+        self.up_integral = 0.0
+        self.up_prior = 0.0
 
         print("Tag tracker initialzated.")
 
@@ -77,32 +83,52 @@ class TagTrackerNode:
             if self.marker_dirty:
                 self.marker_dirty = False
 
-                # Forward axis.
-                x_error = -self.marker_pose.position.y
-                self.x_integral += x_error / self.update_rate
-                x_derivative = (x_error - self.x_prior) * self.update_rate
-                vel_msg.linear.x = np.clip(
-                    kp * x_error + ki * self.x_integral +
-                    kd * x_derivative, -1, 1)
-                self.x_prior = x_error
+                distance = np.linalg.norm(np.array([self.marker_pose.position.x, self.marker_pose.position.y]))
+                angle = np.arctan2(-self.marker_pose.position.x, -self.marker_pose.position.y)
+                quaternion = (self.marker_pose.orientation.x, self.marker_pose.orientation.y,
+                              self.marker_pose.orientation.z, self.marker_pose.orientation.w)
+                _, _, yaw = tf.transformations.euler_from_quaternion(quaternion)
 
-                # Right axis.
-                y_error = -self.marker_pose.position.x
-                self.y_integral += y_error / self.update_rate
-                y_derivative = (y_error - self.y_prior) * self.update_rate
-                vel_msg.linear.y = np.clip(
-                    kp * y_error + ki * self.y_integral +
-                    kd * y_derivative, -1, 1)
-                self.y_prior = y_error
+                # Angular velocity in the XY plane.
+                yaw_error = -yaw
+                self.yaw_integral += yaw_error / self.update_rate
+                yaw_derivative = (yaw_error - self.yaw_prior) * self.update_rate
+                vel_msg.angular.z = np.clip(
+                    kp * yaw_error + ki * self.yaw_integral +
+                    kd * yaw_derivative, -1, 1)
+                self.yaw_prior = yaw_error
+
+                # Linear velocity in the forward axis
+                forward_error = distance * np.cos(angle)
+                self.forward_integral += forward_error / self.update_rate
+                forward_derivative = (
+                    forward_error - self.forward_prior) * self.update_rate
+                vel_msg.linear.x = np.clip(kp * forward_error +
+                                           ki * self.forward_integral +
+                                           kd * forward_derivative, -1,
+                                           1)
+                self.forward_prior = forward_error
+
+                # Linear velocity in right axis.
+                right_error = distance * np.sin(angle)
+                self.right_integral += right_error / self.update_rate
+                right_derivative = (
+                    right_error - self.right_prior) * self.update_rate
+                vel_msg.linear.y = np.clip(kp * right_error +
+                                           ki * self.right_integral +
+                                           kd * right_derivative, -1,
+                                           1)
+                self.right_prior = right_error
 
                 # Up axis.
-                z_error = self.hover_altitude - self.marker_pose.position.z
-                self.z_integral += z_error / self.update_rate
-                z_derivative = (z_error - self.z_prior) * self.update_rate
+                print("Tag visible: %.4f" % self.marker_pose.position.z)
+                up_error = self.hover_altitude - self.marker_pose.position.z
+                self.up_integral += up_error / self.update_rate
+                up_derivative = (up_error - self.up_prior) * self.update_rate
                 vel_msg.linear.z = np.clip(
-                    kp * z_error + ki * self.z_integral +
-                    kd * z_derivative, -1, 1)
-                self.z_prior = z_error
+                    kp * up_error + ki * self.up_integral +
+                    kd * up_derivative, -1, 1)
+                self.up_prior = up_error
 
             # Publish our velocity message.
             self.velocity_publisher.publish(vel_msg)
