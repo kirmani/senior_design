@@ -4,3 +4,9 @@
 [submodule "include/tum_simulator"]
 	path = include/tum_simulator
 	url = https://github.com/angelsantamaria/tum_simulator
+[submodule "include/turtlebot3_msgs"]
+	path = include/turtlebot3_msgs
+	url = https://github.com/ROBOTIS-GIT/turtlebot3_msgs.git
+[submodule "include/turtlebot3"]
+	path = include/turtlebot3
+	url = https://github.com/ROBOTIS-GIT/turtlebot3.git
