@@ -43,7 +43,7 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
   # source trees for ROS packages with one command.
 
   # To install this tool and other dependencies for building ROS packages, run:
-  sudo apt-get -y install python-rosinstall python-rosinstall-generator python-wstool build-essential python-catkin-tools
+  sudo apt-get -y install python-rosinstall python-rosinstall-generator python-wstool build-essential python-catkin-tools ros-kinetic-joy ros-kinetic-teleop-twist-joy ros-kinetic-teleop-twist-keyboard ros-kinetic-laser-proc ros-kinetic-rgbd-launch ros-kinetic-depthimage-to-laserscan ros-kinetic-rosserial-arduino ros-kinetic-rosserial-python ros-kinetic-rosserial-server ros-kinetic-rosserial-client ros-kinetic-rosserial-msgs ros-kinetic-amcl ros-kinetic-map-server ros-kinetic-move-base ros-kinetic-urdf ros-kinetic-xacro ros-kinetic-compressed-image-transport ros-kinetic-rqt-image-view ros-kinetic-gmapping ros-kinetic-navigation ros-kinetic-ar-track-alvar
 
   # Install hector quadrotor suite.
   sudo apt-get -y install ros-kinetic-hector-*
@@ -61,11 +61,11 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
 
   # Build journey workspace.
   cd ~/journey_ws
+  source /opt/ros/kinetic/setup.bash
   catkin init
   catkin clean --yes
   cd src
   wstool update
-  rosdep install tum_ardrone
   cd ..
   catkin build
 elif [[ "$OSTYPE" == "darwin"* ]]; then
