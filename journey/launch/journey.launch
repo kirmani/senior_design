@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
   <!-- Connect to drone. -->
-  <arg name="droneip" default="192.168.1.1" />
+  <arg name="droneip" default="192.168.86.198" />
   <node name="ardrone_driver" pkg="ardrone_autonomy" type="ardrone_driver" output="screen" args="-ip $(arg droneip)">
     <param name="navdata_demo" value="False" />
     <param name="realtime_navdata" value="True" />
