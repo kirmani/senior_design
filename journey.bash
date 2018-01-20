@@ -4,6 +4,11 @@ if [ -f /opt/ros/indigo/setup.bash ]; then
   source /opt/ros/indigo/setup.bash
 fi
 
+# Source the default catkin workspace if one exists.
+if [ -f ~/journey_ws/devel/setup.bash ]; then
+  source ~/journey_ws/devel/setup.bash
+fi
+
 # Ubuntu Gazebo fix on for VMWare.
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
   export SVGA_VGPU10=0
