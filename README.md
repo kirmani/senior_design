@@ -26,7 +26,7 @@ On Ubuntu 16.04:
 
 ```
 git clone https://github.com/kirmani/senior_design.git
-cd ee364d
+cd senior_design
 bash setup.sh
 ```
 
