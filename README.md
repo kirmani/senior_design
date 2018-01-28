@@ -25,7 +25,7 @@ distributions, but do so at your own risk.
 On Ubuntu 16.04:
 
 ```
-git clone https://github.com/kirmani/ee364d
+git clone https://github.com/kirmani/senior_design.git
 cd ee364d
 bash setup.sh
 ```
