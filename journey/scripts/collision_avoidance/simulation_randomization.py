@@ -118,6 +118,9 @@ class SimulationRandomizer:
 
         # Unpause physics.
         self.unpause_physics()
+
+        # Wait a little bit for the drone spawn to stabilize. Maybe there's a
+        # way to do this without sleeping?
         rospy.sleep(2)
 
     def generate_floorplan(self, rows=10, cols=18, num_hallways=6):
