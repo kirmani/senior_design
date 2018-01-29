@@ -255,9 +255,6 @@ class DeepDeterministicPolicyGradients:
                 target_q = self.critic.predict_target(
                     s2_batch, self.actor.predict_target(s2_batch))
 
-                # Prefer sooner task rewards more than later ones.
-                time_decay = self.gamma**np.arange(1, self.horizon + 1)
-
                 # Y represents our model targets.
                 # B represents our critic targets.
                 y_coll_i = np.zeros((batch_size, self.horizon))
@@ -267,8 +264,7 @@ class DeepDeterministicPolicyGradients:
                     if t_batch[k]:
                         b_coll_i[k] = r_batch[k, 0, 0]
                     else:
-                        b_coll_i[k] = (r_batch[k, 0, 0] + np.inner(
-                                target_q[k, :self.horizon], time_decay))
+                        b_coll_i[k] = np.mean(target_q[k, :self.horizon])
 
                 # Update the model and critic given the targets.
                 (loss, model_loss, expected_reward) = self.critic.train(
@@ -428,7 +424,9 @@ class CriticNetwork:
                 labels=self.predicted_y_coll_value, logits=self.y_coll_out),
             axis=1)
         self.reward_loss = tf.reduce_sum(
-            (self.predicted_b_coll_value - self.b_coll_out)**2, axis=1)
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=self.predicted_b_coll_value, logits=self.b_coll_out)
+            , axis=1)
         self.loss = tf.reduce_mean(self.model_loss + self.reward_loss)
 
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(

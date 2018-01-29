@@ -37,6 +37,13 @@ MATERIALS = [
 ]
 
 
+SPAWN_REGIONS = [
+        'living_room',
+        # 'laundry_room',
+        'kitchen',
+        # 'dining_room',
+        ]
+
 class SimulationRandomizer:
 
     def __init__(self):
@@ -80,146 +87,41 @@ class SimulationRandomizer:
         self.pause_physics()
 
         # Pick randomized parameters.
-        hallway_width = (np.random.random() *
-                         (self.max_hallway_width - self.min_hallway_width) +
-                         self.min_hallway_width)
-        wall_height = (np.random.random() *
-                       (self.max_wall_height - self.min_wall_height) +
-                       self.min_wall_height)
-        wall_length = self.wall_length
-        wall_width = self.wall_width
-        quadrotor_ty = (np.random.random() *
-                        (hallway_width - self.quadrotor_width) -
-                        (hallway_width - self.quadrotor_width) / 2)
+        # TODO(kirmani): Give each sample a PMF that corresponds to its area a
+        # opposed to uniformly sampling. This currently biases to explore small
+        # regions for often.
+        spawn_room = random.choice(SPAWN_REGIONS)
+        if spawn_room == 'living_room':
+            min_x = 1.0
+            max_x = 4.5
+            min_y = 1.0
+            max_y = 4.5
+        elif spawn_room == 'kitchen':
+            min_x = 1.0
+            max_x = 4.5
+            min_y = 6.0
+            max_y = 7.0
+
+        quadrotor_tx = min_x + (np.random.random() * (max_x - min_x))
+        quadrotor_ty = min_y + (np.random.random() * (max_y - min_y))
+
+
         quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw
                          - self.max_quadrotor_start_yaw) * np.pi / 180.0
 
-        floorplan_2d = self.generate_floorplan()
-        rows = floorplan_2d.shape[0]
-        cols = floorplan_2d.shape[1]
-
-        # Extract bounding boxes from connected components.
-        (labeled, _) = ndimage.label(floorplan_2d)
-        boxes = ndimage.find_objects(labeled)
-
-        # Create a 3D world that corresponds to our 2D floorplan.
-
-        # Delete existing objects.
-        self.delete_model('floor')
-        self.delete_model('bottom_border')
-        self.delete_model('top_border')
-        self.delete_model('left_border')
-        self.delete_model('right_border')
-        self.delete_model('ceiling')
-        for i in range(self.num_boxes):
-            string = 'box%d' % i
-            self.delete_model(string)
-        self.num_boxes = 0
-
-        # Transform our floorplan into 3D boxes.
-        # Left corner starts at (0, 0).
-        for box in boxes:
-            start = [x.start for x in box]
-            size = [(x.stop - x.start) for x in box]
-            self.spawn_box(
-                model_name='box%d' % (self.num_boxes),
-                tx=hallway_width * start[1] + (hallway_width * size[1]) / 2,
-                ty=hallway_width * start[0] + (hallway_width * size[0]) / 2,
-                tz=wall_height / 2,
-                sx=hallway_width * size[1],
-                sy=hallway_width * size[0],
-                sz=wall_height,
-                material=random.choice(MATERIALS))
-            self.num_boxes += 1
-
-        # Bottom border.
-        self.spawn_box(
-            model_name='bottom_border',
-            tx=hallway_width * cols / 2,
-            ty=-0.1,
-            tz=wall_height / 2,
-            sx=hallway_width * cols,
-            sy=0.2,
-            sz=wall_height,
-            material=random.choice(MATERIALS))
-
-        # Top border.
-        self.spawn_box(
-            model_name='top_border',
-            tx=hallway_width * cols / 2,
-            ty=hallway_width * rows + 0.1,
-            tz=wall_height / 2,
-            sx=hallway_width * cols,
-            sy=0.2,
-            sz=wall_height,
-            material=random.choice(MATERIALS))
-
-        # Left border.
-        self.spawn_box(
-            model_name='left_border',
-            tx=-0.1,
-            ty=hallway_width * rows / 2,
-            tz=wall_height / 2,
-            sx=0.2,
-            sy=hallway_width * rows,
-            sz=wall_height,
-            material=random.choice(MATERIALS))
-
-        # Right border.
-        self.spawn_box(
-            model_name='right_border',
-            tx=hallway_width * cols + 0.1,
-            ty=hallway_width * rows / 2,
-            tz=wall_height / 2,
-            sx=0.2,
-            sy=hallway_width * rows,
-            sz=wall_height,
-            material=random.choice(MATERIALS))
-
-        # Floor.
-        self.spawn_box(
-            model_name='floor',
-            tx=hallway_width * float(cols) / 2,
-            ty=hallway_width * float(rows) / 2,
-            tz=0.0,
-            sx=hallway_width * cols,
-            sy=hallway_width * rows,
-            sz=0.2,
-            material=random.choice(MATERIALS))
-
-        # Ceiling.
-        self.spawn_box(
-            model_name='ceiling',
-            tx=hallway_width * float(cols) / 2,
-            ty=hallway_width * float(rows) / 2,
-            tz=wall_height + 0.1,
-            sx=hallway_width * cols,
-            sy=hallway_width * rows,
-            sz=0.2,
-            material=random.choice(MATERIALS))
-
-        # Choose safe location for quadrotor to spawn.
-        hallways = np.transpose(np.where(floorplan_2d == 0))
-        (drone_row, drone_col) = random.choice([(x[0], x[1]) for x in hallways])
-
-        # Min amount of room on each side.
-        slack = 0.5
-
-        # Where offset is from bottom left corner.
-        drone_offsetrow = slack + self.quadrotor_width / 2 + np.random.random(
-        ) * ((hallway_width - slack * 2 - self.quadrotor_width) - 0) + 0
-        drone_offsetcol = slack + self.quadrotor_width / 2 + np.random.random(
-        ) * ((hallway_width - slack * 2 - self.quadrotor_width) - 0) + 0
-
         # Spawn our quadrotor.
         self.spawn_quadrotor(
-            tx=hallway_width * drone_col + drone_offsetcol,
-            ty=hallway_width * drone_row + drone_offsetrow,
+            tx=quadrotor_tx,
+            ty=quadrotor_ty,
             tz=1.0,
             yaw=quadrotor_yaw)
 
         # Unpause physics.
         self.unpause_physics()
+
+        # Wait a little bit for the drone spawn to stabilize. Maybe there's a
+        # way to do this without sleeping?
+        rospy.sleep(2)
 
     def generate_floorplan(self, rows=10, cols=18, num_hallways=6):
         """

@@ -100,6 +100,7 @@ class DeepDronePlanner:
         self.randomize_simulation = SimulationRandomizer()
 
         # Set up policy search network.
+        self.linear_velocity = 0.5
         self.action_dim = 2
         scale = 0.1
         self.image_width = int(640 * scale)
@@ -310,13 +311,10 @@ class DeepDronePlanner:
         return state
 
     def step(self, state, action):
-        control = self.action_to_control(action)
-
         vel_msg = Twist()
-        vel_msg.linear.x = control[0]
-        vel_msg.linear.y = 0
-        vel_msg.linear.z = 0
-        vel_msg.angular.z = control[1]
+        vel_msg.linear.x = self.linear_velocity
+        vel_msg.linear.z = action[0]
+        vel_msg.angular.z = action[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -325,6 +323,7 @@ class DeepDronePlanner:
         return self.get_current_state()
 
     def visualize(self, state, actions):
+        # NOTE(kirmani): This doesn't work after adding non-planar controls.
         for i in range(state.shape[2]):
             plt.subplot(1, state.shape[2] + 1, state.shape[2] - i)
             plt.imshow(state[:, :, i], cmap="gray")
@@ -349,9 +348,8 @@ class DeepDronePlanner:
         exit()
 
     def reward(self, state, action):
-        control = self.action_to_control(action)
         collision_cost = 1 if not self.collided else 0
-        task_cost = control[0]
+        task_cost = 0.0
         return (collision_cost, task_cost)
 
     def terminal(self, state, action):
@@ -362,18 +360,12 @@ class DeepDronePlanner:
         return self.collided
 
     def action_to_control(self, action):
-        max_control = 1.0
-        min_control = 0.4
-        control = np.zeros(2)
-        control[0] = ((max_control - min_control) * (action[0] + 1.0) / 2.0 + min_control)
-        control[1] = action[1]
-        return control
+        # NOTE(kirmani): This doesn't work after adding non-planar controls.
+        return None
 
     def control_to_metric(self, control):
-        metric = np.zeros(2)
-        metric[0] = control[0] * self.max_linear_velocity
-        metric[1] = control[1] * self.max_angular_velocity
-        return metric
+        # NOTE(kirmani): This doesn't work after adding non-planar controls.
+        return None
 
     def train(self, model_dir=None):
         env = Environment(
