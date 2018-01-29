@@ -433,7 +433,7 @@ class CriticNetwork:
             self.loss)
 
         # Metrics
-        self.expected_reward = tf.reduce_mean(self.b_coll_out)
+        self.expected_reward = tf.reduce_mean(tf.nn.sigmoid(self.b_coll_out))
 
         # Get the gradient of the net w.r.t. the action
         # critic_influence = self.b_task_out + collision_weight * self.b_coll_out
@@ -452,59 +452,43 @@ class CriticNetwork:
         return (loss, model_loss, expected_reward)
 
     def predict(self, inputs, actions, bootstraps=50):
-        collision_probability = []
+        preds = []
         for b in range(bootstraps):
-            collision_probability.append(
+            preds.append(
                 self.sess.run(
-                    self.y_coll_out,
-                    feed_dict={
-                        self.inputs: inputs,
-                        self.actions: actions
-                    }))
-        collision_samples = np.stack(collision_probability, axis=-1)
-        collision_samples = 1.0 / (1.0 + np.exp(-collision_samples))
-        collision_expectation = np.mean(collision_samples, axis=-1)
-        collision_std = np.std(collision_samples, axis=-1)
-        y_coll_out = (
-            collision_expectation - self.uncertainty_weight * collision_std)
-        y_coll_out = np.clip(y_coll_out, 0, 1)
-
-        expected_reward = self.sess.run(
-            self.b_coll_out,
-            feed_dict={
-                self.inputs: inputs,
-                self.actions: actions
-            })
-        b_coll_out = np.array(expected_reward)
-        preds = np.concatenate([y_coll_out, b_coll_out], axis=1)
-        return preds
-
-    def predict_target(self, inputs, actions, bootstraps=50):
-        collision_probability = []
-        for b in range(bootstraps):
-            collision_probability.append(
-                self.sess.run(
-                    self.target_y_coll_out,
+                    [self.y_coll_out, self.b_coll_out],
                     feed_dict={
                         self.target_inputs: inputs,
                         self.target_actions: actions
                     }))
-        collision_samples = np.stack(collision_probability, axis=-1)
-        collision_samples = 1.0 / (1.0 + np.exp(-collision_samples))
-        collision_expectation = np.mean(collision_samples, axis=-1)
-        collision_std = np.std(collision_samples, axis=-1)
-        y_coll_out = (
-            collision_expectation - self.uncertainty_weight * collision_std)
-        y_coll_out = np.clip(y_coll_out, 0, 1)
+        y_coll_out = np.array([pred[0] for pred in preds])
+        b_coll_out = np.array([pred[1] for pred in preds])
+        preds = np.concatenate([y_coll_out, b_coll_out], axis=-1)
+        preds = 1.0 / (1.0 + np.exp(-preds))
+        expectation = np.mean(preds, axis=0)
+        stddev = np.std(preds, axis=0)
+        preds = (expectation - self.uncertainty_weight * stddev)
+        preds = np.clip(preds, 0, 1)
+        return preds
 
-        expected_reward = self.sess.run(
-            self.target_b_coll_out,
-            feed_dict={
-                self.target_inputs: inputs,
-                self.target_actions: actions
-            })
-        b_coll_out = np.array(expected_reward)
-        preds = np.concatenate([y_coll_out, b_coll_out], axis=1)
+    def predict_target(self, inputs, actions, bootstraps=50):
+        preds = []
+        for b in range(bootstraps):
+            preds.append(
+                self.sess.run(
+                    [self.target_y_coll_out, self.target_b_coll_out],
+                    feed_dict={
+                        self.target_inputs: inputs,
+                        self.target_actions: actions
+                    }))
+        y_coll_out = np.array([pred[0] for pred in preds])
+        b_coll_out = np.array([pred[1] for pred in preds])
+        preds = np.concatenate([y_coll_out, b_coll_out], axis=-1)
+        preds = 1.0 / (1.0 + np.exp(-preds))
+        expectation = np.mean(preds, axis=0)
+        stddev = np.std(preds, axis=0)
+        preds = (expectation - self.uncertainty_weight * stddev)
+        preds = np.clip(preds, 0, 1)
         return preds
 
     def update_target_network(self):
