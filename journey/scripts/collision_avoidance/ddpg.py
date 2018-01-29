@@ -458,8 +458,8 @@ class CriticNetwork:
                 self.sess.run(
                     [self.y_coll_out, self.b_coll_out],
                     feed_dict={
-                        self.target_inputs: inputs,
-                        self.target_actions: actions
+                        self.inputs: inputs,
+                        self.actions: actions
                     }))
         y_coll_out = np.array([pred[0] for pred in preds])
         b_coll_out = np.array([pred[1] for pred in preds])
