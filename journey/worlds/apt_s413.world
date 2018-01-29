@@ -1,3 +1,4 @@
+<?xml version="1.0"?>
 <sdf version='1.6'>
   <world name='default'>
     <light name='sun' type='directional'>
@@ -1871,7 +1872,7 @@
           </geometry>
           <material>
             <script>
-              <name>Gazebo/Grey</name>
+              <name>Gazebo/WoodFloor</name>
               <uri>file://media/materials/scripts/gazebo.material</uri>
             </script>
             <ambient>0.3 0.3 0.3 1</ambient>
@@ -1970,7 +1971,7 @@
             <lighting>1</lighting>
             <script>
               <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
+              <name>Gazebo/WoodFloor</name>
             </script>
             <ambient>0.3 0.3 0.3 1</ambient>
             <diffuse>0.7 0.7 0.7 1</diffuse>
@@ -2067,7 +2068,7 @@
             <lighting>1</lighting>
             <script>
               <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Grey</name>
+              <name>Gazebo/WoodFloor</name>
             </script>
             <ambient>0.3 0.3 0.3 1</ambient>
             <diffuse>0.7 0.7 0.7 1</diffuse>
