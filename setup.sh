@@ -51,6 +51,10 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
   # Install ardrone_autonomy.
   sudo apt-get -y install ros-kinetic-ardrone-autonomy freeglut3-dev liblapack-dev libopenblas-dev
 
+  # Install python packages
+  sudo apt-get install python-pip
+  sudo pip install scipy tensorflow
+
   # Link this project to your journey workspace.
   unlink ~/journey_ws/src/journey
   ln -s $PROJECT_DIR ~/journey_ws/src/journey
