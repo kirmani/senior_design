@@ -49,7 +49,7 @@ To start training, open terminal, and run the following:
 
 ```
 journey
-roslaunch journey train_obstacle_avoidance.py
+rosrun journey train_obstacle_avoidance.py
 ```
 
 ### Sending navigation goals in simulation.
