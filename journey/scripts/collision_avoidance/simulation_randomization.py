@@ -86,8 +86,9 @@ class SimulationRandomizer:
 
     def __call__(self):
         print("Randomized simulation.")
-        self.spawn_light()
+
         self.pause_physics()
+        self.spawn_light()
 
         # Pick randomized parameters.
         # Give each sample a PMF that corresponds to its area as
@@ -335,6 +336,12 @@ class SimulationRandomizer:
 
     #might not work because lights might not be considered models
     def spawn_light(self, tx=5, ty=3, tz=5):
+        #TODO armand mess around with range and see if it does anything
+        s = '<?xml version="1.0" ?><sdf version="1.5"><light type="directional" name="sun2"><cast_shadows>true</cast_shadows>'
+        s += '<pose>5 3 5 0 0 0</pose><diffuse>0.8 0.8 0.8 1</diffuse><specular>0.2 0.2 0.2 1</specular>'
+        s += '<attenuation><range>1000</range><constant>0.9</constant><linear>0.01</linear><quadratic>0.001</quadratic>'
+        s += '</attenuation><direction>-0.5 0.1 -0.9</direction></light></sdf>'
+
         max_roll = max_pitch = max_yaw = .1
         roll = np.random.random()*max_roll
         pitch = np.random.random()*max_pitch
@@ -350,30 +357,39 @@ class SimulationRandomizer:
         reset_pose.orientation.y = quaternion[1]
         reset_pose.orientation.z = quaternion[2]
         reset_pose.orientation.w = quaternion[3]
+        model_name = 'sun2'
+        success_spawn = self.spawn_model(model_name, s, reset_pose)
+        if success_spawn:
+            print("spawning sun2 is a success")
 
+
+
+        #test to see if we can change pose with this code 
+        reset_pose.position.x = 6
         model_state = ModelState()
-        model_state.model_name = 'sun'
+        model_state.model_name = 'sun2'
         model_state.reference_frame = 'world'
         model_state.pose = reset_pose
         self.model_state_publisher.publish(model_state)
-        
-        
+                      
+
+
         diffuse = ColorRGBA()
         diffuse.r = 204
-        diffuse.g = 10 #204 is the default, we're just using 10 for testing to see if light changes colour from white
+        diffuse.g = 204 #204 is the default, we're just using 10 for testing to see if light changes colour from white
         diffuse.b = 204
         diffuse.a = 255
-        attenuation_constant = 0.9
-        attenuation_linear = 0.01
-        attenuation_quadratic = 0.0
-        attenuation = (attenuation_constant, attenuation_linear, attenuation_quadratic)
+        #changing attenuation doesn't seem do do anything
+        atten_const = 0.9
+        atten_lin = 0.01
+        atten_quad = 0.0
 
         rospy.wait_for_service('gazebo/set_light_properties')
         set_light_properties = rospy.ServiceProxy('gazebo/set_light_properties', SetLightProperties)
-        success = set_light_properties('sun', diffuse, attenuation)
+        success = set_light_properties('sun2', diffuse, atten_const, atten_lin, atten_quad)
         if success:
             print("set light properties was a success!")
-        
+       
 
     def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
         position = (tx, ty, tz)
