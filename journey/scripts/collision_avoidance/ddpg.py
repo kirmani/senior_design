@@ -83,10 +83,10 @@ class DeepDeterministicPolicyGradients:
 
     def eval(self, env, model_dir, num_attempts=1, max_episode_len=1000):
         saver = tf.train.Saver()
-        saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
+        saver.restore(self.sess, model_dir)
 
         for i in range(num_attempts):
-            total_reward = 0.0
+            episode_reward = 0.0
             state = env.reset()
             for j in range(max_episode_len):
                 # Predict the optimal actions over the horizon.
@@ -108,7 +108,7 @@ class DeepDeterministicPolicyGradients:
                     break
 
             print("Episode over.")
-            print("Reward: %.4f" % total_reward)
+            print("Reward: %.4f" % episode_reward)
 
     def load_model(self, model_dir):
         saver = tf.train.Saver()
@@ -425,8 +425,8 @@ class CriticNetwork:
             axis=1)
         self.reward_loss = tf.reduce_sum(
             tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_b_coll_value, logits=self.b_coll_out)
-            , axis=1)
+                labels=self.predicted_b_coll_value, logits=self.b_coll_out),
+            axis=1)
         self.loss = tf.reduce_mean(self.model_loss + self.reward_loss)
 
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
