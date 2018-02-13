@@ -44,11 +44,13 @@ class DeepDeterministicPolicyGradients:
                  minibatch_size=128,
                  gamma=0.99,
                  horizon=16,
-                 collision_weight=0.01):
+                 collision_weight=0.01,
+                 discrete_controls=False):
         self.collision_weight = collision_weight
         self.gamma = gamma
         self.horizon = horizon
         self.minibatch_size = minibatch_size
+        self.discrete_controls = discrete_controls
 
         # Start tensorflow session.
         self.sess = tf.Session()
@@ -122,6 +124,7 @@ class DeepDeterministicPolicyGradients:
               num_epochs=1000,
               episodes_in_epoch=16,
               max_episode_len=1000,
+              epsilon_zero=0.2,
               model_dir=None):
 
         # Create a saver object for saving and loading variables
@@ -167,6 +170,10 @@ class DeepDeterministicPolicyGradients:
             epoch = tf.train.global_step(self.sess, global_step)
             epoch_rewards = []
             total_epoch_avg_max_q = 0.0
+
+            epsilon = epsilon_zero * (1.0 - epoch / num_epochs)
+            print("Explore with epsilon greedy (epsilon = %.4f)" % epsilon)
+
             for i in range(episodes_in_epoch):
                 state = env.reset()
                 episode_reward = 0.0
@@ -187,7 +194,11 @@ class DeepDeterministicPolicyGradients:
                     action = action_sequence[0][0]
 
                     # Added exploration noise.
-                    action += actor_noise()
+                    if self.discrete_controls:
+                        if np.random.random() < epsilon:
+                            action = np.random.random(self.action_dim)
+                    else:
+                        action += actor_noise()
 
                     # Bound action within [-1, 1]
                     action = np.clip(action, -1, 1)

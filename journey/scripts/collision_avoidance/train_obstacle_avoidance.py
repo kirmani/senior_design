@@ -43,9 +43,10 @@ class DeepDronePlanner:
     def __init__(self,
                  distance_threshold=0.5,
                  rate=4,
-                 episodes_before_position_reset=5):
+                 discrete_controls=True):
         self.distance_threshold = distance_threshold  # meters
         self.update_rate = rate  # Hz
+        self.discrete_controls = discrete_controls
 
         # Set max linear velocity to 0.5 meters/sec.
         self.max_linear_velocity = 0.5
@@ -101,7 +102,10 @@ class DeepDronePlanner:
 
         # Set up policy search network.
         self.linear_velocity = 0.5
-        self.action_dim = 2
+        if self.discrete_controls:
+            self.action_dim = 9
+        else:
+            self.action_dim = 2
         scale = 0.1
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
@@ -185,7 +189,10 @@ class DeepDronePlanner:
             tf.random_uniform([self.horizon * self.action_dim], -3e-4, 3e-4))
         actions = tf.matmul(actions, actions_weights) + actions_bias
         actions = tf.reshape(actions, [-1, self.horizon, self.action_dim])
-        actions = tf.nn.tanh(actions)
+        if self.discrete_controls:
+            actions = tf.nn.softmax(actions)
+        else:
+            actions = tf.nn.tanh(actions)
         return inputs, actions
 
     def create_critic_network(self, scope):
@@ -313,8 +320,13 @@ class DeepDronePlanner:
     def step(self, state, action):
         vel_msg = Twist()
         vel_msg.linear.x = self.linear_velocity
-        vel_msg.linear.z = action[0]
-        vel_msg.angular.z = action[1]
+        if self.discrete_controls:
+            control = np.argmax(action)
+            vel_msg.linear.z = [-1, 0, 1][control / 3]
+            vel_msg.angular.z = [-1, 0, 1][control % 3]
+        else:
+            vel_msg.linear.z = action[0]
+            vel_msg.angular.z = action[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
