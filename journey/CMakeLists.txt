@@ -7,6 +7,7 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   ros_numpy
   std_msgs
+  gazebo_dev
 )
 
 add_message_files(
@@ -20,12 +21,13 @@ generate_messages(
 )
 
 catkin_package(
-  CATKIN_DEPENDS roscpp rospy std_msgs message_runtime
+  CATKIN_DEPENDS roscpp rospy std_msgs message_runtime gazebo_dev
 )
 
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  ${gazebo_INCLUDE_DIRS}
 )
 
 add_executable(randomizer_tools src/randomizer_tools.cpp)
