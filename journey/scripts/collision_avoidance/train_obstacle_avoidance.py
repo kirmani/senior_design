@@ -40,10 +40,7 @@ from multiplicative_integration_lstm import MultiplicativeIntegrationLSTMCell
 
 class DeepDronePlanner:
 
-    def __init__(self,
-                 distance_threshold=0.5,
-                 rate=4,
-                 discrete_controls=True):
+    def __init__(self, distance_threshold=0.5, rate=4, discrete_controls=True):
         self.distance_threshold = distance_threshold  # meters
         self.update_rate = rate  # Hz
         self.discrete_controls = discrete_controls
@@ -116,7 +113,8 @@ class DeepDronePlanner:
         self.ddpg = DeepDeterministicPolicyGradients(
             self.create_actor_network,
             self.create_critic_network,
-            horizon=self.horizon)
+            horizon=self.horizon,
+            discrete_controls=self.discrete_controls)
 
         print("Deep drone planner initialized.")
 

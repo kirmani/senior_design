@@ -197,6 +197,7 @@ class DeepDeterministicPolicyGradients:
                     if self.discrete_controls:
                         if np.random.random() < epsilon:
                             action = np.random.random(self.action_dim)
+                            action = action / np.sum(action)
                     else:
                         action += actor_noise()
 
