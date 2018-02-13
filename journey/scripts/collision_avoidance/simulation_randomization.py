@@ -28,7 +28,11 @@ from gazebo_msgs.srv import DeleteModel
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SpawnModel
 from geometry_msgs.msg import Pose
-from std_srvs.srv import Empty
+from std_msgs.msg import Empty as EmptyMessage
+from std_srvs.srv import Empty as EmptyService
+
+from gazebo_msgs.srv import SetLightProperties
+from std_msgs.msg import ColorRGBA
 
 MATERIALS = [
     'Gazebo/WoodFloor',
@@ -61,6 +65,9 @@ class SimulationRandomizer:
         self.model_state_publisher = rospy.Publisher(
             '/gazebo/set_model_state', ModelState, queue_size=10)
 
+        self.randomizer_publisher = rospy.Publisher(
+            '/journey/randomize', EmptyMessage, queue_size=10)
+
         print("Initialized simulation randomizer.")
 
     def delete_model(self, model):
@@ -72,13 +79,13 @@ class SimulationRandomizer:
     def pause_physics(self):
         # Pause physics.
         rospy.wait_for_service('gazebo/pause_physics')
-        pause_physics = rospy.ServiceProxy('gazebo/pause_physics', Empty)
+        pause_physics = rospy.ServiceProxy('gazebo/pause_physics', EmptyService)
         pause_physics()
 
     def unpause_physics(self):
         # Unpause physics.
         rospy.wait_for_service('gazebo/unpause_physics')
-        unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics', Empty)
+        unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics', EmptyService)
         unpause_physics()
 
     def __call__(self):
@@ -86,28 +93,57 @@ class SimulationRandomizer:
 
         self.pause_physics()
 
+        self.randomizer_publisher.publish(EmptyMessage())
+
+        #self.spawn_light()
+
         # Pick randomized parameters.
-        # TODO(kirmani): Give each sample a PMF that corresponds to its area a
-        # opposed to uniformly sampling. This currently biases to explore small
-        # regions for often.
-        spawn_room = random.choice(SPAWN_REGIONS)
-        if spawn_room == 'living_room':
+        # Give each sample a PMF that corresponds to its area as
+        # opposed to uniformly sampling, so doesn't bias to explore small
+        # regions more often.
+        if np.random.random() > .23 :
+            spawn_room = 'living_room'
             min_x = 1.0
-            max_x = 4.5
+            max_x = 4.0
             min_y = 1.0
-            max_y = 4.5
-        elif spawn_room == 'kitchen':
+            max_y = 4.0
+        else:
+            spawn_room = 'kitchen'
             min_x = 1.0
-            max_x = 4.5
+            max_x = 4.0
             min_y = 6.0
             max_y = 7.0
 
         quadrotor_tx = min_x + (np.random.random() * (max_x - min_x))
         quadrotor_ty = min_y + (np.random.random() * (max_y - min_y))
 
+        if spawn_room == 'living_room':
+            if quadrotor_tx > 2.25 and quadrotor_ty > 2.25:
+                quadrotor_yaw = 165
 
-        quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw
-                         - self.max_quadrotor_start_yaw) * np.pi / 180.0
+            elif quadrotor_tx < 2.25 and quadrotor_ty > 2.25:
+                quadrotor_yaw = 20
+
+            elif quadrotor_tx > 2.25 and quadrotor_ty < 2.25:
+                quadrotor_yaw = 135
+
+            elif quadrotor_tx < 2.25 and quadrotor_ty < 2.25:
+                quadrotor_yaw = 45
+                    
+
+        elif spawn_room == 'kitchen':
+            if quadrotor_tx > 3.0:
+                quadrotor_yaw = 270
+            else:
+                quadrotor_yaw = 0
+            
+        quadrotor_yaw += np.random.random() * np.pi *(45) / 360.0 - 22.5 #+- 22.5 degrees
+
+        if quadrotor_yaw < 0:
+            quadrotor_yaw += 360
+
+        #quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw
+        #                 - self.max_quadrotor_start_yaw) * np.pi / 180.0
 
         # Spawn our quadrotor.
         self.spawn_quadrotor(
@@ -115,13 +151,171 @@ class SimulationRandomizer:
             ty=quadrotor_ty,
             tz=1.0,
             yaw=quadrotor_yaw)
-
         # Unpause physics.
         self.unpause_physics()
-
         # Wait a little bit for the drone spawn to stabilize. Maybe there's a
         # way to do this without sleeping?
         rospy.sleep(2)
+
+    #might not work because lights might not be considered models
+    def spawn_light(self, tx=5, ty=3, tz=5):
+        #TODO armand mess around with range and see if it does anything
+        #s = '<?xml version="1.0" ?><sdf version="1.5"><light type="directional" name="sun2"><cast_shadows>true</cast_shadows>'
+        #s += '<pose>5 3 5 0 0 0</pose><diffuse>0.8 0.8 0.8 1</diffuse><specular>0.2 0.2 0.2 1</specular>'
+        #s += '<attenuation><range>1000</range><constant>0.9</constant><linear>0.01</linear><quadratic>0.001</quadratic>'
+        #s += '</attenuation><direction>-0.5 0.1 -0.9</direction></light></sdf>'
+
+        max_roll = max_pitch = max_yaw = .1
+        roll = np.random.random()*max_roll
+        pitch = np.random.random()*max_pitch
+        yaw = np.random.random()*max_yaw
+        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+
+        position = (tx, ty, tz)
+        reset_pose = Pose()
+        reset_pose.position.x = position[0]
+        reset_pose.position.y = position[1]
+        reset_pose.position.z = position[2]
+        reset_pose.orientation.x = quaternion[0]
+        reset_pose.orientation.y = quaternion[1]
+        reset_pose.orientation.z = quaternion[2]
+        reset_pose.orientation.w = quaternion[3]
+        model_name = 'sun2'
+        success_spawn = self.spawn_model(model_name, s, reset_pose)
+        if success_spawn:
+            print("spawning sun2 is a success")
+
+
+
+        #test to see if we can change pose with this code 
+        reset_pose.position.x = 6
+        model_state = ModelState()
+        model_state.model_name = 'sun2'
+        model_state.reference_frame = 'world'
+        model_state.pose = reset_pose
+        self.model_state_publisher.publish(model_state)
+                      
+
+
+        diffuse = ColorRGBA()
+        diffuse.r = 204
+        diffuse.g = 204 #204 is the default, we're just using 10 for testing to see if light changes colour from white
+        diffuse.b = 204
+        diffuse.a = 255
+        #changing attenuation doesn't seem do do anything
+        atten_const = 0.9
+        atten_lin = 0.01
+        atten_quad = 0.0
+
+        rospy.wait_for_service('gazebo/set_light_properties')
+        set_light_properties = rospy.ServiceProxy('gazebo/set_light_properties', SetLightProperties)
+        success = set_light_properties('sun2', diffuse, atten_const, atten_lin, atten_quad)
+        if success:
+            print("set light properties was a success!")
+       
+
+    def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
+        position = (tx, ty, tz)
+        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+
+        reset_pose = Pose()
+        reset_pose.position.x = position[0]
+        reset_pose.position.y = position[1]
+        reset_pose.position.z = position[2]
+        reset_pose.orientation.x = quaternion[0]
+        reset_pose.orientation.y = quaternion[1]
+        reset_pose.orientation.z = quaternion[2]
+        reset_pose.orientation.w = quaternion[3]
+
+        model_state = ModelState()
+        model_state.model_name = 'quadrotor'
+        model_state.reference_frame = 'world'
+        model_state.pose = reset_pose
+        self.model_state_publisher.publish(model_state)
+
+    def spawn_box(self,
+                  model_name="box",
+                  tx=0,
+                  ty=0,
+                  tz=0.5,
+                  yaw=0,
+                  pitch=0,
+                  roll=0,
+                  sx=1,
+                  sy=1,
+                  sz=1,
+                  static=True,
+                  material='Gazebo/Blue'):
+        s = '<?xml version="1.0" ?><sdf version="1.4"><model name="%s">' % model_name
+        s += '<static>%s</static>' % ('true' if static else 'false')
+        s += '<pose>0 0 0 0 0 0</pose>'
+        s += '<link name="link"><collision name="collision"><geometry><box>'
+
+        s += '<size>%.4f %.4f %.4f</size>' % (sx, sy, sz)
+        s += '</box></geometry></collision><visual name="visual"><geometry><box>'
+        s += '<size>%.4f %.4f %.4f</size>' % (sx, sy, sz)
+        s += '</box></geometry>'
+        s += '<material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>%s</name></material>' % material
+        s += '</visual></link></model></sdf>'
+
+        pose = Pose()
+        pose.position.x = tx
+        pose.position.y = ty
+        pose.position.z = tz
+        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+        pose.orientation.x = quaternion[0]
+        pose.orientation.y = quaternion[1]
+        pose.orientation.z = quaternion[2]
+        pose.orientation.w = quaternion[3]
+
+        self.spawn_model(model_name, s, pose)
+
+    def spawn_cylinder(self,
+                       model_name="cylinder",
+                       tx=0,
+                       ty=0,
+                       tz=0.5,
+                       radius=.1,
+                       length=2,
+                       yaw=0,
+                       pitch=0,
+                       roll=0,
+                       static=True,
+                       material='Gazebo/Blue'):
+        s = '<?xml version="1.0" ?><sdf version="1.4"><model name="%s">' % model_name
+        s += '<static>%s</static>' % ('true' if static else 'false')
+        s += '<link name="pillar">'
+        s += '<pose>0 0 0 0 0 0</pose>'
+
+        s += '<collision name="collision"><geometry><cylinder>'
+        s += '<radius>%.4f</radius>' % (radius)
+        s += '<length>%.4f</length>' % (length)
+        s += '</cylinder></geometry></collision>'
+
+        s += '<visual name="visual"><geometry><cylinder>'
+        s += '<radius>%.4f</radius>' % (radius)
+        s += '<length>%.4f</length>' % (length)
+        s += '</cylinder></geometry>'
+
+        s += '<material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>%s</name></material>' % material
+        s += '</visual></link></model></sdf>'
+
+        pose = Pose()
+        pose.position.x = tx
+        pose.position.y = ty
+        pose.position.z = tz
+        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+        pose.orientation.x = quaternion[0]
+        pose.orientation.y = quaternion[1]
+        pose.orientation.z = quaternion[2]
+        pose.orientation.w = quaternion[3]
+
+        self.spawn_model(model_name, s, pose)
+
+    def spawn_model(self, model_name, model_xml, initial_pose):
+        rospy.wait_for_service('gazebo/spawn_sdf_model')
+        spawn_model = rospy.ServiceProxy('gazebo/spawn_sdf_model', SpawnModel)
+        spawn_model(model_name, model_xml, "quadrotor", initial_pose, "world")
 
     def generate_floorplan(self, rows=10, cols=18, num_hallways=6):
         """
@@ -308,108 +502,6 @@ class SimulationRandomizer:
 
         return floorplan
 
-    def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
-        position = (tx, ty, tz)
-        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
-
-        reset_pose = Pose()
-        reset_pose.position.x = position[0]
-        reset_pose.position.y = position[1]
-        reset_pose.position.z = position[2]
-        reset_pose.orientation.x = quaternion[0]
-        reset_pose.orientation.y = quaternion[1]
-        reset_pose.orientation.z = quaternion[2]
-        reset_pose.orientation.w = quaternion[3]
-
-        model_state = ModelState()
-        model_state.model_name = 'quadrotor'
-        model_state.reference_frame = 'world'
-        model_state.pose = reset_pose
-        self.model_state_publisher.publish(model_state)
-
-    def spawn_box(self,
-                  model_name="box",
-                  tx=0,
-                  ty=0,
-                  tz=0.5,
-                  yaw=0,
-                  pitch=0,
-                  roll=0,
-                  sx=1,
-                  sy=1,
-                  sz=1,
-                  static=True,
-                  material='Gazebo/Blue'):
-        s = '<?xml version="1.0" ?><sdf version="1.4"><model name="%s">' % model_name
-        s += '<static>%s</static>' % ('true' if static else 'false')
-        s += '<pose>0 0 0 0 0 0</pose>'
-        s += '<link name="link"><collision name="collision"><geometry><box>'
-
-        s += '<size>%.4f %.4f %.4f</size>' % (sx, sy, sz)
-        s += '</box></geometry></collision><visual name="visual"><geometry><box>'
-        s += '<size>%.4f %.4f %.4f</size>' % (sx, sy, sz)
-        s += '</box></geometry>'
-        s += '<material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>%s</name></material>' % material
-        s += '</visual></link></model></sdf>'
-
-        pose = Pose()
-        pose.position.x = tx
-        pose.position.y = ty
-        pose.position.z = tz
-        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
-        pose.orientation.x = quaternion[0]
-        pose.orientation.y = quaternion[1]
-        pose.orientation.z = quaternion[2]
-        pose.orientation.w = quaternion[3]
-
-        self.spawn_model(model_name, s, pose)
-
-    def spawn_cylinder(self,
-                       model_name="cylinder",
-                       tx=0,
-                       ty=0,
-                       tz=0.5,
-                       radius=.1,
-                       length=2,
-                       yaw=0,
-                       pitch=0,
-                       roll=0,
-                       static=True,
-                       material='Gazebo/Blue'):
-        s = '<?xml version="1.0" ?><sdf version="1.4"><model name="%s">' % model_name
-        s += '<static>%s</static>' % ('true' if static else 'false')
-        s += '<link name="pillar">'
-        s += '<pose>0 0 0 0 0 0</pose>'
-
-        s += '<collision name="collision"><geometry><cylinder>'
-        s += '<radius>%.4f</radius>' % (radius)
-        s += '<length>%.4f</length>' % (length)
-        s += '</cylinder></geometry></collision>'
-
-        s += '<visual name="visual"><geometry><cylinder>'
-        s += '<radius>%.4f</radius>' % (radius)
-        s += '<length>%.4f</length>' % (length)
-        s += '</cylinder></geometry>'
-
-        s += '<material><script><uri>file://media/materials/scripts/gazebo.material</uri><name>%s</name></material>' % material
-        s += '</visual></link></model></sdf>'
-
-        pose = Pose()
-        pose.position.x = tx
-        pose.position.y = ty
-        pose.position.z = tz
-        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
-        pose.orientation.x = quaternion[0]
-        pose.orientation.y = quaternion[1]
-        pose.orientation.z = quaternion[2]
-        pose.orientation.w = quaternion[3]
-
-        self.spawn_model(model_name, s, pose)
-
-    def spawn_model(self, model_name, model_xml, initial_pose):
-        rospy.wait_for_service('gazebo/spawn_sdf_model')
-        spawn_model = rospy.ServiceProxy('gazebo/spawn_sdf_model', SpawnModel)
-        spawn_model(model_name, model_xml, "quadrotor", initial_pose, "world")
 
 
 def main(args):
