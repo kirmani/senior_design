@@ -24,6 +24,7 @@ import sys
 import traceback
 import time
 import tf
+import math
 from gazebo_msgs.srv import DeleteModel
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SpawnModel
@@ -118,34 +119,36 @@ class SimulationRandomizer:
         quadrotor_ty = min_y + (np.random.random() * (max_y - min_y))
 
         if spawn_room == 'living_room':
-            if quadrotor_tx > 2.25 and quadrotor_ty > 2.25:
-                quadrotor_yaw = 165
+            if quadrotor_tx > 2.0 and quadrotor_ty > 2.0: #quad1
+                quadrotor_yaw = 90
 
-            elif quadrotor_tx < 2.25 and quadrotor_ty > 2.25:
-                quadrotor_yaw = 20
+            elif quadrotor_tx < 2.0 and quadrotor_ty > 2.0: #quad2
+                quadrotor_yaw = 315
 
-            elif quadrotor_tx > 2.25 and quadrotor_ty < 2.25:
-                quadrotor_yaw = 135
+            elif quadrotor_tx > 2.0 and quadrotor_ty < 2.0: #quad4
+                quadrotor_yaw = 225
 
-            elif quadrotor_tx < 2.25 and quadrotor_ty < 2.25:
-                quadrotor_yaw = 45
-                    
+            elif quadrotor_tx < 2.0 and quadrotor_ty < 2.0: #quad3
+                quadrotor_yaw = 315
 
         elif spawn_room == 'kitchen':
             if quadrotor_tx > 3.0:
                 quadrotor_yaw = 270
             else:
                 quadrotor_yaw = 0
-            
-        quadrotor_yaw += np.random.random() * np.pi *(45) / 360.0 - 22.5 #+- 22.5 degrees
+         
+        quadrotor_yaw += (np.random.random() * 45) - 22.5 #+- 22.5 degrees of randomization
 
         if quadrotor_yaw < 0:
             quadrotor_yaw += 360
+
+        quadrotor_yaw = math.radians(quadrotor_yaw)
 
         #quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw
         #                 - self.max_quadrotor_start_yaw) * np.pi / 180.0
 
         # Spawn our quadrotor.
+
         self.spawn_quadrotor(
             tx=quadrotor_tx,
             ty=quadrotor_ty,
@@ -232,6 +235,8 @@ class SimulationRandomizer:
         model_state.reference_frame = 'world'
         model_state.pose = reset_pose
         self.model_state_publisher.publish(model_state)
+        print("quadcopter pose:")
+        print(reset_pose)
 
     def spawn_box(self,
                   model_name="box",
