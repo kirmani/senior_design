@@ -28,7 +28,7 @@ from gazebo_msgs.srv import DeleteModel
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SpawnModel
 from geometry_msgs.msg import Pose
-from std_srvs.msg import Empty as EmptyMessage
+from std_msgs.msg import Empty as EmptyMessage
 from std_srvs.srv import Empty as EmptyService
 
 from gazebo_msgs.srv import SetLightProperties
@@ -66,7 +66,7 @@ class SimulationRandomizer:
             '/gazebo/set_model_state', ModelState, queue_size=10)
 
         self.randomizer_publisher = rospy.Publisher(
-            '/journey/randomizer', EmptyMessage, queue_size=10)
+            '/journey/randomize', EmptyMessage, queue_size=10)
 
         print("Initialized simulation randomizer.")
 
