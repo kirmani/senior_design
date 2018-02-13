@@ -33,7 +33,7 @@ class RandomizerTools {
     /*initialization code*/
     // Create our node for communication
     node_ = new gazebo::transport::Node();
-    node_->Init();
+    node_->Init(
 
     // Start transport
     gazebo::transport::run();
@@ -41,33 +41,36 @@ class RandomizerTools {
 
   void OnRandomize(const std_msgs::Empty::ConstPtr &msg) {
     std::cout << "OnRandomize received." << std::endl;
-    //when called, this is what needs to be done
 
     // Publish to a Gazebo topic
-    gazebo::transport::PublisherPtr pub =
-    node_->Advertise<gazebo::msgs::Light>("~/light/modify");
+    gazebo::transport::PublisherPtr pub = node_->Advertise<gazebo::msgs::Light>("~/light/modify");
 
     // Wait for a subscriber to connect
     pub->WaitForConnection();
 
-    // Throttle Publication
-    gazebo::common::Time::MSleep(100);
+    // Throttle Publication (make sure gazebo and ros are like updating at the same time ish)
+    gazebo::common::Time::MSleep(100); //TODO what does this do?
 
     msgs::Light msg;
-    msg.set_name("sun2");
+    msg.set_name("sun");
 
-    msgs::Set(msg.mutable_pose(), <0 5 5 0 0 0>);
+    pose_t pose_sun;
+    pose_randomization(&pose_sun);
+    msgs::Set(msg.mutable_pose(), <0 5 5 pose_sun.roll pose_sun.pitch pose_sun.yaw>); 
+    //might have to use quaterniond and stuff
+    //type in gazebo world plugin tutorial to get to
 
     pub->Publish(msg);
   }
 
   /*randomly chooses pose (we're just gonna do roll pitch and yaw*/
+  //TODO gazbo pose in radians or degrees? in tutorial it's in radians, so let's do radians
   void pose_randomization(pose_t* pose) {
-    std::random_device rd;
-    std::mt19937 gen(rd())
-    std:uniform_real_distribution<0>
-
-    
+    std::default_random_engine generator;
+    std::uniform_real_distribution<float> distribution(0.0, 1.0); 
+    pose->roll = distribution(generator) * 0.1;
+    pose->pitch = distribution(generator) * 0.1;
+    pose->yaw = distribution(generator) * 0.1;    
 }    
 
  private:
