@@ -28,7 +28,8 @@ from gazebo_msgs.srv import DeleteModel
 from gazebo_msgs.msg import ModelState
 from gazebo_msgs.srv import SpawnModel
 from geometry_msgs.msg import Pose
-from std_srvs.srv import Empty
+from std_srvs.msg import Empty as EmptyMessage
+from std_srvs.srv import Empty as EmptyService
 
 from gazebo_msgs.srv import SetLightProperties
 from std_msgs.msg import ColorRGBA
@@ -64,6 +65,9 @@ class SimulationRandomizer:
         self.model_state_publisher = rospy.Publisher(
             '/gazebo/set_model_state', ModelState, queue_size=10)
 
+        self.randomizer_publisher = rospy.Publisher(
+            '/journey/randomizer', EmptyMessage, queue_size=10)
+
         print("Initialized simulation randomizer.")
 
     def delete_model(self, model):
@@ -75,19 +79,22 @@ class SimulationRandomizer:
     def pause_physics(self):
         # Pause physics.
         rospy.wait_for_service('gazebo/pause_physics')
-        pause_physics = rospy.ServiceProxy('gazebo/pause_physics', Empty)
+        pause_physics = rospy.ServiceProxy('gazebo/pause_physics', EmptyService)
         pause_physics()
 
     def unpause_physics(self):
         # Unpause physics.
         rospy.wait_for_service('gazebo/unpause_physics')
-        unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics', Empty)
+        unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics', EmptyService)
         unpause_physics()
 
     def __call__(self):
         print("Randomized simulation.")
 
         self.pause_physics()
+
+        self.randomizer_publisher.publish(EmptyMessage())
+
         #self.spawn_light()
 
         # Pick randomized parameters.
