@@ -14,6 +14,7 @@
 #include <random>
 
 // TODO armand find some way to change the intensity of the light
+
 class RandomizerTools {
  public:
   RandomizerTools(const gazebo::transport::NodePtr &node) {
@@ -33,19 +34,20 @@ class RandomizerTools {
 
     ignition::math::Pose3d pose_sun = GetRandomPose();
     gazebo::msgs::Set(light_.mutable_pose(), pose_sun);
+    std::cout << pose_sun << std::endl; // for debugging
 
     pub_->Publish(light_);
   }
 
   /*randomly chooses pose (we're just gonna do roll pitch and yaw*/
-  // TODO gazbo pose in radians or degrees? in tutorial it's in radians, so
-  // let's do radians
+  // pose in meters and radians
   static ignition::math::Pose3d GetRandomPose() {
-    std::uniform_real_distribution<float> distribution(0.0, 1.0);
-    std::default_random_engine generator;
-    return ignition::math::Pose3d(0, 0, 10, distribution(generator),
-                                  distribution(generator),
-                                  distribution(generator));
+    std::random_device rd_;
+    std::mt19937 gen(rd_());
+    std::uniform_real_distribution<float> distribution(0.0, 0.5);
+    return ignition::math::Pose3d(0, 0, 10, distribution(gen),
+                                  distribution(gen),
+                                  distribution(gen));
   }
 
  private:
