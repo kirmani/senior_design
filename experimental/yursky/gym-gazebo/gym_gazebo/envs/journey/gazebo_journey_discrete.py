@@ -112,6 +112,21 @@ class GazeboJourneyDiscreteEnv(gazebo_env.GazeboEnv):
             self.unpause()
         except (rospy.ServiceException) as e:
             print ("/gazebo/unpause_physics service call failed")
+        vel_msg = Twist()
+        vel_msg.linear.x = self.linear_velocity
+        if self.discrete_controls:
+            control = np.argmax(action)
+            vel_msg.linear.z = [-1, 0, 1][control / 3]
+            vel_msg.angular.z = [-1, 0, 1][control % 3]
+        else:
+            vel_msg.linear.z = action[0]
+            vel_msg.angular.z = action[1]
+        self.velocity_publisher.publish(vel_msg)
+
+        # Wait.
+        self.rate.sleep()
+
+        return self.get_current_state()
 
     def _reset(self):
 
