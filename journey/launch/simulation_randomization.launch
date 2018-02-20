@@ -11,5 +11,5 @@
     <arg name="y" value="3"/>
   </include>
 
-  <node name="randomizer_tools" pkg="journey" type="randomizer_tools"></node>
+  <node name="randomizer_node" pkg="journey" type="randomizer_node" output="screen"></node>
 </launch>

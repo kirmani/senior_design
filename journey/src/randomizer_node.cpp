@@ -10,49 +10,25 @@
 #include <gazebo/transport/transport.hh>
 #include <ignition/math/Pose3.hh>
 
-#include <iostream>
+#include <stdio.h>
 #include <random>
 
 // TODO armand find some way to change the intensity of the light
 
 class RandomizerTools {
- public:
+  public:
   RandomizerTools(const gazebo::transport::NodePtr &node) {
     // Publish to a Gazebo topic
-    pub_ = node->Advertise<gazebo::msgs::Light>("~/light/modify");
-
-    light_.set_name("sun");
-
-    std::cout << "Randomizer tool initialized." << std::endl;
+    pub_ = node->Advertise<gazebo::msgs::Status>("~/log/status");
+    printf("Randomizer tool initialized.\n");
   }
 
   void OnRandomize(const std_msgs::Empty::ConstPtr &msg) {
-    std::cout << "OnRandomize received." << std::endl;
-
-    // Wait for a subscriber to connect
-    pub_->WaitForConnection();
-
-    ignition::math::Pose3d pose_sun = GetRandomPose();
-    gazebo::msgs::Set(light_.mutable_pose(), pose_sun);
-    std::cout << pose_sun << std::endl; // for debugging
-
-    pub_->Publish(light_);
+    printf("OnRandomize received.\n");
   }
 
-  /*randomly chooses pose (we're just gonna do roll pitch and yaw*/
-  // pose in meters and radians
-  static ignition::math::Pose3d GetRandomPose() {
-    std::random_device rd_;
-    std::mt19937 gen(rd_());
-    std::uniform_real_distribution<float> distribution(0.0, 0.5);
-    return ignition::math::Pose3d(0, 0, 10, distribution(gen),
-                                  distribution(gen),
-                                  distribution(gen));
-  }
-
- private:
+  private:
   gazebo::transport::PublisherPtr pub_;
-  gazebo::msgs::Light light_;
 };
 
 int main(int argc, char **argv) {

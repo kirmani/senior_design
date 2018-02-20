@@ -24,11 +24,14 @@ catkin_package(
   CATKIN_DEPENDS roscpp rospy std_msgs message_runtime gazebo_dev
 )
 
-include_directories(
-# include
-  ${catkin_INCLUDE_DIRS}
-  ${gazebo_INCLUDE_DIRS}
-)
+link_directories(${GAZEBO_LIBRARY_DIRS})
+include_directories(${catkin_INCLUDE_DIRS} ${gazebo_INCLUDE_DIRS})
 
-add_executable(randomizer_tools src/randomizer_tools.cpp)
-target_link_libraries(randomizer_tools ${catkin_LIBRARIES})
+add_library(randomize_material src/randomize_material.cpp)
+target_link_libraries(randomize_material ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_library(randomize_light src/randomize_light.cpp)
+target_link_libraries(randomize_light ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+add_executable(randomizer_node src/randomizer_node.cpp)
+target_link_libraries(randomizer_node ${catkin_LIBRARIES})
