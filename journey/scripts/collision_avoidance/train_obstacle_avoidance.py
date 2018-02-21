@@ -36,11 +36,12 @@ from visualization_msgs.msg import Marker
 from ddpg import DeepDeterministicPolicyGradients
 from environment import Environment
 from multiplicative_integration_lstm import MultiplicativeIntegrationLSTMCell
+from model_evaluator import ModelValidator
 
 
 class DeepDronePlanner:
 
-    def __init__(self, distance_threshold=0.5, rate=4, discrete_controls=True):
+    def __init__(self, distance_threshold=0.5, rate=4, discrete_controls=False):
         self.distance_threshold = distance_threshold  # meters
         self.update_rate = rate  # Hz
         self.discrete_controls = discrete_controls
@@ -397,6 +398,13 @@ class DeepDronePlanner:
         self.ddpg.eval(
             env, model_dir, num_attempts=num_attempts, max_episode_len=1000)
 
+    def test(self, model_dir):
+        env = Environment(self.reset, self.step, self.reward, self.terminal)
+        model_dir = os.path.join(os.getcwd(), model_dir)
+        self.ddpg.load_model(model_dir)
+        validator = ModelValidator()
+        validator.validate()
+
     def plan(self, model_dir):
         # Load our model.
         model_dir = os.path.join(os.getcwd(), model_dir)
@@ -457,6 +465,8 @@ def main(args):
         if args.num_attempts:
             attempts = int(args.num_attempts)
         deep_drone_planner.eval(args.model, num_attempts=attempts)
+    elif args.test:
+        deep_drone_planner.test(args.model)
     else:
         deep_drone_planner.train(args.model)
 
@@ -476,6 +486,12 @@ if __name__ == '__main__':
         parser.add_argument(
             '-e',
             '--eval',
+            action='store_true',
+            default=False,
+            help='evaluate model')
+        parser.add_argument(
+            '-t',
+            '--test',
             action='store_true',
             default=False,
             help='evaluate model')
