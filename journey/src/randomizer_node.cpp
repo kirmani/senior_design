@@ -18,26 +18,25 @@ using namespace gazebo;
 
 class RandomizerTools {
  public:
-  RandomizerTools(const transport::NodePtr &node) {
+  RandomizerTools(const transport::NodePtr &node1, const transport::NodePtr &node2) {
     // Publish to a Gazebo topic
-    //lightPub_ = node->Advertise<msgs::Light>("~/light/modify");
-    materialPub_ = node->Advertise<msgs::Vector3d>("~/modifymaterial");
+    lightPub_ = node1->Advertise<msgs::Light>("~/light/modify");
+    materialPub_ = node2->Advertise<msgs::Vector3d>("~/modifymaterial");
 
-    //light_.set_name("sun");
-
+    light_.set_name("sun");
   }
 
   void OnRandomize(const std_msgs::Empty::ConstPtr &msg) {
     printf("OnRandomize received\n");
 
-//    // Wait for a subscriber to connect
-//    lightPub_->WaitForConnection();
-//
-//    ignition::math::Pose3d pose_sun = GetRandomPose();
-//    msgs::Set(light_.mutable_pose(), pose_sun);
-//    std::cout << pose_sun << std::endl; // for debugging
-//
-//    lightPub_->Publish(light_);
+    // Wait for a subscriber to connect
+    lightPub_->WaitForConnection();
+
+    ignition::math::Pose3d pose_sun = GetRandomPose();
+    msgs::Set(light_.mutable_pose(), pose_sun);
+    std::cout << pose_sun << std::endl; // for debugging
+
+    lightPub_->Publish(light_);
 
     //publish to update materials
     materialPub_->WaitForConnection();
@@ -68,16 +67,18 @@ int main(int argc, char **argv) {
   ros::init(argc, argv, "randomizer_tools");
   ros::NodeHandle ros_node;
 
-  // Setup gazebo.
+  // Setup gazebo with light and material transport nodes
   client::setup(argc, argv);
-  transport::NodePtr gazebo_node(new transport::Node());
-  gazebo_node->Init();
+  transport::NodePtr gazebo_node_light(new transport::Node());
+  transport::NodePtr gazebo_node_material(new transport::Node());
+  gazebo_node_light->Init();
+  gazebo_node_material->Init();
   transport::run();
 
-  // Create our randomizer tools.
-  RandomizerTools randomizer_tools(gazebo_node);
+  // Create our randomizer tools
+  RandomizerTools randomizer_tools(gazebo_node_light, gazebo_node_material);
 
-  // Subscribe to /journey/randomize.
+  // Subscribe to /journey/randomize
   ros::Subscriber sub =
       ros_node.subscribe("/journey/randomize", 1000,
                          &RandomizerTools::OnRandomize, &randomizer_tools);

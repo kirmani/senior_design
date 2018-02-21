@@ -21,7 +21,7 @@ using namespace gazebo;
 class RandomizeMaterial : public VisualPlugin {
   public:
   RandomizeMaterial() {
-    printf("======Randomizer tool initialized.=======\n\n");
+    printf("======Randomizer tool initialized=======\n\n");
   }
 
   public:
@@ -41,12 +41,12 @@ class RandomizeMaterial : public VisualPlugin {
        &RandomizeMaterial::OnMsg, this);
   }
 
-  private: void OnMsg(ConstVector3dPtr &_msg)
+  private:
+  void OnMsg(ConstVector3dPtr &_msg)
   {
     this->colorA.Set(0.3,1,1,1);
     this->visual->SetDiffuse(colorA);
     this->visual->SetAmbient(colorA);
-    printf("Recieved material message\n\n");
   }
 
   private:
