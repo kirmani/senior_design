@@ -18,52 +18,43 @@ using namespace gazebo;
 
 // TODO armand find some way to change the intensity of the light
 
-class RandomizeMaterial : public ModelPlugin {
+class RandomizeMaterial : public VisualPlugin {
   public:
   RandomizeMaterial() {
-    std::cout << "Randomizer tool initialized." << std::endl;
+    printf("======Randomizer tool initialized.=======\n\n");
   }
 
   public:
-  void Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
-    if (!ros::isInitialized())
-    {
-      ROS_FATAL_STREAM("A ROS node for Gazebo has not been initialized, unable to load plugin. "
-        << "Load the Gazebo system plugin 'libgazebo_ros_api_plugin.so' in the gazebo_ros package)");
-      return;
-    }
+  void Load(rendering::VisualPtr _visual, sdf::ElementPtr _sdf) {
+    this->visual = _visual;
 
-    this->parent_ = _parent;
+    // Create the node
     this->node = transport::NodePtr(new transport::Node());
-    this->node->Init(_parent->GetWorld()->GetName());
-    this->visPub = this->node->Advertise<msgs::Visual>("~/visual", 10);
+    this->node->Init("default");
+
+
+    // Create a topic name
+    std::string topicName = "~/modifymaterial";
+
+    // Subscribe to the topic, and register a callback
+    this->sub = this->node->Subscribe(topicName,
+       &RandomizeMaterial::OnMsg, this);
   }
 
-  public:
-  void SendVisualMessage(void) {
-    msgs::Visual visualMsg;
-    // Set the visual's name. This should be unique.
-    visualMsg.set_name("visual_boi");
-
-    // Set the visual's parent. This visual will be attached to the parent
-    printf("Attaching to: %s\n\n", this->parent_->GetScopedName().c_str());
-    visualMsg.set_parent_name(this->parent_->GetScopedName());
-
-    printf("Link %s %d children\n", this->parent_->GetLinks().at(0)->GetName().c_str(), this->parent_->GetLinks().at(0)->GetChildCount());
-
-    // Set the material to be bright red
-    visualMsg.mutable_material()->mutable_script()->set_name("Gazebo/WoodFloor");
-
-    visPub->Publish(visualMsg);
-
-    printf("Sent Material Message\n\n");
+  private: void OnMsg(ConstVector3dPtr &_msg)
+  {
+    this->colorA.Set(0.3,1,1,1);
+    this->visual->SetDiffuse(colorA);
+    this->visual->SetAmbient(colorA);
+    printf("Recieved material message\n\n");
   }
 
   private:
-  transport::NodePtr node;
-  transport::PublisherPtr visPub;
-  physics::ModelPtr parent_;
+  rendering::VisualPtr visual;
+  common::Color colorA;
+  private: transport::NodePtr node;
+  private: transport::SubscriberPtr sub;
 };
 
-GZ_REGISTER_MODEL_PLUGIN(RandomizeMaterial)
+GZ_REGISTER_VISUAL_PLUGIN(RandomizeMaterial)
 

@@ -13,7 +13,6 @@
         <quadratic>0.001</quadratic>
       </attenuation>
       <direction>-0.5 0.5 -1</direction>
-      <plugin name="RandomizeLight" filename="librandomize_light.so"/>
     </light>
     <model name='ground_plane'>
       <static>1</static>
@@ -4824,7 +4823,7 @@
         <self_collide>0</self_collide>
         <kinematic>0</kinematic>
         <gravity>1</gravity>
-        <visual name='visual_boi'>
+        <visual name='visual'>
           <geometry>
             <box>
               <size>2.8 0.9 0.2</size>
@@ -4846,6 +4845,7 @@
           <pose frame=''>0 0 0 0 -0 0</pose>
           <cast_shadows>1</cast_shadows>
           <transparency>0</transparency>
+          <plugin name="RandomizeMaterial" filename="librandomize_material.so"/>
         </visual>
         <collision name='collision'>
           <laser_retro>0</laser_retro>
@@ -4906,7 +4906,6 @@
       <static>1</static>
       <allow_auto_disable>1</allow_auto_disable>
       <pose frame=''>8.73025 7.28912 0 0 -0 0</pose>
-      <plugin name="RandomizeMaterial" filename="librandomize_material.so"/>
     </model>
   </world>
 </sdf>

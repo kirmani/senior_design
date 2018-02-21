@@ -30,8 +30,5 @@ include_directories(${catkin_INCLUDE_DIRS} ${gazebo_INCLUDE_DIRS})
 add_library(randomize_material src/randomize_material.cpp)
 target_link_libraries(randomize_material ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 
-add_library(randomize_light src/randomize_light.cpp)
-target_link_libraries(randomize_light ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
-
 add_executable(randomizer_node src/randomizer_node.cpp)
 target_link_libraries(randomizer_node ${catkin_LIBRARIES})

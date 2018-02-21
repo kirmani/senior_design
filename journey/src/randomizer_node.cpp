@@ -10,37 +10,69 @@
 #include <gazebo/transport/transport.hh>
 #include <ignition/math/Pose3.hh>
 
+#include <iostream>
 #include <stdio.h>
 #include <random>
 
-// TODO armand find some way to change the intensity of the light
+using namespace gazebo;
 
 class RandomizerTools {
-  public:
-  RandomizerTools(const gazebo::transport::NodePtr &node) {
+ public:
+  RandomizerTools(const transport::NodePtr &node) {
     // Publish to a Gazebo topic
-    pub_ = node->Advertise<gazebo::msgs::Status>("~/log/status");
-    printf("Randomizer tool initialized.\n");
+    //lightPub_ = node->Advertise<msgs::Light>("~/light/modify");
+    materialPub_ = node->Advertise<msgs::Vector3d>("~/modifymaterial");
+
+    //light_.set_name("sun");
+
   }
 
   void OnRandomize(const std_msgs::Empty::ConstPtr &msg) {
-    printf("OnRandomize received.\n");
+    printf("OnRandomize received\n");
+
+//    // Wait for a subscriber to connect
+//    lightPub_->WaitForConnection();
+//
+//    ignition::math::Pose3d pose_sun = GetRandomPose();
+//    msgs::Set(light_.mutable_pose(), pose_sun);
+//    std::cout << pose_sun << std::endl; // for debugging
+//
+//    lightPub_->Publish(light_);
+
+    //publish to update materials
+    materialPub_->WaitForConnection();
+    msgs::Set(&material_, ignition::math::Vector3d(2, 0, 0));
+    materialPub_->Publish(material_);
+  }
+
+  /*randomly chooses pose (we're just gonna do roll pitch and yaw*/
+  // pose in meters and radians
+  static ignition::math::Pose3d GetRandomPose() {
+    std::random_device rd_;
+    std::mt19937 gen(rd_());
+    std::uniform_real_distribution<float> distribution(0.0, 0.5);
+    return ignition::math::Pose3d(0, 0, 10, distribution(gen),
+                                  distribution(gen),
+                                  distribution(gen));
   }
 
   private:
-  gazebo::transport::PublisherPtr pub_;
+  transport::PublisherPtr lightPub_;
+  transport::PublisherPtr materialPub_;
+  msgs::Vector3d material_;
+  msgs::Light light_;
 };
 
 int main(int argc, char **argv) {
-  // Setup ROS>
+  // Setup ROS
   ros::init(argc, argv, "randomizer_tools");
   ros::NodeHandle ros_node;
 
   // Setup gazebo.
-  gazebo::client::setup(argc, argv);
-  gazebo::transport::NodePtr gazebo_node(new gazebo::transport::Node());
+  client::setup(argc, argv);
+  transport::NodePtr gazebo_node(new transport::Node());
   gazebo_node->Init();
-  gazebo::transport::run();
+  transport::run();
 
   // Create our randomizer tools.
   RandomizerTools randomizer_tools(gazebo_node);
