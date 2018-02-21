@@ -7,11 +7,13 @@
 #include <gazebo/msgs/msgs.hh>
 #include <gazebo/rendering/rendering.hh>
 #include <gazebo/transport/transport.hh>
-#include <gazebo/transport/transport.hh>
 #include <ignition/math/Pose3.hh>
 
 #include <iostream>
 #include <random>
+
+#include <gazebo/common/Color.hh>
+#include "gazebo/msgs/visual.pb.h"
 
 // TODO armand find some way to change the intensity of the light
 
@@ -19,9 +21,14 @@ class RandomizerTools {
  public:
   RandomizerTools(const gazebo::transport::NodePtr &node) {
     // Publish to a Gazebo topic
-    pub_ = node->Advertise<gazebo::msgs::Light>("~/light/modify");
+    //pub_ = node->Advertise<gazebo::msgs::Light>("~/light/modify");
 
-    light_.set_name("sun");
+    //light_.set_name("sun");
+
+    //TODO potentially revisit    
+    //just going to change 1 object as a test
+    pubMod_ = node->Advertise<gazebo::msgs::Model>("~/model/modify");    
+    model_.set_name("sean_couch_small");
 
     std::cout << "Randomizer tool initialized." << std::endl;
   }
@@ -30,13 +37,36 @@ class RandomizerTools {
     std::cout << "OnRandomize received." << std::endl;
 
     // Wait for a subscriber to connect
-    pub_->WaitForConnection();
+    //pub_->WaitForConnection();
 
-    ignition::math::Pose3d pose_sun = GetRandomPose();
-    gazebo::msgs::Set(light_.mutable_pose(), pose_sun);
-    std::cout << pose_sun << std::endl; // for debugging
+    //ignition::math::Pose3d pose_sun = GetRandomPose();
+    //gazebo::msgs::Set(light_.mutable_pose(), pose_sun);
+    //std::cout << pose_sun << std::endl; // for debugging
 
-    pub_->Publish(light_);
+    //pub_->Publish(light_);
+
+    //model part. just going to change one object as a test
+
+
+    pubMod_->WaitForConnection();
+
+    gazebo::msgs::Material* material(new gazebo::msgs::Material());
+    gazebo::msgs::Visual visual;
+
+    gazebo::common::Color color_comm = GetRandomColor();
+    gazebo::msgs::Set(material.mutable_diffuse(), color_comm);
+
+    visual.mutable_material();
+    //visual.material = &material;
+
+    //visual.set_material(material);
+
+
+    //gazebo::msgs::Set(visual.material.mutable_diffuse(), color_comm);
+    //gazebo::msgs::Set(visual.mutable_material(), material);
+    //std::cout << material << std::endl; //for debugging
+
+    pubMod_->Publish(model_);
   }
 
   /*randomly chooses pose (we're just gonna do roll pitch and yaw*/
@@ -50,9 +80,20 @@ class RandomizerTools {
                                   distribution(gen));
   }
 
+  static gazebo::common::Color GetRandomColor() {
+    float r = 0.25; 
+    float g = 0.25;
+    float b = 0.25;
+    float a = 1.0;   
+    return gazebo::common::Color(r, g, b, a);
+  }
+
  private:
   gazebo::transport::PublisherPtr pub_;
   gazebo::msgs::Light light_;
+  
+  gazebo::transport::PublisherPtr pubMod_;
+  gazebo::msgs::Model model_;
 };
 
 int main(int argc, char **argv) {
