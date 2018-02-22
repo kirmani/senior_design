@@ -128,6 +128,7 @@ class DeepDeterministicPolicyGradients:
               episodes_in_epoch=16,
               max_episode_len=1000,
               epsilon_zero=0.2,
+              data_requirement=10000,
               model_dir=None):
 
         # Create a saver object for saving and loading variables
@@ -168,6 +169,8 @@ class DeepDeterministicPolicyGradients:
             actor_noise = OrnsteinUhlenbeckActionNoise(
                 mu=np.zeros(self.action_dim))
 
+        data_initialized = False
+
         while tf.train.global_step(self.sess, global_step) < num_epochs:
             epoch = tf.train.global_step(self.sess, global_step)
             epoch_rewards = []
@@ -197,7 +200,8 @@ class DeepDeterministicPolicyGradients:
 
                     # Added exploration noise.
                     if self.discrete_controls:
-                        if np.random.random() < epsilon:
+                        if (np.random.random() < epsilon or
+                                not data_initialized):
                             action = np.random.random(self.action_dim)
                             action = action / np.sum(action)
                     else:
@@ -249,8 +253,12 @@ class DeepDeterministicPolicyGradients:
                     episode_reward, i))
 
             print("Experience buffer size: %s" % replay_buffer.size())
-            if replay_buffer.size() < self.minibatch_size:
+            if replay_buffer.size() < data_requirement:
+                print("Data requirement progress: %d / %d" %
+                      (replay_buffer.size(), data_requirement))
                 continue
+
+            data_initialized = True
 
             # Output epoch statistics.
             average_epoch_reward = np.mean(epoch_rewards)
