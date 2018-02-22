@@ -41,7 +41,11 @@ from model_evaluator import ModelValidator
 
 class DeepDronePlanner:
 
-    def __init__(self, distance_threshold=0.5, rate=4, discrete_controls=False, use_probability=False):
+    def __init__(self,
+                 distance_threshold=0.5,
+                 rate=4,
+                 discrete_controls=True,
+                 use_probability=False):
         self.distance_threshold = distance_threshold  # meters
         self.update_rate = rate  # Hz
         self.discrete_controls = discrete_controls
