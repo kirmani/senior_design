@@ -45,12 +45,14 @@ class DeepDeterministicPolicyGradients:
                  gamma=0.99,
                  horizon=16,
                  collision_weight=0.01,
-                 discrete_controls=False):
+                 discrete_controls=False,
+                 use_probability=False):
         self.collision_weight = collision_weight
         self.gamma = gamma
         self.horizon = horizon
         self.minibatch_size = minibatch_size
         self.discrete_controls = discrete_controls
+        self.use_probability = use_probability
 
         # Start tensorflow session.
         self.sess = tf.Session()
@@ -63,7 +65,8 @@ class DeepDeterministicPolicyGradients:
             create_critic_network,
             self.horizon,
             self.actor.get_num_trainable_vars(),
-            collision_weight=self.collision_weight)
+            collision_weight=self.collision_weight,
+            use_probability=self.use_probability)
         self.action_dim = self.actor.get_action_dim()
 
     def build_summaries(self):
@@ -276,7 +279,13 @@ class DeepDeterministicPolicyGradients:
                     if t_batch[k]:
                         b_coll_i[k] = r_batch[k, 0, 0]
                     else:
-                        b_coll_i[k] = np.mean(target_q[k, :self.horizon])
+                        if self.use_probability:
+                            b_coll_i[k] = np.mean(target_q[k, :self.horizon])
+                        else:
+                            # Prefer sooner task rewards more than later ones.
+                            time_decay = self.gamma**np.arange(1, self.horizon + 1)
+                            b_coll_i[k] = (r_batch[k, 0, 0] + np.inner(
+                                target_q[k, :self.horizon], time_decay))
 
                 # Update the model and critic given the targets.
                 (loss, model_loss, expected_reward) = self.critic.train(
@@ -401,7 +410,8 @@ class CriticNetwork:
                  collision_weight=0.01,
                  uncertainty_weight=1.0,
                  tau=0.001,
-                 learning_rate=0.001):
+                 learning_rate=0.001,
+                 use_probability=False):
         self.sess = sess
         self.uncertainty_weight = uncertainty_weight
 
@@ -435,10 +445,14 @@ class CriticNetwork:
             tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=self.predicted_y_coll_value, logits=self.y_coll_out),
             axis=1)
-        self.reward_loss = tf.reduce_sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_b_coll_value, logits=self.b_coll_out),
-            axis=1)
+        if use_probability:
+            self.reward_loss = tf.reduce_sum(
+                (self.predicted_b_coll_value - self.b_coll_out)**2 ,axis=1)
+        else:
+            self.reward_loss = tf.reduce_sum(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=self.predicted_b_coll_value, logits=self.b_coll_out),
+                axis=1)
         self.loss = tf.reduce_mean(self.model_loss + self.reward_loss)
 
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
