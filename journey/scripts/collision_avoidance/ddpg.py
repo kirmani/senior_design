@@ -446,16 +446,18 @@ class CriticNetwork:
         self.predicted_b_coll_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
-        self.model_loss = tf.reduce_sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_y_coll_value, logits=self.y_coll_out),
-            axis=1)
         if self.use_probability:
+            self.model_loss = tf.reduce_sum(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=self.predicted_y_coll_value, logits=self.y_coll_out),
+                axis=1)
             self.reward_loss = tf.reduce_sum(
                 tf.nn.sigmoid_cross_entropy_with_logits(
                     labels=self.predicted_b_coll_value, logits=self.b_coll_out),
                 axis=1)
         else:
+            self.model_loss = tf.reduce_sum(
+                (self.predicted_y_coll_value - self.y_coll_out)**2, axis=1)
             self.reward_loss = tf.reduce_sum(
                 (self.predicted_b_coll_value - self.b_coll_out)**2 ,axis=1)
         self.loss = tf.reduce_mean(self.model_loss + self.reward_loss)
