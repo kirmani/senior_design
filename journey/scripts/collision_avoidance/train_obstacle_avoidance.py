@@ -365,9 +365,9 @@ class DeepDronePlanner:
         control = self.action_to_control(action)
         collision_reward = 1 if not self.collided else 0
         if self.use_probability:
-            return (collision_reward, 0.0)
+            return collision_reward
         else:
-            return (collision_reward * np.cos(control[1]), 0.0)
+            return collision_reward * np.cos(control[1])
 
     def terminal(self, state, action):
         if self.collided:
