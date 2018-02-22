@@ -45,12 +45,14 @@ class DeepDeterministicPolicyGradients:
                  gamma=0.99,
                  horizon=16,
                  collision_weight=0.01,
-                 discrete_controls=False):
+                 discrete_controls=False,
+                 use_probability=False):
         self.collision_weight = collision_weight
         self.gamma = gamma
         self.horizon = horizon
         self.minibatch_size = minibatch_size
         self.discrete_controls = discrete_controls
+        self.use_probability = use_probability
 
         # Start tensorflow session.
         self.sess = tf.Session()
@@ -63,7 +65,8 @@ class DeepDeterministicPolicyGradients:
             create_critic_network,
             self.horizon,
             self.actor.get_num_trainable_vars(),
-            collision_weight=self.collision_weight)
+            collision_weight=self.collision_weight,
+            use_probability=self.use_probability)
         self.action_dim = self.actor.get_action_dim()
 
     def build_summaries(self):
@@ -73,11 +76,14 @@ class DeepDeterministicPolicyGradients:
         tf.summary.scalar("loss", loss)
         expected_reward = tf.Variable(0.)
         tf.summary.scalar("expected_reward", expected_reward)
+        qmax = tf.Variable(0.)
+        tf.summary.scalar("qmax", qmax)
 
         summary_vars = [
             episode_reward,
             loss,
             expected_reward,
+            qmax,
         ]
         summary_ops = tf.summary.merge_all()
 
@@ -276,10 +282,16 @@ class DeepDeterministicPolicyGradients:
                     if t_batch[k]:
                         b_coll_i[k] = r_batch[k, 0, 0]
                     else:
-                        b_coll_i[k] = np.mean(target_q[k, :self.horizon])
+                        if self.use_probability:
+                            b_coll_i[k] = np.mean(target_q[k, :self.horizon])
+                        else:
+                            # Prefer sooner task rewards more than later ones.
+                            time_decay = self.gamma**np.arange(1, self.horizon + 1)
+                            b_coll_i[k] = (r_batch[k, 0, 0] + np.inner(
+                                target_q[k, :self.horizon], time_decay))
 
                 # Update the model and critic given the targets.
-                (loss, model_loss, expected_reward) = self.critic.train(
+                (loss, model_loss, expected_reward, qmax) = self.critic.train(
                     s_batch, a_batch,
                     np.reshape(y_coll_i, (batch_size, self.horizon)),
                     np.reshape(b_coll_i, (batch_size, 1)))
@@ -296,8 +308,8 @@ class DeepDeterministicPolicyGradients:
                 # Output training statistics.
                 if ((optimization_step % 20 == 0) or
                     (optimization_step == optimization_steps - 1)):
-                    print("[%d] Loss: %.4f, Exp Reward: %.4f" %
-                          (optimization_step, loss, expected_reward))
+                    print("[%d] Loss: %.4f, Qmax: %.4f" %
+                          (optimization_step, loss, qmax))
 
             # Write episode summary statistics.
             summary_str = self.sess.run(
@@ -306,6 +318,7 @@ class DeepDeterministicPolicyGradients:
                     summary_vars[0]: average_epoch_reward,
                     summary_vars[1]: loss,
                     summary_vars[2]: expected_reward,
+                    summary_vars[3]: qmax,
                 })
             writer.add_summary(summary_str, epoch)
             writer.flush()
@@ -401,9 +414,11 @@ class CriticNetwork:
                  collision_weight=0.01,
                  uncertainty_weight=1.0,
                  tau=0.001,
-                 learning_rate=0.001):
+                 learning_rate=0.001,
+                 use_probability=False):
         self.sess = sess
         self.uncertainty_weight = uncertainty_weight
+        self.use_probability = use_probability
 
         # Critic network.
         (self.inputs, self.actions, self.y_coll_out,
@@ -431,21 +446,32 @@ class CriticNetwork:
         self.predicted_b_coll_value = tf.placeholder(tf.float32, (None, 1))
 
         # Define loss and optimization Op
-        self.model_loss = tf.reduce_sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_y_coll_value, logits=self.y_coll_out),
-            axis=1)
-        self.reward_loss = tf.reduce_sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=self.predicted_b_coll_value, logits=self.b_coll_out),
-            axis=1)
+        if self.use_probability:
+            self.model_loss = tf.reduce_sum(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=self.predicted_y_coll_value, logits=self.y_coll_out),
+                axis=1)
+            self.reward_loss = tf.reduce_sum(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=self.predicted_b_coll_value, logits=self.b_coll_out),
+                axis=1)
+        else:
+            self.model_loss = tf.reduce_sum(
+                (self.predicted_y_coll_value - self.y_coll_out)**2, axis=1)
+            self.reward_loss = tf.reduce_sum(
+                (self.predicted_b_coll_value - self.b_coll_out)**2 ,axis=1)
         self.loss = tf.reduce_mean(self.model_loss + self.reward_loss)
 
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
             self.loss)
 
         # Metrics
-        self.expected_reward = tf.reduce_mean(tf.nn.sigmoid(self.b_coll_out))
+        if self.use_probability:
+            self.expected_reward = tf.reduce_mean(tf.nn.sigmoid(self.b_coll_out))
+            self.qmax = tf.reduce_max(tf.nn.sigmoid(self.b_coll_out))
+        else:
+            self.expected_reward = tf.reduce_mean(self.b_coll_out)
+            self.qmax = tf.reduce_max(self.b_coll_out)
 
         # Get the gradient of the net w.r.t. the action
         # critic_influence = self.b_task_out + collision_weight * self.b_coll_out
@@ -453,15 +479,15 @@ class CriticNetwork:
         self.action_grads = tf.gradients(critic_influence, self.actions)
 
     def train(self, inputs, actions, y_coll, b_coll):
-        (loss, model_loss, expected_reward, _) = self.sess.run(
-            [self.loss, self.model_loss, self.expected_reward, self.optimize],
+        (loss, model_loss, expected_reward, qmax, _) = self.sess.run(
+            [self.loss, self.model_loss, self.expected_reward, self.qmax, self.optimize],
             feed_dict={
                 self.inputs: inputs,
                 self.actions: actions,
                 self.predicted_y_coll_value: y_coll,
                 self.predicted_b_coll_value: b_coll,
             })
-        return (loss, model_loss, expected_reward)
+        return (loss, model_loss, expected_reward, qmax)
 
     def predict(self, inputs, actions, bootstraps=50):
         preds = []
@@ -476,11 +502,13 @@ class CriticNetwork:
         y_coll_out = np.array([pred[0] for pred in preds])
         b_coll_out = np.array([pred[1] for pred in preds])
         preds = np.concatenate([y_coll_out, b_coll_out], axis=-1)
-        preds = 1.0 / (1.0 + np.exp(-preds))
+        if self.use_probability:
+            preds = 1.0 / (1.0 + np.exp(-preds))
         expectation = np.mean(preds, axis=0)
         stddev = np.std(preds, axis=0)
         preds = (expectation - self.uncertainty_weight * stddev)
-        preds = np.clip(preds, 0, 1)
+        if self.use_probability:
+            preds = np.clip(preds, 0, 1)
         return preds
 
     def predict_target(self, inputs, actions, bootstraps=50):
@@ -496,11 +524,13 @@ class CriticNetwork:
         y_coll_out = np.array([pred[0] for pred in preds])
         b_coll_out = np.array([pred[1] for pred in preds])
         preds = np.concatenate([y_coll_out, b_coll_out], axis=-1)
-        preds = 1.0 / (1.0 + np.exp(-preds))
+        if self.use_probability:
+            preds = 1.0 / (1.0 + np.exp(-preds))
         expectation = np.mean(preds, axis=0)
         stddev = np.std(preds, axis=0)
         preds = (expectation - self.uncertainty_weight * stddev)
-        preds = np.clip(preds, 0, 1)
+        if self.use_probability:
+            preds = np.clip(preds, 0, 1)
         return preds
 
     def update_target_network(self):

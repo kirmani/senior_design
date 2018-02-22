@@ -41,10 +41,15 @@ from model_evaluator import ModelValidator
 
 class DeepDronePlanner:
 
-    def __init__(self, distance_threshold=0.5, rate=4, discrete_controls=False):
+    def __init__(self,
+                 distance_threshold=0.5,
+                 rate=4,
+                 discrete_controls=True,
+                 use_probability=False):
         self.distance_threshold = distance_threshold  # meters
         self.update_rate = rate  # Hz
         self.discrete_controls = discrete_controls
+        self.use_probability = use_probability
 
         # Set max linear velocity to 0.5 meters/sec.
         self.max_linear_velocity = 0.5
@@ -101,7 +106,8 @@ class DeepDronePlanner:
         # Set up policy search network.
         self.linear_velocity = 0.5
         if self.discrete_controls:
-            self.action_dim = 9
+            self.atoms = 5
+            self.action_dim = self.atoms**2
         else:
             self.action_dim = 2
         scale = 0.1
@@ -115,7 +121,8 @@ class DeepDronePlanner:
             self.create_actor_network,
             self.create_critic_network,
             horizon=self.horizon,
-            discrete_controls=self.discrete_controls)
+            discrete_controls=self.discrete_controls,
+            use_probability=self.use_probability)
 
         print("Deep drone planner initialized.")
 
@@ -317,15 +324,11 @@ class DeepDronePlanner:
         return state
 
     def step(self, state, action):
+        control = self.action_to_control(action)
         vel_msg = Twist()
         vel_msg.linear.x = self.linear_velocity
-        if self.discrete_controls:
-            control = np.argmax(action)
-            vel_msg.linear.z = [-1, 0, 1][control / 3]
-            vel_msg.angular.z = [-1, 0, 1][control % 3]
-        else:
-            vel_msg.linear.z = action[0]
-            vel_msg.angular.z = action[1]
+        vel_msg.linear.z = control[0]
+        vel_msg.angular.z = control[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -359,9 +362,12 @@ class DeepDronePlanner:
         exit()
 
     def reward(self, state, action):
-        collision_cost = 1 if not self.collided else 0
-        task_cost = 0.0
-        return (collision_cost, task_cost)
+        control = self.action_to_control(action)
+        collision_reward =  1 if not self.collided else 0
+        if self.use_probability:
+            return (collision_reward, 0.0)
+        else:
+            return (collision_reward * np.cos(control[1]), 0.0)
 
     def terminal(self, state, action):
         if self.collided:
@@ -371,12 +377,19 @@ class DeepDronePlanner:
         return self.collided
 
     def action_to_control(self, action):
-        # NOTE(kirmani): This doesn't work after adding non-planar controls.
-        return None
+        if self.discrete_controls:
+            argmax = np.argmax(action)
+            values = 2.0 * np.arange(self.atoms) / (self.atoms - 1.0) - 1.0
+            linear_z = values[argmax / self.atoms]
+            angular_z = values[argmax % self.atoms]
+        else:
+            linear_z = action[0]
+            angular_z = action[1]
+        return (linear_z, angular_z)
 
-    def control_to_metric(self, control):
-        # NOTE(kirmani): This doesn't work after adding non-planar controls.
-        return None
+    # def control_to_metric(self, control):
+    #     # NOTE(kirmani): This doesn't work after adding non-planar controls.
+    #     return None
 
     def train(self, model_dir=None):
         env = Environment(
