@@ -177,7 +177,7 @@ class DeepDeterministicPolicyGradients:
             epoch_rewards = []
             total_epoch_avg_max_q = 0.0
 
-            epsilon = epsilon_zero * (1.0 - epoch / num_epochs)
+            epsilon = epsilon_zero * (1.0 - float(epoch) / num_epochs)
             print("Explore with epsilon greedy (epsilon = %.4f)" % epsilon)
 
             for i in range(episodes_in_epoch):
