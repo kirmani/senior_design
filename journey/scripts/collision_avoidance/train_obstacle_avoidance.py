@@ -118,8 +118,7 @@ class DeepDronePlanner:
         self.frame_buffer = deque(maxlen=self.sequence_length)
         self.backup_velocity = 0.5
         self.ddpg = DeepDeterministicPolicyGradients(
-            self.create_actor_network,
-            self.create_critic_network,
+            self.create_network,
             horizon=self.horizon,
             discrete_controls=self.discrete_controls,
             use_probability=self.use_probability)
@@ -137,7 +136,8 @@ class DeepDronePlanner:
     def on_new_state(self, state):
         self.pose = state.pose.pose
 
-    def create_actor_network(self, scope):
+    def create_network(self, scope):
+        num_params = len(tf.trainable_variables())
         inputs = tf.placeholder(
             tf.float32,
             (None, self.image_height, self.image_width, self.sequence_length))
@@ -173,12 +173,15 @@ class DeepDronePlanner:
             image, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         image = tf.contrib.layers.batch_norm(image)
         image = tf.nn.relu(image)
+
         image = tf.stack([image for _ in range(self.horizon)], axis=1)
         lstm_inputs = image
         lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
         lstm_outputs, lstm_states = tf.nn.dynamic_rnn(
             lstm_cell, lstm_inputs, dtype=tf.float32, scope=scope)
+        actor_params = tf.trainable_variables()[num_params:]
 
+        # Predict actions.
         actions = tf.contrib.layers.fully_connected(
             lstm_outputs,
             16,
@@ -199,61 +202,8 @@ class DeepDronePlanner:
             actions = tf.nn.softmax(actions)
         else:
             actions = tf.nn.tanh(actions)
-        return inputs, actions
 
-    def create_critic_network(self, scope):
-        inputs = tf.placeholder(
-            tf.float32,
-            (None, self.image_height, self.image_width, self.sequence_length))
-        actions = tf.placeholder(tf.float32,
-                                 (None, self.horizon, self.action_dim))
-        image = tf.contrib.layers.conv2d(
-            inputs,
-            num_outputs=32,
-            activation_fn=None,
-            kernel_size=(8, 8),
-            stride=(4, 4),
-            weights_regularizer=tf.nn.l2_loss)
-        image = tf.contrib.layers.batch_norm(image)
-        image = tf.nn.relu(image)
-        image = tf.contrib.layers.conv2d(
-            image,
-            num_outputs=32,
-            activation_fn=None,
-            kernel_size=(4, 4),
-            stride=(2, 2),
-            weights_regularizer=tf.nn.l2_loss)
-        image = tf.contrib.layers.batch_norm(image)
-        image = tf.nn.relu(image)
-        image = tf.contrib.layers.conv2d(
-            image,
-            num_outputs=32,
-            activation_fn=None,
-            kernel_size=(3, 3),
-            stride=(1, 1),
-            weights_regularizer=tf.nn.l2_loss)
-        image = tf.contrib.layers.batch_norm(image)
-        image = tf.nn.relu(image)
-        image = tf.contrib.layers.flatten(image)
-        image = tf.contrib.layers.fully_connected(
-            image, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        image = tf.contrib.layers.batch_norm(image)
-        image = tf.nn.relu(image)
-
-        act = tf.contrib.layers.fully_connected(
-            actions, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        act = tf.contrib.layers.batch_norm(act)
-        act = tf.nn.relu(act)
-        act = tf.contrib.layers.fully_connected(
-            act, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        act = tf.contrib.layers.batch_norm(act)
-        act = tf.nn.relu(act)
-
-        image = tf.stack([image for _ in range(self.horizon)], axis=1)
-        lstm_inputs = tf.concat([image, act], axis=-1)
-        lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
-        lstm_outputs, lstm_states = tf.nn.dynamic_rnn(
-            lstm_cell, lstm_inputs, dtype=tf.float32, scope=scope)
+        lstm_outputs = tf.concat([lstm_outputs, actions], axis=-1)
 
         # Collision probability prediction.
         y_coll = tf.contrib.layers.fully_connected(
@@ -284,7 +234,7 @@ class DeepDronePlanner:
         b_coll_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
         b_coll = tf.matmul(b_coll, b_coll_weights) + b_coll_bias
 
-        return inputs, actions, y_coll, b_coll
+        return inputs, actions, y_coll, b_coll, actor_params
 
     def get_current_frame(self):
         image_data = ros_numpy.numpify(self.image_msg)
