@@ -286,7 +286,8 @@ class DeepDeterministicPolicyGradients:
                             b_coll_i[k] = np.mean(target_q[k, :self.horizon])
                         else:
                             # Prefer sooner task rewards more than later ones.
-                            time_decay = self.gamma**np.arange(1, self.horizon + 1)
+                            time_decay = self.gamma**np.arange(
+                                1, self.horizon + 1)
                             b_coll_i[k] = (r_batch[k, 0, 0] + np.inner(
                                 target_q[k, :self.horizon], time_decay))
 
@@ -308,8 +309,8 @@ class DeepDeterministicPolicyGradients:
                 # Output training statistics.
                 if ((optimization_step % 20 == 0) or
                     (optimization_step == optimization_steps - 1)):
-                    print("[%d] Loss: %.4f, Qmax: %.4f" %
-                          (optimization_step, loss, qmax))
+                    print("[%d] Loss: %.4f, Qmax: %.4f" % (optimization_step,
+                                                           loss, qmax))
 
             # Write episode summary statistics.
             summary_str = self.sess.run(
@@ -459,7 +460,7 @@ class CriticNetwork:
             self.model_loss = tf.reduce_sum(
                 (self.predicted_y_coll_value - self.y_coll_out)**2, axis=1)
             self.reward_loss = tf.reduce_sum(
-                (self.predicted_b_coll_value - self.b_coll_out)**2 ,axis=1)
+                (self.predicted_b_coll_value - self.b_coll_out)**2, axis=1)
         self.loss = tf.reduce_mean(self.model_loss + self.reward_loss)
 
         self.optimize = tf.train.AdamOptimizer(learning_rate).minimize(
@@ -467,7 +468,8 @@ class CriticNetwork:
 
         # Metrics
         if self.use_probability:
-            self.expected_reward = tf.reduce_mean(tf.nn.sigmoid(self.b_coll_out))
+            self.expected_reward = tf.reduce_mean(
+                tf.nn.sigmoid(self.b_coll_out))
             self.qmax = tf.reduce_max(tf.nn.sigmoid(self.b_coll_out))
         else:
             self.expected_reward = tf.reduce_mean(self.b_coll_out)
@@ -480,7 +482,10 @@ class CriticNetwork:
 
     def train(self, inputs, actions, y_coll, b_coll):
         (loss, model_loss, expected_reward, qmax, _) = self.sess.run(
-            [self.loss, self.model_loss, self.expected_reward, self.qmax, self.optimize],
+            [
+                self.loss, self.model_loss, self.expected_reward, self.qmax,
+                self.optimize
+            ],
             feed_dict={
                 self.inputs: inputs,
                 self.actions: actions,
