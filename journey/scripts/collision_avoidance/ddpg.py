@@ -110,7 +110,7 @@ class DeepDeterministicPolicyGradients:
                 reward = env.reward(next_state, action)
 
                 state = next_state
-                episode_reward += reward[0]
+                episode_reward += reward
 
                 if terminal:
                     break
@@ -228,7 +228,7 @@ class DeepDeterministicPolicyGradients:
                     next_state_buffer.append(next_state)
 
                     state = next_state
-                    episode_reward += reward[0]
+                    episode_reward += reward
 
                     if terminal:
                         break
@@ -236,14 +236,14 @@ class DeepDeterministicPolicyGradients:
                 # For our entire episode add our experience with our target
                 # model rewards and future actions to our experience replay buffer.
                 for t in range(len(state_buffer)):
-                    y_i = np.zeros((self.horizon, 2))
+                    y_i = np.zeros(self.horizon)
                     a_i = np.zeros((self.horizon, self.action_dim))
                     for h in range(self.horizon):
                         if t + h < len(state_buffer):
-                            y_i[h, :] = np.array(reward_buffer[t + h])
+                            y_i[h] = np.array(reward_buffer[t + h])
                             a_i[h, :] = action_buffer[t + h]
                         else:
-                            y_i[h, :] = np.array(reward_buffer[-1])
+                            y_i[h] = np.array(reward_buffer[-1])
                             a_i[h, :] = np.random.random(self.action_dim)
                     replay_buffer.add(state_buffer[t], a_i, y_i,
                                       terminal_buffer[t], next_state_buffer[t])
@@ -278,9 +278,9 @@ class DeepDeterministicPolicyGradients:
                 y_coll_i = np.zeros((batch_size, self.horizon))
                 b_coll_i = np.zeros(batch_size)
                 for k in range(batch_size):
-                    y_coll_i[k, :] = r_batch[k, :, 0]
+                    y_coll_i[k, :] = r_batch[k, :]
                     if t_batch[k]:
-                        b_coll_i[k] = r_batch[k, 0, 0]
+                        b_coll_i[k] = r_batch[k, 0]
                     else:
                         if self.use_probability:
                             b_coll_i[k] = np.mean(target_q[k, :self.horizon])
@@ -288,7 +288,7 @@ class DeepDeterministicPolicyGradients:
                             # Prefer sooner task rewards more than later ones.
                             time_decay = self.gamma**np.arange(
                                 1, self.horizon + 1)
-                            b_coll_i[k] = (r_batch[k, 0, 0] + np.inner(
+                            b_coll_i[k] = (r_batch[k, 0] + np.inner(
                                 target_q[k, :self.horizon], time_decay))
 
                 # Update the model and critic given the targets.
