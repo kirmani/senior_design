@@ -45,7 +45,7 @@ class DeepDronePlanner:
                  distance_threshold=0.5,
                  rate=4,
                  discrete_controls=True,
-                 use_probability=False):
+                 use_probability=True):
         self.distance_threshold = distance_threshold  # meters
         self.update_rate = rate  # Hz
         self.discrete_controls = discrete_controls
@@ -387,7 +387,7 @@ class DeepDronePlanner:
         if self.use_probability:
             return collision_reward
         else:
-            return collision_reward * np.cos(control[1])
+            return collision_reward
 
     def terminal(self, state, action):
         x = np.array(
