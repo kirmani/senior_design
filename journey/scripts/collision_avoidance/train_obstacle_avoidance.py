@@ -17,7 +17,7 @@ import ros_numpy
 import scipy
 import sys
 import tensorflow as tf
-import tf as transform
+import tf as tf2
 import time
 import traceback
 from collections import deque
@@ -74,8 +74,8 @@ class DeepDronePlanner:
         # Subscribe to ground truth pose.
         self.ground_truth_subscriber = rospy.Subscriber(
             '/ground_truth/state', Odometry, self.on_new_state)
-        self.last_collision_pose = Pose()
-        self.pose = None
+        self.pose = Pose()
+        self.nav_goal = Pose()
 
         # Subscribe to collision detector.
         self.collision_subscriber = rospy.Subscriber(
@@ -102,6 +102,21 @@ class DeepDronePlanner:
 
         # Simulation reset randomization.
         self.randomize_simulation = SimulationRandomizer()
+
+        # Velocity control scaling constant.
+        self.forward_kp = 0.6
+        self.forward_ki = 0.001
+        self.forward_kd = 0.1
+
+        # Gaz PID variables.
+        self.up_kp = 0.6
+        self.up_ki = 0.001
+        self.up_kd = 0.1
+
+        # Yaw PID variables.
+        self.yaw_kp = 0.6
+        self.yaw_ki = 0.001
+        self.yaw_kd = 0.1
 
         # Set up policy search network.
         self.linear_velocity = 0.5
@@ -268,6 +283,20 @@ class DeepDronePlanner:
         # Get state.
         state = self.get_current_state()
 
+        # Set goal pose.
+        goal_position = self.randomize_simulation.GetRandomAptPosition()
+        self.nav_goal.position.x = goal_position[0]
+        self.nav_goal.position.y = goal_position[1]
+        self.nav_goal.position.z = goal_position[2]
+        self.forward_integral = 0.0
+        self.forward_prior = 0.0
+        self.up_integral = 0.0
+        self.up_prior = 0.0
+        self.yaw_integral = 0.0
+        self.yaw_prior = 0.0
+        # print("Goal position: (%.4f, %.4f)" % (goal_position[0],
+        #                                        goal_position[1]))
+
         # Reset collision state.
         self.collided = False
 
@@ -276,9 +305,50 @@ class DeepDronePlanner:
     def step(self, state, action):
         control = self.action_to_control(action)
         vel_msg = Twist()
-        vel_msg.linear.x = self.linear_velocity
-        vel_msg.linear.z = control[0]
-        vel_msg.angular.z = control[1]
+
+        x = np.array(
+            [self.pose.position.x, self.pose.position.y, self.pose.position.z])
+        quaternion = (self.pose.orientation.x, self.pose.orientation.y,
+                      self.pose.orientation.z, self.pose.orientation.w)
+        _, _, yaw = tf2.transformations.euler_from_quaternion(quaternion)
+        g = np.array([
+            self.nav_goal.position.x, self.nav_goal.position.y,
+            self.nav_goal.position.z
+        ])
+
+        distance = np.linalg.norm(g[:2] - x[:2])
+
+        # Angular velocity in the XY plane.
+        angle = np.arctan2(g[1] - x[1], g[0] - x[0])
+        yaw_error = angle - yaw
+        self.yaw_integral += yaw_error / self.update_rate
+        yaw_derivative = (yaw_error - self.yaw_prior) * self.update_rate
+        vel_msg.angular.z = np.clip(
+            self.yaw_kp * yaw_error + self.yaw_ki * self.yaw_integral +
+            self.yaw_kd * yaw_derivative, -1, 1)
+        self.yaw_prior = yaw_error
+
+        # Linear velocity in the forward axis
+        forward_error = distance * np.cos(yaw_error)
+        self.forward_integral += forward_error / self.update_rate
+        forward_derivative = (
+            forward_error - self.forward_prior) * self.update_rate
+        vel_msg.linear.x = np.clip(self.forward_kp * forward_error +
+                                   self.forward_ki * self.forward_integral +
+                                   self.forward_kd * forward_derivative, -1, 1)
+        self.forward_prior = forward_error
+
+        # Linear velocity in the up axis.
+        up_error = g[2] - x[2]
+        self.up_integral += up_error / self.update_rate
+        up_derivative = (up_error - self.up_prior) * self.update_rate
+        vel_msg.linear.z = np.clip(
+            self.up_kp * up_error + self.up_ki * self.up_integral +
+            self.up_kd * up_derivative, -1, 1)
+        self.up_prior = up_error
+
+        vel_msg.linear.z += control[0]
+        vel_msg.angular.z += control[1]
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -320,11 +390,25 @@ class DeepDronePlanner:
             return collision_reward * np.cos(control[1])
 
     def terminal(self, state, action):
-        if self.collided:
+        x = np.array(
+            [self.pose.position.x, self.pose.position.y, self.pose.position.z])
+        g = np.array([
+            self.nav_goal.position.x, self.nav_goal.position.y,
+            self.nav_goal.position.z
+        ])
+
+        distance = np.linalg.norm(g[:2] - x[:2])
+        goal_reached = distance < self.distance_threshold
+
+        terminal = self.collided or goal_reached
+        if terminal:
+            if goal_reached:
+                print("Goal reached!")
+            elif self.collided:
+                print("Collided :(")
             self.pause_physics()
-            self.last_collision_pose = self.pose
             self.velocity_publisher.publish(Twist())
-        return self.collided
+        return terminal
 
     def action_to_control(self, action):
         if self.discrete_controls:
