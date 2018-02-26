@@ -105,17 +105,17 @@ class DeepDronePlanner:
 
         # Velocity control scaling constant.
         self.forward_kp = 0.6
-        self.forward_ki = 0.001
+        self.forward_ki = 0.01
         self.forward_kd = 0.1
 
         # Gaz PID variables.
         self.up_kp = 0.6
-        self.up_ki = 0.001
+        self.up_ki = 0.01
         self.up_kd = 0.1
 
         # Yaw PID variables.
         self.yaw_kp = 0.6
-        self.yaw_ki = 0.001
+        self.yaw_ki = 0.01
         self.yaw_kd = 0.1
 
         # Set up policy search network.
@@ -350,6 +350,8 @@ class DeepDronePlanner:
 
         vel_msg.linear.z += control[0]
         vel_msg.angular.z += control[1]
+        vel_msg.linear.z = np.clip(vel_msg.linear.z, -1, 1)
+        vel_msg.angular.z = np.clip(vel_msg.angular.z, -1, 1)
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -414,7 +416,7 @@ class DeepDronePlanner:
     def action_to_control(self, action):
         if self.discrete_controls:
             argmax = np.argmax(action)
-            values = 2.0 * np.arange(self.atoms) / (self.atoms - 1.0) - 1.0
+            values = 1.5 * np.arange(self.atoms) / (self.atoms - 1.0) - 0.75
             linear_z = values[argmax / self.atoms]
             angular_z = values[argmax % self.atoms]
         else:
