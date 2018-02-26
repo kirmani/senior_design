@@ -105,29 +105,15 @@ class SimulationRandomizer:
             max_x = 4.0
             min_y = 6.0
             max_y = 7.0
+        min_z = 1.0
+        max_z = 3.0
         tx = min_x + (np.random.random() * (max_x - min_x))
         ty = min_y + (np.random.random() * (max_y - min_y))
+        tz = min_z + (np.random.random() * (max_z - min_z))
+        yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw -
+               self.max_quadrotor_start_yaw) * np.pi / 180.0
 
-        if spawn_room == 'living_room':
-            if tx > 2.25 and ty > 2.25:
-                yaw = 165
-
-            elif tx < 2.25 and ty > 2.25:
-                yaw = 20
-
-            elif tx > 2.25 and ty < 2.25:
-                yaw = 135
-
-            elif tx < 2.25 and ty < 2.25:
-                yaw = 45
-
-        elif spawn_room == 'kitchen':
-            if tx > 3.0:
-                yaw = 270
-            else:
-                yaw = 0
-
-        return (tx, ty, 1.0, yaw)
+        return (tx, ty, tz, yaw)
 
     def __call__(self):
         print("Randomized simulation.")
@@ -139,21 +125,15 @@ class SimulationRandomizer:
         #self.spawn_light()
 
         # Pick randomized parameters.
-        (quadrotor_tx, quadrotor_ty, _,
+        (quadrotor_tx, quadrotor_ty, quadrotor_tz,
          quadrotor_yaw) = self.GetRandomAptPosition()
-
-        quadrotor_yaw += np.random.random() * np.pi * (
-            45) / 360.0 - 22.5  #+- 22.5 degrees
-
-        if quadrotor_yaw < 0:
-            quadrotor_yaw += 360
-
-        #quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw
-        #                 - self.max_quadrotor_start_yaw) * np.pi / 180.0
 
         # Spawn our quadrotor.
         self.spawn_quadrotor(
-            tx=quadrotor_tx, ty=quadrotor_ty, tz=1.0, yaw=quadrotor_yaw)
+            tx=quadrotor_tx,
+            ty=quadrotor_ty,
+            tz=quadrotor_tz,
+            yaw=quadrotor_yaw)
         # Unpause physics.
         self.unpause_physics()
         # Wait a little bit for the drone spawn to stabilize. Maybe there's a

@@ -294,8 +294,9 @@ class DeepDronePlanner:
         self.up_prior = 0.0
         self.yaw_integral = 0.0
         self.yaw_prior = 0.0
-        # print("Goal position: (%.4f, %.4f)" % (goal_position[0],
-        #                                        goal_position[1]))
+        print("Set navigation goal: (%.4f, %.4f, %.4f)" %
+              (self.nav_goal.position.x, self.nav_goal.position.y,
+               self.nav_goal.position.z))
 
         # Reset collision state.
         self.collided = False
@@ -397,7 +398,7 @@ class DeepDronePlanner:
             self.nav_goal.position.z
         ])
 
-        distance = np.linalg.norm(g[:2] - x[:2])
+        distance = np.linalg.norm(g - x)
         goal_reached = distance < self.distance_threshold
 
         terminal = self.collided or goal_reached
