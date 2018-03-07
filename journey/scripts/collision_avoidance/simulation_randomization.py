@@ -95,7 +95,7 @@ class SimulationRandomizer:
         # opposed to uniformly sampling, so doesn't bias to explore small
         # regions more often.
         room = np.random.random()
-        if room > 65:
+        if room < .65:
             spawn_room = 'living_room'
             min_x = 0.5
             max_x = 4.0
@@ -103,7 +103,7 @@ class SimulationRandomizer:
             max_y = 4.2
             min_z = 1.2 
             max_z = 2.5
-        elif room > .87:
+        elif room < .87:
             spawn_room = 'kitchen'
             min_x = 0.5
             max_x = 4.0
@@ -111,7 +111,7 @@ class SimulationRandomizer:
             max_y = 7.2
             min_z = 0.5 
             max_z = 2.5
-        elif room > .96: 
+        elif room < .96: 
             spawn_room = 'laundry_room' 
             min_x = -0.8 
             max_x = -0.6
@@ -119,7 +119,7 @@ class SimulationRandomizer:
             max_y = 4.8 
             min_z = 0.5
             max_z = 2.5
-        elif room > .98:
+        elif room < .98:
             spawn_room = 'dining_room'
             min_x = 5.0
             max_x = 5.4
@@ -153,7 +153,7 @@ class SimulationRandomizer:
 
         self.randomizer_publisher.publish(EmptyMessage())
 
-        #self.spawn_light()
+        self.set_intensity()
 
         # Pick randomized parameters.
         (quadrotor_tx, quadrotor_ty, quadrotor_tz,
