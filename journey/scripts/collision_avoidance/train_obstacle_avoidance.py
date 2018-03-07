@@ -453,7 +453,7 @@ class DeepDronePlanner:
         model_dir = os.path.join(os.getcwd(), model_dir)
         self.ddpg.load_model(model_dir)
         validator = ModelValidator()
-        validator.validate()
+        validator.validate(env)
 
     def plan(self, model_dir):
         # Load our model.
