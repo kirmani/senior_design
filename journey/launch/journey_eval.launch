@@ -2,6 +2,6 @@
 <launch>
   <!-- Start obstacle avoidance detection. -->
   <node name="obstacle_avoidance" pkg="journey" type="train_obstacle_avoidance.py"
-    args="-t -m $(find journey)/tensorflow/models/collision_avoidance/continuous/model.ckpt-51"
+    args="-t -m $(find journey)/tensorflow/models/collision_avoidance/discrete/model.ckpt-999"
     output="screen"></node>
 </launch>

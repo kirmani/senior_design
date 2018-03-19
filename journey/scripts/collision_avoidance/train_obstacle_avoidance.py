@@ -105,18 +105,18 @@ class DeepDronePlanner:
 
         # Velocity control scaling constant.
         self.forward_kp = 0.6
-        self.forward_ki = 0.01
-        self.forward_kd = 0.1
+        self.forward_ki = 0.1
+        self.forward_kd = 0.001
 
         # Gaz PID variables.
         self.up_kp = 0.6
-        self.up_ki = 0.01
-        self.up_kd = 0.1
+        self.up_ki = 0.1
+        self.up_kd = 0.001
 
         # Yaw PID variables.
         self.yaw_kp = 0.6
-        self.yaw_ki = 0.01
-        self.yaw_kd = 0.1
+        self.yaw_ki = 0.1
+        self.yaw_kd = 0.001
 
         # Set up policy search network.
         self.linear_velocity = 0.5
@@ -336,7 +336,7 @@ class DeepDronePlanner:
             forward_error - self.forward_prior) * self.update_rate
         vel_msg.linear.x = np.clip(self.forward_kp * forward_error +
                                    self.forward_ki * self.forward_integral +
-                                   self.forward_kd * forward_derivative, -1, 1)
+                                   self.forward_kd * forward_derivative, 0, 1)
         self.forward_prior = forward_error
 
         # Linear velocity in the up axis.
@@ -453,7 +453,7 @@ class DeepDronePlanner:
         model_dir = os.path.join(os.getcwd(), model_dir)
         self.ddpg.load_model(model_dir)
         validator = ModelValidator()
-        validator.validate()
+        validator.validate(env)
 
     def plan(self, model_dir):
         # Load our model.

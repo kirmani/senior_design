@@ -75,12 +75,15 @@ class DeepDeterministicPolicyGradients:
         tf.summary.scalar("expected_reward", expected_reward)
         qmax = tf.Variable(0.)
         tf.summary.scalar("qmax", qmax)
+        success_rate = tf.Variable(0.)
+        tf.summary.scalar("success_rate", success_rate)
 
         summary_vars = [
             episode_reward,
             loss,
             expected_reward,
             qmax,
+            success_rate,
         ]
         summary_ops = tf.summary.merge_all()
 
@@ -179,6 +182,8 @@ class DeepDeterministicPolicyGradients:
             epsilon = epsilon_zero * (1.0 - float(epoch) / num_epochs)
             print("Explore with epsilon greedy (epsilon = %.4f)" % epsilon)
 
+            success_rate = []
+
             for i in range(episodes_in_epoch):
                 state = env.reset()
                 episode_reward = 0.0
@@ -207,8 +212,8 @@ class DeepDeterministicPolicyGradients:
                     else:
                         action += actor_noise()
 
-                    # Bound action within [-1, 1]
-                    action = np.clip(action, -1, 1)
+                        # Bound action within [-1, 1]
+                        action = np.clip(action, -1, 1)
 
                     # Take a step.
                     next_state = env.step(state, action)
@@ -232,6 +237,8 @@ class DeepDeterministicPolicyGradients:
 
                     if terminal:
                         break
+
+                success_rate.append(reward)
 
                 # For our entire episode add our experience with our target
                 # model rewards and future actions to our experience replay buffer.
@@ -263,8 +270,10 @@ class DeepDeterministicPolicyGradients:
             # Output epoch statistics.
             average_epoch_reward = np.mean(epoch_rewards)
             epoch_reward_stddev = np.std(epoch_rewards)
-            print('| Reward: {:4f} ({:4f})| Epoch: {:d} |'.format(
-                average_epoch_reward, epoch_reward_stddev, epoch))
+            print(
+                '| Reward: {:4f} ({:4f})| Success: {:4f} ({:4f}) | Epoch: {:d} |'.
+                format(average_epoch_reward, epoch_reward_stddev,
+                       np.mean(success_rate), np.std(success_rate), epoch))
 
             print("Finished data collection for epoch %d." % epoch)
             print("Starting policy optimization.")
@@ -322,6 +331,7 @@ class DeepDeterministicPolicyGradients:
                     summary_vars[1]: loss,
                     summary_vars[2]: expected_reward,
                     summary_vars[3]: qmax,
+                    summary_vars[4]: np.mean(success_rate),
                 })
             writer.add_summary(summary_str, epoch)
             writer.flush()
