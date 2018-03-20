@@ -1,7 +1,18 @@
 <?xml version="1.0"?>
 <launch>
+  <!-- We resume the logic in empty_world.launch, changing only the name of the world to be launched -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find journey)/worlds/apt_s413.world"/>
+  </include>
+
+  <include file="$(find cvg_sim_gazebo)/launch/spawn_quadrotor.launch" >
+    <arg name="model" value="$(find journey)/urdf/quadrotor_sensors.urdf.xacro"/>
+    <arg name="x" value="3"/>
+    <arg name="y" value="3"/>
+  </include>
+
   <!-- Start obstacle avoidance detection. -->
   <node name="obstacle_avoidance" pkg="journey" type="train_obstacle_avoidance.py"
-    args="-t -m $(find journey)/tensorflow/models/collision_avoidance/continuous/model.ckpt-51"
+    args="-t -m $(find journey)/tensorflow/models/collision_avoidance/discrete/model.ckpt-999"
     output="screen"></node>
 </launch>

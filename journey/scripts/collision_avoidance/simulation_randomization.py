@@ -95,6 +95,7 @@ class SimulationRandomizer:
         # opposed to uniformly sampling, so doesn't bias to explore small
         # regions more often.
         room = np.random.random()
+
         if room < .65:
             spawn_room = 'living_room'
             min_x = 0.5
@@ -103,6 +104,7 @@ class SimulationRandomizer:
             max_y = 4.2
             min_z = 1.2 
             max_z = 2.5
+
         elif room < .87:
             spawn_room = 'kitchen'
             min_x = 0.5
@@ -111,6 +113,7 @@ class SimulationRandomizer:
             max_y = 7.2
             min_z = 0.5 
             max_z = 2.5
+
         elif room < .96: 
             spawn_room = 'laundry_room' 
             min_x = -0.8 
@@ -119,6 +122,7 @@ class SimulationRandomizer:
             max_y = 4.8 
             min_z = 0.5
             max_z = 2.5
+
         elif room < .98:
             spawn_room = 'dining_room'
             min_x = 5.0
@@ -127,6 +131,7 @@ class SimulationRandomizer:
             max_y = 8.2
             min_z = 1.5
             max_z = 2.5
+
         else:
             spawn_room = 'entry_way'
             min_x = 3.2
@@ -146,18 +151,24 @@ class SimulationRandomizer:
 
         return (tx, ty, tz, yaw)
 
-    def __call__(self):
+    def __call__(self, start_x = 0, start_y = 0, start_z = 0, test = 0):
         print("Randomized simulation.")
 
         self.pause_physics()
 
         self.randomizer_publisher.publish(EmptyMessage())
 
-        self.set_intensity()
+        if test == 0:
+            self.set_intensity()
 
-        # Pick randomized parameters.
-        (quadrotor_tx, quadrotor_ty, quadrotor_tz,
-         quadrotor_yaw) = self.GetRandomAptPosition()
+            # Pick randomized parameters.
+            (quadrotor_tx, quadrotor_ty, quadrotor_tz,
+            quadrotor_yaw) = self.GetRandomAptPosition()
+        else:
+            quadrotor_tx = start_x 
+            quadrotor_ty = start_y
+            quadrotor_tz = start_z
+            quadrotor_yaw = 0
 
         # Spawn our quadrotor.
         self.spawn_quadrotor(
@@ -167,6 +178,7 @@ class SimulationRandomizer:
             yaw=quadrotor_yaw)
         # Unpause physics.
         self.unpause_physics()
+        print("unpaused physics")
         # Wait a little bit for the drone spawn to stabilize. Maybe there's a
         # way to do this without sleeping?
         rospy.sleep(2)

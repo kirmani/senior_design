@@ -118,6 +118,45 @@ class DeepDeterministicPolicyGradients:
             print("Episode over.")
             print("Reward: %.4f" % episode_reward)
 
+    #does the "run" stage of testing and returns # successful attempts
+    def test(self, env, test_name, 
+             test_goal_x, test_goal_y, test_goal_z, 
+             test_start_x, test_start_y, test_start_z,
+             num_attempts=1, max_episode_len=1000):
+        test = 1
+        num_success = 0
+
+        for i in range(num_attempts):
+            state = env.reset(test_goal_x = test_goal_x,
+                              test_goal_y = test_goal_y,
+                              test_goal_z = test_goal_z, 
+                              test_start_x = test_start_x,
+                              test_start_y = test_start_y,
+                              test_start_z = test_start_z,
+                              test = test)
+            for j in range(max_episode_len):
+                # Predict the optimal actions over the horizon.
+                action_sequence = self.policy.predict_actions(
+                    np.expand_dims(state, axis=0))
+
+                # MPC action selection.
+                action = action_sequence[0][0]
+
+                # Take a step.
+                next_state = env.step(state, action)
+                terminal = env.terminal(next_state, action)
+                reward = env.reward(next_state, action)
+
+                state = next_state
+
+                if terminal:
+                    if reward == 1: #if reward = 0 means collided
+                        num_success += 1
+                    break
+
+        print("Test: %s Complete" % test_name)
+        return num_success
+
     def load_model(self, model_dir):
         saver = tf.train.Saver()
         saver.restore(self.sess, model_dir)
