@@ -41,11 +41,7 @@ MATERIALS = [
 ]
 
 SPAWN_REGIONS = [
-    'living_room',
-    'laundry_room',
-    'kitchen',
-    'dining_room',
-    'entry_way'
+    'living_room', 'laundry_room', 'kitchen', 'dining_room', 'entry_way'
 ]
 
 
@@ -102,7 +98,7 @@ class SimulationRandomizer:
             max_x = 4.0
             min_y = 0.5
             max_y = 4.2
-            min_z = 1.2 
+            min_z = 1.2
             max_z = 2.5
 
         elif room < .87:
@@ -111,15 +107,15 @@ class SimulationRandomizer:
             max_x = 4.0
             min_y = 6.0
             max_y = 7.2
-            min_z = 0.5 
+            min_z = 0.5
             max_z = 2.5
 
-        elif room < .96: 
-            spawn_room = 'laundry_room' 
-            min_x = -0.8 
+        elif room < .96:
+            spawn_room = 'laundry_room'
+            min_x = -0.8
             max_x = -0.6
-            min_y = 4.3 
-            max_y = 4.8 
+            min_y = 4.3
+            max_y = 4.8
             min_z = 0.5
             max_z = 2.5
 
@@ -151,21 +147,21 @@ class SimulationRandomizer:
 
         return (tx, ty, tz, yaw)
 
-    def __call__(self, start_x = 0, start_y = 0, start_z = 0, test = 0):
+    def __call__(self, start_x=0, start_y=0, start_z=0, training=True):
         print("Randomized simulation.")
 
         self.pause_physics()
 
         self.randomizer_publisher.publish(EmptyMessage())
 
-        if test == 0:
+        if training:
             self.set_intensity()
 
             # Pick randomized parameters.
             (quadrotor_tx, quadrotor_ty, quadrotor_tz,
-            quadrotor_yaw) = self.GetRandomAptPosition()
+             quadrotor_yaw) = self.GetRandomAptPosition()
         else:
-            quadrotor_tx = start_x 
+            quadrotor_tx = start_x
             quadrotor_ty = start_y
             quadrotor_tz = start_z
             quadrotor_yaw = 0
@@ -187,10 +183,10 @@ class SimulationRandomizer:
     def set_intensity(self):
         intensity = 100 + (np.random.random() * (235 - 100))
         diffuse = ColorRGBA()
-        diffuse.r = intensity #all the same so greyscale
+        diffuse.r = intensity  #all the same so greyscale
         diffuse.g = intensity
         diffuse.b = intensity
-        diffuse.a = 255 #transparency 0 is completely transparent
+        diffuse.a = 255  #transparency 0 is completely transparent
         #changing attenuation doesn't seem do do anything
         atten_const = 0.9
         atten_lin = 0.01
