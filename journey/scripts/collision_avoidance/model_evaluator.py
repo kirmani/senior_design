@@ -21,7 +21,11 @@ List of tests we are running:
 """
 #chkpt path hardcoded to "-t -m $(find journey)/tensorflow/models/collision_avoidance/discrete/model.ckpt-999"
 from simulation_randomization import SimulationRandomizer
-
+from train_obstacle_avoidance import DeepDronePlanner
+import tensorflow as tf
+from environment import Environment
+from replay_buffer import ReplayBuffer
+from ddpg import DeepDeterministicPolicyGradients
 
 class Test:
     def __init__(self, name):
@@ -37,12 +41,32 @@ class ModelValidator:
 
         self.tests = [corner_test, kitchen_nook_test]
 
-        self.randomize_simulation = SimulationRandomizer()
         print("Validator Initialized")
 
-    def validate(self, env):
-        for test in self.tests:
-            print("Running test: %s" % test.name)
+    #maybe have to pass in the entire deep drone planner
+    def validate(self, env, ddpg):
+        #model already loaded
+
+        #set goal, starting pose, and initialize drone using env.reset
+        test = 1
+        test_goal = (-0.75, 5.0, 1.0)
+        test_start_pose = (1, 1, 1)
+        state = env.reset(test = test, 
+                          test_goal = test_goal, 
+                          test_start_pose = test_start_pose)
+
+        #run the test (code mostly from ddpg.eval)
+        test_name = "Bathroom"
+        num_success = ddpg.test(env = env, 
+                                test_name = test_name, 
+                                test_goal = test_goal, 
+                                test_start_pose = test_start_pose, 
+                                num_attempts=1,
+                                max_episode_len=1000)
+
+        print("Test: %s num_successes" % (test_name, num_successes))        
+        #for test in self.tests:
+        #    print("Running test: %s" % test.name)
 
 
     def laundry_room_test(self):
@@ -55,9 +79,18 @@ class ModelValidator:
         print("test call to self")
         self.laundry_room_test()
 
+
 #how much stuff has already been done
 
 # stuff I need to do:
+# set goal
+# set starting position
+# run the thing ?? not so sure
+# (later) set up environment
+# check if step terminated and check reward
+
+
+ 
 # know when drone has collided
 # set goal:
 # self.nav_goal.position.x = goal_position[0]
@@ -65,3 +98,4 @@ class ModelValidator:
 # self.nav_goal.position.z = goal_position[2]
 
 # set start position (from sim rand)
+

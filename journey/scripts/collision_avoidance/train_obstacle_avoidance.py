@@ -267,11 +267,12 @@ class DeepDronePlanner:
             self.frame_buffer.append(frame)
         return np.stack(list(self.frame_buffer), axis=-1)
 
-    def reset(self):
+    def reset(self, test = 0, test_goal, test_start_pose):
         self.velocity_publisher.publish(Twist())
 
         # Randomize simulation environment.
-        self.randomize_simulation()
+        self.randomize_simulation(test, test_start_pose)
+        
 
         # Clear our frame buffer.
         self.frame_buffer.clear()
@@ -284,19 +285,26 @@ class DeepDronePlanner:
         state = self.get_current_state()
 
         # Set goal pose.
-        goal_position = self.randomize_simulation.GetRandomAptPosition()
-        self.nav_goal.position.x = goal_position[0]
-        self.nav_goal.position.y = goal_position[1]
-        self.nav_goal.position.z = goal_position[2]
+        if test == 0:
+            goal_position = self.randomize_simulation.GetRandomAptPosition()
+            self.nav_goal.position.x = goal_position[0]
+            self.nav_goal.position.y = goal_position[1]
+            self.nav_goal.position.z = goal_position[2]
+        else:
+            self.nav_goal.position.x = test_goal[0]
+            self.nav_goal.position.y = test_goal[1]
+            self.nav_goal.position.z = test_goal[2]
+
         self.forward_integral = 0.0
         self.forward_prior = 0.0
         self.up_integral = 0.0
         self.up_prior = 0.0
         self.yaw_integral = 0.0
         self.yaw_prior = 0.0
-        print("Set navigation goal: (%.4f, %.4f, %.4f)" %
-              (self.nav_goal.position.x, self.nav_goal.position.y,
-               self.nav_goal.position.z))
+
+            print("Set navigation goal: (%.4f, %.4f, %.4f)" %
+                  (self.nav_goal.position.x, self.nav_goal.position.y,
+                   self.nav_goal.position.z))
 
         # Reset collision state.
         self.collided = False
@@ -452,8 +460,10 @@ class DeepDronePlanner:
         env = Environment(self.reset, self.step, self.reward, self.terminal)
         model_dir = os.path.join(os.getcwd(), model_dir)
         self.ddpg.load_model(model_dir)
+
+        ddpg = self.ddpg
         validator = ModelValidator()
-        validator.validate(env)
+        validator.validate(env, ddpg)
 
     def plan(self, model_dir):
         # Load our model.

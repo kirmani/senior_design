@@ -151,18 +151,23 @@ class SimulationRandomizer:
 
         return (tx, ty, tz, yaw)
 
-    def __call__(self):
+    def __call__(self, test = 0, test_start_pose):
         print("Randomized simulation.")
 
         self.pause_physics()
 
         self.randomizer_publisher.publish(EmptyMessage())
 
-        self.set_intensity()
+        if test == 0:
+            self.set_intensity()
 
-        # Pick randomized parameters.
-        (quadrotor_tx, quadrotor_ty, quadrotor_tz,
-         quadrotor_yaw) = self.GetRandomAptPosition()
+            # Pick randomized parameters.
+            (quadrotor_tx, quadrotor_ty, quadrotor_tz,
+            quadrotor_yaw) = self.GetRandomAptPosition()
+        else:
+            quadrotor_tx = test_start_pose[0] 
+            quadrotor_ty = test_start_pose[1]
+            quadrotor_tz = test_start_pose[2]
 
         # Spawn our quadrotor.
         self.spawn_quadrotor(
