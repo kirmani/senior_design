@@ -28,7 +28,9 @@ from replay_buffer import ReplayBuffer
 from ddpg import DeepDeterministicPolicyGradients
 from geometry_msgs.msg import Pose
 
+
 class Test:
+
     def __init__(self, name):
         self.name = name
         self.start = (1, 1, 1)
@@ -36,6 +38,7 @@ class Test:
 
 
 class ModelValidator:
+
     def __init__(self):
         corner_test = Test("corner")
         kitchen_nook_test = Test("kitchen_nook")
@@ -50,36 +53,27 @@ class ModelValidator:
 
         #set goal, starting pose, and initialize drone using env.reset in ddpg.test
         test = 1
-        test_goal_x = 2.0
-        test_goal_y = 6.0
-        test_goal_z = 1.0
-        test_start_x = 1
-        test_start_y = 1
-        test_start_z = 1
+        start = (1.0, 1.0, 1.0)
+        goal = (2.0, 6.0, 1.0)
 
         #run the test (code mostly from ddpg.eval)
         test_name = "Bathroom"
-        num_success = ddpg.test(env = env, 
-                                test_name = test_name, 
-                                test_goal_x = test_goal_x,
-                                test_goal_y = test_goal_y,
-                                test_goal_z = test_goal_z, 
-                                test_start_x = test_start_x,
-                                test_start_y = test_start_y,
-                                test_start_z = test_start_z, 
-                                num_attempts=100,
-                                max_episode_len=1000)
+        num_success = ddpg.test(
+            env=env,
+            test_name=test_name,
+            start=start,
+            goal=goal,
+            num_attempts=100,
+            max_episode_len=1000)
 
-        print("Test: %s num_successes: %d" % (test_name, num_success))        
+        print("Test: %s num_successes: %d" % (test_name, num_success))
         #for test in self.tests:
         #    print("Running test: %s" % test.name)
 
-
     def laundry_room_test(self):
-        self.nav_goal.position.x = -0.75 
-        self.nav_goal.position.y = 5.0    
+        self.nav_goal.position.x = -0.75
+        self.nav_goal.position.y = 5.0
         self.nav_goal.position.z = 1.0
-
 
     def __call__(self):
         print("test call to self")
@@ -95,8 +89,6 @@ class ModelValidator:
 # (later) set up environment
 # check if step terminated and check reward
 
-
- 
 # know when drone has collided
 # set goal:
 # self.nav_goal.position.x = goal_position[0]
@@ -104,4 +96,3 @@ class ModelValidator:
 # self.nav_goal.position.z = goal_position[2]
 
 # set start position (from sim rand)
-
