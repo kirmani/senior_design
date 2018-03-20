@@ -278,7 +278,6 @@ class DeepDronePlanner:
 
         # Take-off.
         self.unpause_physics()
-        print("unpause physics 2")
         self.takeoff_publisher.publish(EmptyMessage())
 
         # Get state.
@@ -463,7 +462,6 @@ class DeepDronePlanner:
 
         validator = ModelValidator()
         validator.validate(env, self.ddpg)
-        print("got here 2")
 
     def plan(self, model_dir):
         # Load our model.

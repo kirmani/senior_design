@@ -174,7 +174,6 @@ class SimulationRandomizer:
             yaw=quadrotor_yaw)
         # Unpause physics.
         self.unpause_physics()
-        print("unpaused physics")
         # Wait a little bit for the drone spawn to stabilize. Maybe there's a
         # way to do this without sleeping?
         rospy.sleep(2)
