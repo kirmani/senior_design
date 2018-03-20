@@ -151,7 +151,7 @@ class SimulationRandomizer:
 
         return (tx, ty, tz, yaw)
 
-    def __call__(self, test = 0, test_start_pose):
+    def __call__(self, start_x, start_y, start_z, test = 0):
         print("Randomized simulation.")
 
         self.pause_physics()
@@ -165,9 +165,10 @@ class SimulationRandomizer:
             (quadrotor_tx, quadrotor_ty, quadrotor_tz,
             quadrotor_yaw) = self.GetRandomAptPosition()
         else:
-            quadrotor_tx = test_start_pose[0] 
-            quadrotor_ty = test_start_pose[1]
-            quadrotor_tz = test_start_pose[2]
+            quadrotor_tx = start_x 
+            quadrotor_ty = start_y
+            quadrotor_tz = start_z
+            quadrotor_yaw = 0
 
         # Spawn our quadrotor.
         self.spawn_quadrotor(
@@ -177,6 +178,7 @@ class SimulationRandomizer:
             yaw=quadrotor_yaw)
         # Unpause physics.
         self.unpause_physics()
+        print("unpaused physics")
         # Wait a little bit for the drone spawn to stabilize. Maybe there's a
         # way to do this without sleeping?
         rospy.sleep(2)

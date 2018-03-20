@@ -21,17 +21,18 @@ List of tests we are running:
 """
 #chkpt path hardcoded to "-t -m $(find journey)/tensorflow/models/collision_avoidance/discrete/model.ckpt-999"
 from simulation_randomization import SimulationRandomizer
-from train_obstacle_avoidance import DeepDronePlanner
+#from train_obstacle_avoidance import DeepDronePlanner
 import tensorflow as tf
 from environment import Environment
 from replay_buffer import ReplayBuffer
 from ddpg import DeepDeterministicPolicyGradients
+from geometry_msgs.msg import Pose
 
 class Test:
     def __init__(self, name):
         self.name = name
-        self.start = 
-        self.goal =
+        self.start = (1, 1, 1)
+        self.goal = (2, 2, 2)
 
 
 class ModelValidator:
@@ -47,24 +48,29 @@ class ModelValidator:
     def validate(self, env, ddpg):
         #model already loaded
 
-        #set goal, starting pose, and initialize drone using env.reset
+        #set goal, starting pose, and initialize drone using env.reset in ddpg.test
         test = 1
-        test_goal = (-0.75, 5.0, 1.0)
-        test_start_pose = (1, 1, 1)
-        state = env.reset(test = test, 
-                          test_goal = test_goal, 
-                          test_start_pose = test_start_pose)
+        test_goal_x = 2.0
+        test_goal_y = 6.0
+        test_goal_z = 1.0
+        test_start_x = 1
+        test_start_y = 1
+        test_start_z = 1
 
         #run the test (code mostly from ddpg.eval)
         test_name = "Bathroom"
         num_success = ddpg.test(env = env, 
                                 test_name = test_name, 
-                                test_goal = test_goal, 
-                                test_start_pose = test_start_pose, 
-                                num_attempts=1,
+                                test_goal_x = test_goal_x,
+                                test_goal_y = test_goal_y,
+                                test_goal_z = test_goal_z, 
+                                test_start_x = test_start_x,
+                                test_start_y = test_start_y,
+                                test_start_z = test_start_z, 
+                                num_attempts=100,
                                 max_episode_len=1000)
 
-        print("Test: %s num_successes" % (test_name, num_successes))        
+        print("Test: %s num_successes: %d" % (test_name, num_success))        
         #for test in self.tests:
         #    print("Running test: %s" % test.name)
 
