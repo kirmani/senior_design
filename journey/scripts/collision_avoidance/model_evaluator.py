@@ -53,24 +53,16 @@ class ModelValidator:
 
         #set goal, starting pose, and initialize drone using env.reset in ddpg.test
         test = 1
-        test_goal_x = 2.0
-        test_goal_y = 6.0
-        test_goal_z = 1.0
-        test_start_x = 1
-        test_start_y = 1
-        test_start_z = 1
+        start = (1.0, 1.0, 1.0)
+        goal = (2.0, 6.0, 1.0)
 
         #run the test (code mostly from ddpg.eval)
         test_name = "Bathroom"
         num_success = ddpg.test(
             env=env,
             test_name=test_name,
-            test_goal_x=test_goal_x,
-            test_goal_y=test_goal_y,
-            test_goal_z=test_goal_z,
-            test_start_x=test_start_x,
-            test_start_y=test_start_y,
-            test_start_z=test_start_z,
+            start=start,
+            goal=goal,
             num_attempts=100,
             max_episode_len=1000)
 

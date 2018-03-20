@@ -267,19 +267,11 @@ class DeepDronePlanner:
             self.frame_buffer.append(frame)
         return np.stack(list(self.frame_buffer), axis=-1)
 
-    def reset(self,
-              test_goal_x=0,
-              test_goal_y=0,
-              test_goal_z=0,
-              test_start_x=0,
-              test_start_y=0,
-              test_start_z=0,
-              training=True):
+    def reset(self, start=(0, 0, 0), goal=(0, 0, 0), training=True):
         self.velocity_publisher.publish(Twist())
 
         # Randomize simulation environment.
-        self.randomize_simulation(training, test_start_x, test_start_y,
-                                  test_start_z)
+        self.randomize_simulation(start=start, training=training)
 
         # Clear our frame buffer.
         self.frame_buffer.clear()
@@ -299,9 +291,9 @@ class DeepDronePlanner:
             self.nav_goal.position.y = goal_position[1]
             self.nav_goal.position.z = goal_position[2]
         else:
-            self.nav_goal.position.x = test_goal_x
-            self.nav_goal.position.y = test_goal_y
-            self.nav_goal.position.z = test_goal_z
+            self.nav_goal.position.x = goal[0]
+            self.nav_goal.position.y = goal[1]
+            self.nav_goal.position.z = goal[2]
 
         self.forward_integral = 0.0
         self.forward_prior = 0.0
@@ -469,9 +461,8 @@ class DeepDronePlanner:
         model_dir = os.path.join(os.getcwd(), model_dir)
         self.ddpg.load_model(model_dir)
 
-        ddpg = self.ddpg
         validator = ModelValidator()
-        validator.validate(env, ddpg)
+        validator.validate(env, self.ddpg)
         print("got here 2")
 
     def plan(self, model_dir):

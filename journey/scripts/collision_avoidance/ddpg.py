@@ -122,25 +122,14 @@ class DeepDeterministicPolicyGradients:
     def test(self,
              env,
              test_name,
-             test_goal_x,
-             test_goal_y,
-             test_goal_z,
-             test_start_x,
-             test_start_y,
-             test_start_z,
+             start,
+             goal,
              num_attempts=1,
              max_episode_len=1000):
         num_success = 0
 
         for i in range(num_attempts):
-            state = env.reset(
-                test_goal_x=test_goal_x,
-                test_goal_y=test_goal_y,
-                test_goal_z=test_goal_z,
-                test_start_x=test_start_x,
-                test_start_y=test_start_y,
-                test_start_z=test_start_z,
-                training=False)
+            state = env.reset(start=start, goal=goal, training=False)
             for j in range(max_episode_len):
                 # Predict the optimal actions over the horizon.
                 action_sequence = self.policy.predict_actions(
