@@ -151,7 +151,7 @@ class SimulationRandomizer:
 
         return (tx, ty, tz, yaw)
 
-    def __call__(self, start_x, start_y, start_z, test = 0):
+    def __call__(self, start_x = 0, start_y = 0, start_z = 0, test = 0):
         print("Randomized simulation.")
 
         self.pause_physics()
