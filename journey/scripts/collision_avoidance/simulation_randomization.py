@@ -152,9 +152,9 @@ class SimulationRandomizer:
 
         self.pause_physics()
 
-        self.randomizer_publisher.publish(EmptyMessage())
-
         if training:
+            self.randomizer_publisher.publish(EmptyMessage())
+
             self.set_intensity()
 
             # Pick randomized parameters.
