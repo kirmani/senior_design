@@ -40,13 +40,10 @@ MATERIALS = [
     'Gazebo/WoodPallet',
 ]
 
-
 SPAWN_REGIONS = [
-        'living_room',
-        # 'laundry_room',
-        'kitchen',
-        # 'dining_room',
-        ]
+    'living_room', 'laundry_room', 'kitchen', 'dining_room', 'entry_way'
+]
+
 
 class SimulationRandomizer:
 
@@ -85,71 +82,95 @@ class SimulationRandomizer:
     def unpause_physics(self):
         # Unpause physics.
         rospy.wait_for_service('gazebo/unpause_physics')
-        unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics', EmptyService)
+        unpause_physics = rospy.ServiceProxy('gazebo/unpause_physics',
+                                             EmptyService)
         unpause_physics()
 
-    def __call__(self):
+    def GetRandomAptPosition(self):
+        # Give each sample a PMF that corresponds to its area as
+        # opposed to uniformly sampling, so doesn't bias to explore small
+        # regions more often.
+        room = np.random.random()
+
+        if room < .65:
+            spawn_room = 'living_room'
+            min_x = 0.5
+            max_x = 4.0
+            min_y = 0.5
+            max_y = 4.2
+            min_z = 1.2
+            max_z = 2.5
+
+        elif room < .87:
+            spawn_room = 'kitchen'
+            min_x = 0.5
+            max_x = 4.0
+            min_y = 6.0
+            max_y = 7.2
+            min_z = 0.5
+            max_z = 2.5
+
+        elif room < .96:
+            spawn_room = 'laundry_room'
+            min_x = -0.8
+            max_x = -0.6
+            min_y = 4.3
+            max_y = 4.8
+            min_z = 0.5
+            max_z = 2.5
+
+        elif room < .98:
+            spawn_room = 'dining_room'
+            min_x = 5.0
+            max_x = 5.4
+            min_y = 4.0
+            max_y = 8.2
+            min_z = 1.5
+            max_z = 2.5
+
+        else:
+            spawn_room = 'entry_way'
+            min_x = 3.2
+            max_x = 4.5
+            min_y = 8.1
+            max_y = 8.3
+            min_z = .5
+            max_z = 2.5
+
+        tx = min_x + (np.random.random() * (max_x - min_x))
+        ty = min_y + (np.random.random() * (max_y - min_y))
+        tz = min_z + (np.random.random() * (max_z - min_z))
+        #NOTE: can't get drone to spawn facing the correct way
+        #but doesn't matter b/c have goal now
+        yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw -
+               self.max_quadrotor_start_yaw) * np.pi / 180.0
+
+        return (tx, ty, tz, yaw)
+
+    def __call__(self, start=(0, 0, 0), training=True):
         print("Randomized simulation.")
 
         self.pause_physics()
 
-        self.randomizer_publisher.publish(EmptyMessage())
+        if training:
+            self.randomizer_publisher.publish(EmptyMessage())
 
-        #self.spawn_light()
+            self.set_intensity()
 
-        # Pick randomized parameters.
-        # Give each sample a PMF that corresponds to its area as
-        # opposed to uniformly sampling, so doesn't bias to explore small
-        # regions more often.
-        if np.random.random() > .23 :
-            spawn_room = 'living_room'
-            min_x = 1.0
-            max_x = 4.0
-            min_y = 1.0
-            max_y = 4.0
+            # Pick randomized parameters.
+            (quadrotor_tx, quadrotor_ty, quadrotor_tz,
+             quadrotor_yaw) = self.GetRandomAptPosition()
         else:
-            spawn_room = 'kitchen'
-            min_x = 1.0
-            max_x = 4.0
-            min_y = 6.0
-            max_y = 7.0
-
-        quadrotor_tx = min_x + (np.random.random() * (max_x - min_x))
-        quadrotor_ty = min_y + (np.random.random() * (max_y - min_y))
-
-        if spawn_room == 'living_room':
-            if quadrotor_tx > 2.25 and quadrotor_ty > 2.25:
-                quadrotor_yaw = 165
-
-            elif quadrotor_tx < 2.25 and quadrotor_ty > 2.25:
-                quadrotor_yaw = 20
-
-            elif quadrotor_tx > 2.25 and quadrotor_ty < 2.25:
-                quadrotor_yaw = 135
-
-            elif quadrotor_tx < 2.25 and quadrotor_ty < 2.25:
-                quadrotor_yaw = 45
-                    
-
-        elif spawn_room == 'kitchen':
-            if quadrotor_tx > 3.0:
-                quadrotor_yaw = 270
-            else:
-                quadrotor_yaw = 0
-            
-        quadrotor_yaw += np.random.random() * np.pi *(45) / 360.0 - 22.5 #+- 22.5 degrees
-
-        if quadrotor_yaw < 0:
-            quadrotor_yaw += 360
-
-        #quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw
-        #                 - self.max_quadrotor_start_yaw) * np.pi / 180.0
+            quadrotor_tx = start[0]
+            quadrotor_ty = start[1]
+            quadrotor_tz = start[2]
+            quadrotor_yaw = 0
 
         # Spawn our quadrotor.
         self.spawn_quadrotor(
             tx=quadrotor_tx,
             ty=quadrotor_ty,
-            tz=1.0,
+            tz=quadrotor_tz,
             yaw=quadrotor_yaw)
         # Unpause physics.
         self.unpause_physics()
@@ -158,70 +179,25 @@ class SimulationRandomizer:
         rospy.sleep(2)
 
     #might not work because lights might not be considered models
-    def spawn_light(self, tx=5, ty=3, tz=5):
-        #TODO armand mess around with range and see if it does anything
-        #s = '<?xml version="1.0" ?><sdf version="1.5"><light type="directional" name="sun2"><cast_shadows>true</cast_shadows>'
-        #s += '<pose>5 3 5 0 0 0</pose><diffuse>0.8 0.8 0.8 1</diffuse><specular>0.2 0.2 0.2 1</specular>'
-        #s += '<attenuation><range>1000</range><constant>0.9</constant><linear>0.01</linear><quadratic>0.001</quadratic>'
-        #s += '</attenuation><direction>-0.5 0.1 -0.9</direction></light></sdf>'
-
-        max_roll = max_pitch = max_yaw = .1
-        roll = np.random.random()*max_roll
-        pitch = np.random.random()*max_pitch
-        yaw = np.random.random()*max_yaw
-        quaternion = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
-
-        position = (tx, ty, tz)
-        reset_pose = Pose()
-        reset_pose.position.x = position[0]
-        reset_pose.position.y = position[1]
-        reset_pose.position.z = position[2]
-        reset_pose.orientation.x = quaternion[0]
-        reset_pose.orientation.y = quaternion[1]
-        reset_pose.orientation.z = quaternion[2]
-        reset_pose.orientation.w = quaternion[3]
-        model_name = 'sun2'
-        success_spawn = self.spawn_model(model_name, s, reset_pose)
-        if success_spawn:
-            print("spawning sun2 is a success")
-
-
-
-        #test to see if we can change pose with this code 
-        reset_pose.position.x = 6
-        model_state = ModelState()
-        model_state.model_name = 'sun2'
-        model_state.reference_frame = 'world'
-        model_state.pose = reset_pose
-        self.model_state_publisher.publish(model_state)
-                      
-
-
+    def set_intensity(self):
+        intensity = 100 + (np.random.random() * (235 - 100))
         diffuse = ColorRGBA()
-        diffuse.r = 204
-        diffuse.g = 204 #204 is the default, we're just using 10 for testing to see if light changes colour from white
-        diffuse.b = 204
-        diffuse.a = 255
+        diffuse.r = intensity  #all the same so greyscale
+        diffuse.g = intensity
+        diffuse.b = intensity
+        diffuse.a = 255  #transparency 0 is completely transparent
         #changing attenuation doesn't seem do do anything
         atten_const = 0.9
         atten_lin = 0.01
         atten_quad = 0.0
 
         rospy.wait_for_service('gazebo/set_light_properties')
-        set_light_properties = rospy.ServiceProxy('gazebo/set_light_properties', SetLightProperties)
-        success = set_light_properties('sun2', diffuse, atten_const, atten_lin, atten_quad)
+        set_light_properties = rospy.ServiceProxy('gazebo/set_light_properties',
+                                                  SetLightProperties)
+        success = set_light_properties('sun', diffuse, atten_const, atten_lin,
+                                       atten_quad)
         if success:
             print("set light properties was a success!")
-       
-
-    # def randomize_colors(self):
-
-
-
-
-
-
-
 
     def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
         position = (tx, ty, tz)
@@ -510,7 +486,6 @@ class SimulationRandomizer:
         floorplan = 1 - floorplan[1:-1, 1:-1]
 
         return floorplan
-
 
 
 def main(args):

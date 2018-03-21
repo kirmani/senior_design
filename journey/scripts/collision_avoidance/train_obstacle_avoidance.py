@@ -17,7 +17,7 @@ import ros_numpy
 import scipy
 import sys
 import tensorflow as tf
-import tf as transform
+import tf as tf2
 import time
 import traceback
 from collections import deque
@@ -36,6 +36,7 @@ from visualization_msgs.msg import Marker
 from ddpg import DeepDeterministicPolicyGradients
 from environment import Environment
 from multiplicative_integration_lstm import MultiplicativeIntegrationLSTMCell
+from model_evaluator import ModelValidator
 
 
 class DeepDronePlanner:
@@ -43,9 +44,12 @@ class DeepDronePlanner:
     def __init__(self,
                  distance_threshold=0.5,
                  rate=4,
-                 episodes_before_position_reset=5):
+                 discrete_controls=True,
+                 use_probability=True):
         self.distance_threshold = distance_threshold  # meters
         self.update_rate = rate  # Hz
+        self.discrete_controls = discrete_controls
+        self.use_probability = use_probability
 
         # Set max linear velocity to 0.5 meters/sec.
         self.max_linear_velocity = 0.5
@@ -70,8 +74,8 @@ class DeepDronePlanner:
         # Subscribe to ground truth pose.
         self.ground_truth_subscriber = rospy.Subscriber(
             '/ground_truth/state', Odometry, self.on_new_state)
-        self.last_collision_pose = Pose()
-        self.pose = None
+        self.pose = Pose()
+        self.nav_goal = Pose()
 
         # Subscribe to collision detector.
         self.collision_subscriber = rospy.Subscriber(
@@ -99,9 +103,28 @@ class DeepDronePlanner:
         # Simulation reset randomization.
         self.randomize_simulation = SimulationRandomizer()
 
+        # Velocity control scaling constant.
+        self.forward_kp = 0.6
+        self.forward_ki = 0.001
+        self.forward_kd = 0.1
+
+        # Gaz PID variables.
+        self.up_kp = 0.6
+        self.up_ki = 0.1
+        self.up_kd = 0.001
+
+        # Yaw PID variables.
+        self.yaw_kp = 0.6
+        self.yaw_ki = 0.001
+        self.yaw_kd = 0.1
+
         # Set up policy search network.
         self.linear_velocity = 0.5
-        self.action_dim = 2
+        if self.discrete_controls:
+            self.atoms = 5
+            self.action_dim = self.atoms**2
+        else:
+            self.action_dim = 2
         scale = 0.1
         self.image_width = int(640 * scale)
         self.image_height = int(360 * scale)
@@ -110,9 +133,10 @@ class DeepDronePlanner:
         self.frame_buffer = deque(maxlen=self.sequence_length)
         self.backup_velocity = 0.5
         self.ddpg = DeepDeterministicPolicyGradients(
-            self.create_actor_network,
-            self.create_critic_network,
-            horizon=self.horizon)
+            self.create_network,
+            horizon=self.horizon,
+            discrete_controls=self.discrete_controls,
+            use_probability=self.use_probability)
 
         print("Deep drone planner initialized.")
 
@@ -127,7 +151,8 @@ class DeepDronePlanner:
     def on_new_state(self, state):
         self.pose = state.pose.pose
 
-    def create_actor_network(self, scope):
+    def create_network(self, scope):
+        num_params = len(tf.trainable_variables())
         inputs = tf.placeholder(
             tf.float32,
             (None, self.image_height, self.image_width, self.sequence_length))
@@ -163,12 +188,15 @@ class DeepDronePlanner:
             image, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
         image = tf.contrib.layers.batch_norm(image)
         image = tf.nn.relu(image)
+
         image = tf.stack([image for _ in range(self.horizon)], axis=1)
         lstm_inputs = image
         lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
         lstm_outputs, lstm_states = tf.nn.dynamic_rnn(
             lstm_cell, lstm_inputs, dtype=tf.float32, scope=scope)
+        actor_params = tf.trainable_variables()[num_params:]
 
+        # Predict actions.
         actions = tf.contrib.layers.fully_connected(
             lstm_outputs,
             16,
@@ -185,62 +213,12 @@ class DeepDronePlanner:
             tf.random_uniform([self.horizon * self.action_dim], -3e-4, 3e-4))
         actions = tf.matmul(actions, actions_weights) + actions_bias
         actions = tf.reshape(actions, [-1, self.horizon, self.action_dim])
-        actions = tf.nn.tanh(actions)
-        return inputs, actions
+        if self.discrete_controls:
+            actions = tf.nn.softmax(actions)
+        else:
+            actions = tf.nn.tanh(actions)
 
-    def create_critic_network(self, scope):
-        inputs = tf.placeholder(
-            tf.float32,
-            (None, self.image_height, self.image_width, self.sequence_length))
-        actions = tf.placeholder(tf.float32,
-                                 (None, self.horizon, self.action_dim))
-        image = tf.contrib.layers.conv2d(
-            inputs,
-            num_outputs=32,
-            activation_fn=None,
-            kernel_size=(8, 8),
-            stride=(4, 4),
-            weights_regularizer=tf.nn.l2_loss)
-        image = tf.contrib.layers.batch_norm(image)
-        image = tf.nn.relu(image)
-        image = tf.contrib.layers.conv2d(
-            image,
-            num_outputs=32,
-            activation_fn=None,
-            kernel_size=(4, 4),
-            stride=(2, 2),
-            weights_regularizer=tf.nn.l2_loss)
-        image = tf.contrib.layers.batch_norm(image)
-        image = tf.nn.relu(image)
-        image = tf.contrib.layers.conv2d(
-            image,
-            num_outputs=32,
-            activation_fn=None,
-            kernel_size=(3, 3),
-            stride=(1, 1),
-            weights_regularizer=tf.nn.l2_loss)
-        image = tf.contrib.layers.batch_norm(image)
-        image = tf.nn.relu(image)
-        image = tf.contrib.layers.flatten(image)
-        image = tf.contrib.layers.fully_connected(
-            image, 256, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        image = tf.contrib.layers.batch_norm(image)
-        image = tf.nn.relu(image)
-
-        act = tf.contrib.layers.fully_connected(
-            actions, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        act = tf.contrib.layers.batch_norm(act)
-        act = tf.nn.relu(act)
-        act = tf.contrib.layers.fully_connected(
-            act, 16, activation_fn=None, weights_regularizer=tf.nn.l2_loss)
-        act = tf.contrib.layers.batch_norm(act)
-        act = tf.nn.relu(act)
-
-        image = tf.stack([image for _ in range(self.horizon)], axis=1)
-        lstm_inputs = tf.concat([image, act], axis=-1)
-        lstm_cell = MultiplicativeIntegrationLSTMCell(num_units=16)
-        lstm_outputs, lstm_states = tf.nn.dynamic_rnn(
-            lstm_cell, lstm_inputs, dtype=tf.float32, scope=scope)
+        lstm_outputs = tf.concat([lstm_outputs, actions], axis=-1)
 
         # Collision probability prediction.
         y_coll = tf.contrib.layers.fully_connected(
@@ -271,7 +249,7 @@ class DeepDronePlanner:
         b_coll_bias = tf.Variable(tf.random_uniform([1], -3e-4, 3e-4))
         b_coll = tf.matmul(b_coll, b_coll_weights) + b_coll_bias
 
-        return inputs, actions, y_coll, b_coll
+        return inputs, actions, y_coll, b_coll, actor_params
 
     def get_current_frame(self):
         image_data = ros_numpy.numpify(self.image_msg)
@@ -289,11 +267,11 @@ class DeepDronePlanner:
             self.frame_buffer.append(frame)
         return np.stack(list(self.frame_buffer), axis=-1)
 
-    def reset(self):
+    def reset(self, start=(0, 0, 0), goal=(0, 0, 0), training=True):
         self.velocity_publisher.publish(Twist())
 
         # Randomize simulation environment.
-        self.randomize_simulation()
+        self.randomize_simulation(start=start, training=training)
 
         # Clear our frame buffer.
         self.frame_buffer.clear()
@@ -305,16 +283,82 @@ class DeepDronePlanner:
         # Get state.
         state = self.get_current_state()
 
+        # Set goal pose.
+        if training:
+            goal_position = self.randomize_simulation.GetRandomAptPosition()
+            self.nav_goal.position.x = goal_position[0]
+            self.nav_goal.position.y = goal_position[1]
+            self.nav_goal.position.z = goal_position[2]
+        else:
+            self.nav_goal.position.x = goal[0]
+            self.nav_goal.position.y = goal[1]
+            self.nav_goal.position.z = goal[2]
+
+        self.forward_integral = 0.0
+        self.forward_prior = 0.0
+        self.up_integral = 0.0
+        self.up_prior = 0.0
+        self.yaw_integral = 0.0
+        self.yaw_prior = 0.0
+
+        print("Set navigation goal: (%.4f, %.4f, %.4f)" %
+              (self.nav_goal.position.x, self.nav_goal.position.y,
+               self.nav_goal.position.z))
+
         # Reset collision state.
         self.collided = False
 
         return state
 
     def step(self, state, action):
+        control = self.action_to_control(action)
         vel_msg = Twist()
-        vel_msg.linear.x = self.linear_velocity
-        vel_msg.linear.z = action[0]
-        vel_msg.angular.z = action[1]
+
+        x = np.array(
+            [self.pose.position.x, self.pose.position.y, self.pose.position.z])
+        quaternion = (self.pose.orientation.x, self.pose.orientation.y,
+                      self.pose.orientation.z, self.pose.orientation.w)
+        _, _, yaw = tf2.transformations.euler_from_quaternion(quaternion)
+        g = np.array([
+            self.nav_goal.position.x, self.nav_goal.position.y,
+            self.nav_goal.position.z
+        ])
+
+        distance = np.linalg.norm(g[:2] - x[:2])
+
+        # Angular velocity in the XY plane.
+        angle = np.arctan2(g[1] - x[1], g[0] - x[0])
+        yaw_error = angle - yaw
+        self.yaw_integral += yaw_error / self.update_rate
+        yaw_derivative = (yaw_error - self.yaw_prior) * self.update_rate
+        vel_msg.angular.z = np.clip(
+            self.yaw_kp * yaw_error + self.yaw_ki * self.yaw_integral +
+            self.yaw_kd * yaw_derivative, -1, 1)
+        self.yaw_prior = yaw_error
+
+        # Linear velocity in the forward axis
+        forward_error = distance * np.cos(yaw_error)
+        self.forward_integral += forward_error / self.update_rate
+        forward_derivative = (
+            forward_error - self.forward_prior) * self.update_rate
+        vel_msg.linear.x = np.clip(self.forward_kp * forward_error +
+                                   self.forward_ki * self.forward_integral +
+                                   self.forward_kd * forward_derivative, 0, 1)
+        self.forward_prior = forward_error
+
+        # Linear velocity in the up axis.
+        up_error = g[2] - x[2]
+        self.up_integral += up_error / self.update_rate
+        up_derivative = (up_error - self.up_prior) * self.update_rate
+        vel_msg.linear.z = np.clip(
+            self.up_kp * up_error + self.up_ki * self.up_integral +
+            self.up_kd * up_derivative, -1, 1)
+        self.up_prior = up_error
+
+        vel_msg.linear.z += control[0]
+        vel_msg.angular.z += control[1]
+        vel_msg.linear.z = np.clip(vel_msg.linear.z, -1, 1)
+        vel_msg.angular.z = np.clip(vel_msg.angular.z, -1, 1)
         self.velocity_publisher.publish(vel_msg)
 
         # Wait.
@@ -348,24 +392,48 @@ class DeepDronePlanner:
         exit()
 
     def reward(self, state, action):
-        collision_cost = 1 if not self.collided else 0
-        task_cost = 0.0
-        return (collision_cost, task_cost)
+        control = self.action_to_control(action)
+        collision_reward = 1 if not self.collided else 0
+        if self.use_probability:
+            return collision_reward
+        else:
+            return collision_reward
 
     def terminal(self, state, action):
-        if self.collided:
+        x = np.array(
+            [self.pose.position.x, self.pose.position.y, self.pose.position.z])
+        g = np.array([
+            self.nav_goal.position.x, self.nav_goal.position.y,
+            self.nav_goal.position.z
+        ])
+
+        distance = np.linalg.norm(g - x)
+        goal_reached = distance < self.distance_threshold
+
+        terminal = self.collided or goal_reached
+        if terminal:
+            if goal_reached:
+                print("Goal reached!")
+            elif self.collided:
+                print("Collided :(")
             self.pause_physics()
-            self.last_collision_pose = self.pose
             self.velocity_publisher.publish(Twist())
-        return self.collided
+        return terminal
 
     def action_to_control(self, action):
-        # NOTE(kirmani): This doesn't work after adding non-planar controls.
-        return None
+        if self.discrete_controls:
+            argmax = np.argmax(action)
+            values = 1.5 * np.arange(self.atoms) / (self.atoms - 1.0) - 0.75
+            linear_z = values[argmax / self.atoms]
+            angular_z = values[argmax % self.atoms]
+        else:
+            linear_z = action[0]
+            angular_z = action[1]
+        return (linear_z, angular_z)
 
-    def control_to_metric(self, control):
-        # NOTE(kirmani): This doesn't work after adding non-planar controls.
-        return None
+    # def control_to_metric(self, control):
+    #     # NOTE(kirmani): This doesn't work after adding non-planar controls.
+    #     return None
 
     def train(self, model_dir=None):
         env = Environment(
@@ -386,6 +454,14 @@ class DeepDronePlanner:
         model_dir = os.path.join(os.getcwd(), model_dir)
         self.ddpg.eval(
             env, model_dir, num_attempts=num_attempts, max_episode_len=1000)
+
+    def test(self, model_dir):
+        env = Environment(self.reset, self.step, self.reward, self.terminal)
+        model_dir = os.path.join(os.getcwd(), model_dir)
+        self.ddpg.load_model(model_dir)
+
+        validator = ModelValidator()
+        validator.validate(env, self.ddpg)
 
     def plan(self, model_dir):
         # Load our model.
@@ -447,6 +523,8 @@ def main(args):
         if args.num_attempts:
             attempts = int(args.num_attempts)
         deep_drone_planner.eval(args.model, num_attempts=attempts)
+    elif args.test:
+        deep_drone_planner.test(args.model)
     else:
         deep_drone_planner.train(args.model)
 
@@ -466,6 +544,12 @@ if __name__ == '__main__':
         parser.add_argument(
             '-e',
             '--eval',
+            action='store_true',
+            default=False,
+            help='evaluate model')
+        parser.add_argument(
+            '-t',
+            '--test',
             action='store_true',
             default=False,
             help='evaluate model')
