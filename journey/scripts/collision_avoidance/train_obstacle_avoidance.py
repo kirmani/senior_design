@@ -278,7 +278,6 @@ class DeepDronePlanner:
 
         # Take-off.
         self.unpause_physics()
-        print("unpause physics 2")
         self.takeoff_publisher.publish(EmptyMessage())
 
         # Get state.

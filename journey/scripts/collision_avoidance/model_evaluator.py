@@ -28,8 +28,11 @@ from replay_buffer import ReplayBuffer
 from ddpg import DeepDeterministicPolicyGradients
 from geometry_msgs.msg import Pose
 
+
 class Test:
-    def __init__(self, name, (start_x, start_y, start_z), (goal_x, goal_y, goal_z)):
+
+    def __init__(self, name, (start_x, start_y, start_z), (goal_x, goal_y,
+                                                           goal_z)):
         self.name = name
         self.start = (start_x, start_y, start_z)
         self.goal = (goal_x, goal_y, goal_z)
@@ -38,33 +41,36 @@ class Test:
 class ModelValidator:
 
     def __init__(self):
-	#Initialize test cases with name start and goal
+        #Initialize test cases with name start and goal
         self.tests = []
-	self.tests.append(Test("Through Kitchen", (1,1,1), (2,6,1)))
-	self.tests.append(Test("Exit Laundry Room", (-.75, 5, 1),(1,1,1)))
-	self.tests.append(Test("Under Table", (5.25, 7, 1),(5,4,1)))
-	self.tests.append(Test("Around Corner", (5.5,4,1),(4,2,1)))
-	self.tests.append(Test("Between Couches", (2,1.5,1),(2,4.5,1)))
+        self.tests.append(Test("Through Kitchen", (1, 1, 1), (2, 6, 1)))
+        self.tests.append(Test("Exit Laundry Room", (-.75, 5, 1), (1, 1, 1)))
+        self.tests.append(Test("Under Table", (5.25, 7, 1), (5, 4, 1)))
+        self.tests.append(Test("Around Corner", (5.5, 4, 1), (4, 2, 1)))
+        self.tests.append(Test("Between Couches", (2, 1.5, 1), (2, 4.5, 1)))
 
         print("Validator Initialized")
 
     def validate(self, env, ddpg):
-	num_test_attempts = 1
-	total_success = 0
-	total_attempts = 0	
-	for test in self.tests:
-		#run the test (code mostly from ddpg.eval)
-       		num_success = ddpg.test(env = env, 
-                                test_name = test.name,
-				start=test.start,
-				goal=test.goal, 
-                                num_attempts=num_test_attempts,
-                                max_episode_len=1000)
-		total_success += num_success
-		total_attempts += num_test_attempts
-       		print("Test: %s num_successes: %d" % (test.name, num_success))        
-	if total_attempts != 0:
-		print("Validation Complete. Score: %d%%" % (total_success/total_attempts * 100))
+        num_test_attempts = 10
+        total_success = 0
+        total_attempts = 0
+        for test in self.tests:
+            #run the test (code mostly from ddpg.eval)
+            num_success = ddpg.test(
+                env=env,
+                test_name=test.name,
+                start=test.start,
+                goal=test.goal,
+                num_attempts=num_test_attempts,
+                max_episode_len=1000)
+            total_success += num_success
+            total_attempts += num_test_attempts
+            print("Test: %s num_successes: %d" % (test.name, num_success))
+        if total_attempts != 0:
+            print("Validation Complete. Score: %d%%" %
+                  (total_success / total_attempts * 100))
+
 
 #how much stuff has already been done
 

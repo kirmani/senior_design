@@ -119,21 +119,30 @@ class DeepDeterministicPolicyGradients:
             print("Reward: %.4f" % episode_reward)
 
     #does the "run" stage of testing and returns # successful attempts
-    def test(self, env, test_name, 
-             test_goal_x, test_goal_y, test_goal_z, 
-             test_start_x, test_start_y, test_start_z,
-             num_attempts=1, max_episode_len=1000):
+    def test(self,
+             env,
+             test_name,
+             test_goal_x,
+             test_goal_y,
+             test_goal_z,
+             test_start_x,
+             test_start_y,
+             test_start_z,
+             num_attempts=1,
+             max_episode_len=1000):
         test = 1
         num_success = 0
 
         for i in range(num_attempts):
-            state = env.reset(test_goal_x = test_goal_x,
-                              test_goal_y = test_goal_y,
-                              test_goal_z = test_goal_z, 
-                              test_start_x = test_start_x,
-                              test_start_y = test_start_y,
-                              test_start_z = test_start_z,
-                              test = test)
+            state = env.reset(
+                test_goal_x=test_goal_x,
+                test_goal_y=test_goal_y,
+                test_goal_z=test_goal_z,
+                test_start_x=test_start_x,
+                test_start_y=test_start_y,
+                test_start_z=test_start_z,
+                test=test)
+
     def test(self,
              env,
              test_name,
