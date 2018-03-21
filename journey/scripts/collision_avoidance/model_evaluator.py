@@ -31,17 +31,16 @@ from geometry_msgs.msg import Pose
 
 class Test:
 
-    def __init__(self, name, (start_x, start_y, start_z), (goal_x, goal_y,
-                                                           goal_z)):
+    def __init__(self, name, start, goal):
         self.name = name
-        self.start = (start_x, start_y, start_z)
-        self.goal = (goal_x, goal_y, goal_z)
+        self.start = start
+        self.goal = goal
 
 
 class ModelValidator:
 
     def __init__(self):
-        #Initialize test cases with name start and goal
+        # Initialize test cases with name start and goal.
         self.tests = []
         self.tests.append(Test("Across Living Room", (1, 1, 1), (4, 4, 1)))
         self.tests.append(Test("Through Kitchen", (1, 1, 1), (2, 6, 1)))
@@ -57,7 +56,7 @@ class ModelValidator:
         total_success = 0
         total_attempts = 0
         for test in self.tests:
-            #run the test (code mostly from ddpg.eval)
+            # Run the test (code mostly from ddpg.eval).
             num_success = ddpg.test(
                 env=env,
                 test_name=test.name,
