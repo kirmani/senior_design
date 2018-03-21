@@ -43,6 +43,7 @@ class ModelValidator:
     def __init__(self):
         #Initialize test cases with name start and goal
         self.tests = []
+        self.tests.append(Test("Across Living Room", (1, 1, 1), (4, 4, 1)))
         self.tests.append(Test("Through Kitchen", (1, 1, 1), (2, 6, 1)))
         self.tests.append(Test("Exit Laundry Room", (-.75, 5, 1), (1, 1, 1)))
         self.tests.append(Test("Under Table", (5.25, 7, 1), (5, 4, 1)))
@@ -52,7 +53,7 @@ class ModelValidator:
         print("Validator Initialized")
 
     def validate(self, env, ddpg):
-        num_test_attempts = 10
+        num_test_attempts = 1
         total_success = 0
         total_attempts = 0
         for test in self.tests:
