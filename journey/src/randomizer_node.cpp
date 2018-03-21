@@ -27,8 +27,6 @@ class RandomizerTools {
   }
 
   void OnRandomize(const std_msgs::Empty::ConstPtr &msg) {
-    printf("OnRandomize received\n");
-
     // Wait for a subscriber to connect
     lightPub_->WaitForConnection();
 
