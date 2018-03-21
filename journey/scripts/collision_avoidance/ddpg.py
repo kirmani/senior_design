@@ -118,7 +118,6 @@ class DeepDeterministicPolicyGradients:
             print("Episode over.")
             print("Reward: %.4f" % episode_reward)
 
-    #does the "run" stage of testing and returns # successful attempts
     def test(self,
              env,
              test_name,
@@ -126,6 +125,9 @@ class DeepDeterministicPolicyGradients:
              goal,
              num_attempts=1,
              max_episode_len=1000):
+        """
+        Does the 'run' stage of testing and returns # successful attempts
+        """
         num_success = 0
 
         for i in range(num_attempts):

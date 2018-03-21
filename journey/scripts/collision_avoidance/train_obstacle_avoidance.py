@@ -105,8 +105,8 @@ class DeepDronePlanner:
 
         # Velocity control scaling constant.
         self.forward_kp = 0.6
-        self.forward_ki = 0.1
-        self.forward_kd = 0.001
+        self.forward_ki = 0.001
+        self.forward_kd = 0.1
 
         # Gaz PID variables.
         self.up_kp = 0.6
@@ -115,8 +115,8 @@ class DeepDronePlanner:
 
         # Yaw PID variables.
         self.yaw_kp = 0.6
-        self.yaw_ki = 0.1
-        self.yaw_kd = 0.001
+        self.yaw_ki = 0.001
+        self.yaw_kd = 0.1
 
         # Set up policy search network.
         self.linear_velocity = 0.5

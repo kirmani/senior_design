@@ -31,53 +31,45 @@ from geometry_msgs.msg import Pose
 
 class Test:
 
-    def __init__(self, name):
+    def __init__(self, name, start, goal):
         self.name = name
-        self.start = (1, 1, 1)
-        self.goal = (2, 2, 2)
+        self.start = start
+        self.goal = goal
 
 
 class ModelValidator:
 
     def __init__(self):
-        corner_test = Test("corner")
-        kitchen_nook_test = Test("kitchen_nook")
-
-        self.tests = [corner_test, kitchen_nook_test]
+        # Initialize test cases with name start and goal.
+        self.tests = []
+        self.tests.append(Test("Across Living Room", (1, 1, 1), (4, 4, 1)))
+        self.tests.append(Test("Through Kitchen", (1, 1, 1), (2, 6, 1)))
+        self.tests.append(Test("Exit Laundry Room", (-.75, 5, 1), (1, 1, 1)))
+        self.tests.append(Test("Under Table", (5.25, 7, 1), (5, 4, 1)))
+        self.tests.append(Test("Around Corner", (5.5, 4, 1), (4, 2, 1)))
+        self.tests.append(Test("Between Couches", (2, 1.5, 1), (2, 4.5, 1)))
 
         print("Validator Initialized")
 
-    #maybe have to pass in the entire deep drone planner
     def validate(self, env, ddpg):
-        #model already loaded
-
-        #set goal, starting pose, and initialize drone using env.reset in ddpg.test
-        test = 1
-        start = (1.0, 1.0, 1.0)
-        goal = (2.0, 6.0, 1.0)
-
-        #run the test (code mostly from ddpg.eval)
-        test_name = "Bathroom"
-        num_success = ddpg.test(
-            env=env,
-            test_name=test_name,
-            start=start,
-            goal=goal,
-            num_attempts=100,
-            max_episode_len=1000)
-
-        print("Test: %s num_successes: %d" % (test_name, num_success))
-        #for test in self.tests:
-        #    print("Running test: %s" % test.name)
-
-    def laundry_room_test(self):
-        self.nav_goal.position.x = -0.75
-        self.nav_goal.position.y = 5.0
-        self.nav_goal.position.z = 1.0
-
-    def __call__(self):
-        print("test call to self")
-        self.laundry_room_test()
+        num_test_attempts = 1
+        total_success = 0
+        total_attempts = 0
+        for test in self.tests:
+            # Run the test (code mostly from ddpg.eval).
+            num_success = ddpg.test(
+                env=env,
+                test_name=test.name,
+                start=test.start,
+                goal=test.goal,
+                num_attempts=num_test_attempts,
+                max_episode_len=1000)
+            total_success += num_success
+            total_attempts += num_test_attempts
+            print("Test: %s num_successes: %d" % (test.name, num_success))
+        if total_attempts != 0:
+            print("Validation Complete. Score: %d%%" %
+                  (total_success * 100 / total_attempts))
 
 
 #how much stuff has already been done
@@ -88,7 +80,6 @@ class ModelValidator:
 # run the thing ?? not so sure
 # (later) set up environment
 # check if step terminated and check reward
-
 # know when drone has collided
 # set goal:
 # self.nav_goal.position.x = goal_position[0]
