@@ -134,6 +134,17 @@ class DeepDeterministicPolicyGradients:
                               test_start_y = test_start_y,
                               test_start_z = test_start_z,
                               test = test)
+    def test(self,
+             env,
+             test_name,
+             start,
+             goal,
+             num_attempts=1,
+             max_episode_len=1000):
+        num_success = 0
+
+        for i in range(num_attempts):
+            state = env.reset(start=start, goal=goal, training=False)
             for j in range(max_episode_len):
                 # Predict the optimal actions over the horizon.
                 action_sequence = self.policy.predict_actions(
@@ -150,7 +161,7 @@ class DeepDeterministicPolicyGradients:
                 state = next_state
 
                 if terminal:
-                    if reward == 1: #if reward = 0 means collided
+                    if reward == 1:  #if reward = 0 means collided
                         num_success += 1
                     break
 
