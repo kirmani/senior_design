@@ -70,7 +70,7 @@ class ModelValidator:
             print("Test: %s num_successes: %d" % (test.name, num_success))
         if total_attempts != 0:
             print("Validation Complete. Score: %d%%" %
-                  (total_success / total_attempts * 100))
+                  (total_success * 100 / total_attempts))
 
 
 #how much stuff has already been done
