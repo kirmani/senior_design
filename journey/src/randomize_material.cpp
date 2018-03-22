@@ -3,6 +3,10 @@
 namespace {
 static const std::string kMaterialUri =
     "file://media/materials/scripts/gazebo.material";
+static const std::vector<std::string> kMaterials = {
+    "Gazebo/Wood",    "Gazebo/Bricks",    "Gazebo/Road",
+    "Gazebo/Grass",   "Gazebo/WoodFloor", "Gazebo/CeilingTiled",
+    "Gazebo/Footway", "Gazebo/Motorway"};
 
 gazebo::common::Color GetRandomColor() {
   std::random_device rd_;
@@ -12,7 +16,9 @@ gazebo::common::Color GetRandomColor() {
                                distribution(gen), 1.0);
 }
 
-std::string GetRandomMaterial() { return "Gazebo/Wood"; }
+std::string GetRandomMaterial() {
+  return kMaterials[rand() % kMaterials.size()];
+}
 }  // namespace
 
 void RandomizeMaterial::Load(gazebo::physics::WorldPtr world,
