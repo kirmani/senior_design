@@ -164,7 +164,7 @@ class DeepDeterministicPolicyGradients:
               actor_noise=None,
               logdir='log',
               optimization_steps=40,
-              num_epochs=1000,
+              num_epochs=5000,
               episodes_in_epoch=16,
               max_episode_len=1000,
               epsilon_zero=0.2,
@@ -179,11 +179,8 @@ class DeepDeterministicPolicyGradients:
             global_step, 1, name='increment_global_step')
 
         if model_dir != None:
-            saver.restore(self.sess, tf.train.latest_checkpoint(model_dir))
+            saver.restore(self.sess, model_dir)
             print("Restoring model: %s" % model_dir)
-            last_step = int(
-                os.path.basename(
-                    tf.train.latest_checkpoint(model_dir)).split('-')[1])
 
         # Set up summary Ops
         summary_ops, summary_vars = self.build_summaries()
