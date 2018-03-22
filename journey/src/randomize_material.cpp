@@ -1,10 +1,19 @@
 #include "journey/randomize_material.h"
 
+namespace {
+gazebo::common::Color GetRandomColor() {
+  std::random_device rd_;
+  std::mt19937 gen(rd_());
+  std::uniform_real_distribution<float> distribution(0.0, 1.0);
+  return gazebo::common::Color(distribution(gen), distribution(gen),
+                               distribution(gen), 1.0);
+}
+}  // namespace
+
 void RandomizeMaterial::Load(gazebo::physics::WorldPtr world,
                              sdf::ElementPtr sdf) {
   std::cout << "Loading material randomizer." << std::endl;
   world_ = world;
-  models_ = world->GetModels();
 
   gzNode_ = gazebo::transport::NodePtr(new gazebo::transport::Node());
   gzNode_->Init(world_->GetName());
@@ -24,12 +33,15 @@ void RandomizeMaterial::Load(gazebo::physics::WorldPtr world,
 void RandomizeMaterial::Call(ConstVector3dPtr& msg) {
   std::cout << "Randomizing material." << std::endl;
 
-  gazebo::common::Color newColor(1.0, 1.0, 1.0, 0.0);
-  gazebo::msgs::Color* colorMsg =
-      new gazebo::msgs::Color(gazebo::msgs::Convert(newColor));
-  gazebo::msgs::Color* diffuseMsg = new gazebo::msgs::Color(*colorMsg);
+  for (auto model : world_->GetModels()) {
+    if (model->GetName().find("sean") != 0 &&
+        model->GetName().find("floor") != 0 &&
+        model->GetName().find("ceiling") != 0 &&
+        model->GetName().find("counter") != 0) {
+      continue;
+    }
 
-  for (const auto& model : models_) {
+    std::cout << "Model: " << model->GetName() << std::endl;
     for (auto link : model->GetLinks()) {
       // Get all the visuals
       sdf::ElementPtr linkSDF = link->GetSDF();
@@ -44,23 +56,31 @@ void RandomizeMaterial::Call(ConstVector3dPtr& msg) {
           GZ_ASSERT(visualSDF->HasAttribute("name"),
                     "Malformed visual element!");
           std::string visualName = visualSDF->Get<std::string>("name");
+          std::cout << "Visual: " << visualName << std::endl;
           gazebo::msgs::Visual visMsg;
           visMsg = link->GetVisualMessage(visualName);
           if ((!visMsg.has_material()) || visMsg.mutable_material() == NULL) {
             gazebo::msgs::Material* materialMsg = new gazebo::msgs::Material;
             visMsg.set_allocated_material(materialMsg);
           }
-          // gazebo::msgs::Material* materialMsg = visMsg.mutable_material();
-          // if (materialMsg->has_ambient()) {
-          //   materialMsg->clear_ambient();
-          // }
-          // materialMsg->set_allocated_ambient(colorMsg);
-          // if (materialMsg->has_diffuse()) {
-          //   materialMsg->clear_diffuse();
-          // }
+
+          gazebo::common::Color newColor = GetRandomColor();
+          gazebo::msgs::Color* colorMsg =
+              new gazebo::msgs::Color(gazebo::msgs::Convert(newColor));
+          gazebo::msgs::Color* diffuseMsg = new gazebo::msgs::Color(*colorMsg);
+
+          gazebo::msgs::Material* materialMsg = visMsg.mutable_material();
+          if (materialMsg->has_ambient()) {
+            materialMsg->clear_ambient();
+          }
+
+          materialMsg->set_allocated_ambient(colorMsg);
+          if (materialMsg->has_diffuse()) {
+            materialMsg->clear_diffuse();
+          }
+          materialMsg->set_allocated_diffuse(diffuseMsg);
           visMsg.set_name(link->GetScopedName());
           visMsg.set_parent_name(model->GetScopedName());
-          // materialMsg->set_allocated_diffuse(diffuseMsg);
           visPub_->Publish(visMsg);
         }
       }
