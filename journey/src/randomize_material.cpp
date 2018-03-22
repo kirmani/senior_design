@@ -44,12 +44,27 @@ void RandomizeMaterial::Load(gazebo::physics::WorldPtr world,
 void RandomizeMaterial::Call(ConstVector3dPtr& msg) {
   std::cout << "Randomizing material." << std::endl;
 
+  gazebo::common::Color wallColor = GetRandomColor();
+  std::string wallTexture = GetRandomMaterial();
+
   for (auto model : world_->GetModels()) {
     if (model->GetName().find("sean") != 0) {
       continue;
     }
 
     std::cout << "Model: " << model->GetName() << std::endl;
+
+    // Pick color for model based on its namespace.
+    gazebo::common::Color newColor;
+    std::string newTexture;
+    if (model->GetName().find("wall") != std::string::npos) {
+      newColor = wallColor;
+      newTexture = wallTexture;
+    } else {
+      newColor = GetRandomColor();
+      newTexture = GetRandomMaterial();
+    }
+
     for (auto link : model->GetLinks()) {
       // Get all the visuals
       sdf::ElementPtr linkSDF = link->GetSDF();
@@ -72,7 +87,6 @@ void RandomizeMaterial::Call(ConstVector3dPtr& msg) {
             visMsg.set_allocated_material(materialMsg);
           }
 
-          gazebo::common::Color newColor = GetRandomColor();
           gazebo::msgs::Color* colorMsg =
               new gazebo::msgs::Color(gazebo::msgs::Convert(newColor));
           gazebo::msgs::Color* diffuseMsg = new gazebo::msgs::Color(*colorMsg);
@@ -103,7 +117,7 @@ void RandomizeMaterial::Call(ConstVector3dPtr& msg) {
           if (scriptMsg->has_name()) {
             scriptMsg->clear_name();
           }
-          scriptMsg->set_name(GetRandomMaterial());
+          scriptMsg->set_name(newTexture);
 
           visMsg.set_name(link->GetScopedName());
           visMsg.set_parent_name(model->GetScopedName());

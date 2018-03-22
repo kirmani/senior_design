@@ -86,7 +86,7 @@
       <real_time>0 0</real_time>
       <wall_time>1516858302 626387293</wall_time>
       <iterations>0</iterations>
-      <model name='counter_bottom_0'>
+      <model name='sean_counter_bottom_0'>
         <pose frame=''>1.39171 5.1262 0.7 3.14159 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
