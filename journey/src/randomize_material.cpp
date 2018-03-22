@@ -1,6 +1,9 @@
 #include "journey/randomize_material.h"
 
 namespace {
+static const std::string kMaterialUri =
+    "file://media/materials/scripts/gazebo.material";
+
 gazebo::common::Color GetRandomColor() {
   std::random_device rd_;
   std::mt19937 gen(rd_());
@@ -8,6 +11,8 @@ gazebo::common::Color GetRandomColor() {
   return gazebo::common::Color(distribution(gen), distribution(gen),
                                distribution(gen), 1.0);
 }
+
+std::string GetRandomMaterial() { return "Gazebo/Wood"; }
 }  // namespace
 
 void RandomizeMaterial::Load(gazebo::physics::WorldPtr world,
@@ -73,12 +78,30 @@ void RandomizeMaterial::Call(ConstVector3dPtr& msg) {
           if (materialMsg->has_ambient()) {
             materialMsg->clear_ambient();
           }
-
           materialMsg->set_allocated_ambient(colorMsg);
+
           if (materialMsg->has_diffuse()) {
             materialMsg->clear_diffuse();
           }
           materialMsg->set_allocated_diffuse(diffuseMsg);
+
+          if (!materialMsg->has_script() ||
+              materialMsg->mutable_script() == NULL) {
+            gazebo::msgs::Material_Script* scriptMsg =
+                new gazebo::msgs::Material_Script;
+            materialMsg->set_allocated_script(scriptMsg);
+          }
+          gazebo::msgs::Material_Script* scriptMsg =
+              materialMsg->mutable_script();
+
+          scriptMsg->clear_uri();
+          scriptMsg->add_uri(kMaterialUri);
+
+          if (scriptMsg->has_name()) {
+            scriptMsg->clear_name();
+          }
+          scriptMsg->set_name(GetRandomMaterial());
+
           visMsg.set_name(link->GetScopedName());
           visMsg.set_parent_name(model->GetScopedName());
           visPub_->Publish(visMsg);
