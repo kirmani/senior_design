@@ -1,113 +1,71 @@
-#include "ros/ros.h"
+#include "journey/randomize_material.h"
 
-#include <gazebo/gazebo.hh>
-#include <gazebo/physics/physics.hh>
-#include <gazebo/gazebo_client.hh>
-#include <gazebo/common/common.hh>
-#include <gazebo/math/gzmath.hh>
-#include <gazebo/msgs/msgs.hh>
-#include <gazebo/rendering/rendering.hh>
-#include <gazebo/transport/transport.hh>
-#include <gazebo/transport/transport.hh>
-#include <ignition/math/Pose3.hh>
+void RandomizeMaterial::Load(gazebo::physics::WorldPtr world,
+                             sdf::ElementPtr sdf) {
+  std::cout << "Loading material randomizer." << std::endl;
+  world_ = world;
+  models_ = world->GetModels();
 
-#include <random>
-#include <stdio.h>
-#include <string.h>
+  gzNode_ = gazebo::transport::NodePtr(new gazebo::transport::Node());
+  gzNode_->Init(world_->GetName());
+  visPub_ = gzNode_->Advertise<gazebo::msgs::Visual>("~/visual");
 
-using namespace gazebo;
-
-// TODO armand find some way to change the intensity of the light
-
-class RandomizeMaterial : public WorldPlugin {
-  public:
-  RandomizeMaterial() {}
-
-  public:
-  void Load(physics::WorldPtr _world, sdf::ElementPtr _sdf) {
-    this->world = _world;
-    this->models = world->GetModels();
-
-    // add model names to vector
-    for(int i = 0; i < models.size(); ++i) {
-      model_names.push_back(models.at(i)->GetName());
-      printf("%s\n", model_names.at(i).c_str());
-    }
-
-    // Create the nodes
-    this->recieve_node = transport::NodePtr(new transport::Node());
-    this->recieve_node->Init("default");
-
-    this->send_node = transport::NodePtr(new transport::Node());
-    this->send_node->Init("default");
-
-    // Create a topic name
-    std::string topicName = "~/modifymaterial";
-
-    // Subscribe to the topic, and register a callback
-    this->sub = this->recieve_node->Subscribe(topicName,
-       &RandomizeMaterial::OnMsg, this);
-
-    // Publish to the visual topic
-    pub = send_node->Advertise<msgs::Visual>("~/visual");
+  // add model names to vector
+  for (const auto& model : models_) {
+    std::string model_name = model->GetName();
+    model_names_.push_back(model_name);
+    std::cout << model_name << std::endl;
   }
 
-  private:
-  void OnMsg(ConstVector3dPtr &_msg)
-  {
-    physics::ModelPtr mptr;
-    sdf::ElementPtr sdf;
-    msgs::Visual visualMsg;
-    common::Color colorA;
-    colorA.Set(1,0,0.3,1);
-    for(int i = 0; i < model_names.size(); ++i) {
-      sdf = models.at(i)->GetSDF();
-      if (sdf->HasElement("link")) {
-         physics::LinkPtr lptr = models.at(i)->GetChildLink("link");
-         rendering::VisualPtr vptr = (rendering::VisualPtr) lptr->GetByName("visual");
-//        sdf = sdf->GetElement("link");
-//        if (sdf->HasElement("visual")){
-//          sdf = sdf->GetElement("visual");
-//          visualMsg = msgs::VisualFromSDF(sdf);
-//          visualMsg.set_parent_name(model_names.at(i).c_str());
-//          msgs::Set(visualMsg.mutable_material()->mutable_ambient(), colorA);
-//          if(visualMsg.mutable_material()->mutable_script()->has_name()){
-//            printf("old script name: %s\n", visualMsg.mutable_material()->mutable_script()->name().c_str());
-//          }
-//          visualMsg.mutable_material()->mutable_script()->set_name("Gazebo/Bricks");
-//          msgs::VisualToSDF(visualMsg, sdf);
-//          //printf("modified supposedly\n");
-//        }
+  // Subscribe to the topic, and register a callback
+  sub_ = gzNode_->Subscribe("~/modifymaterial", &RandomizeMaterial::Call, this);
+}
+
+void RandomizeMaterial::Call(ConstVector3dPtr& msg) {
+  std::cout << "Randomizing material." << std::endl;
+
+  gazebo::common::Color newColor(1.0, 1.0, 1.0, 0.0);
+  gazebo::msgs::Color* colorMsg =
+      new gazebo::msgs::Color(gazebo::msgs::Convert(newColor));
+  gazebo::msgs::Color* diffuseMsg = new gazebo::msgs::Color(*colorMsg);
+
+  for (const auto& model : models_) {
+    for (auto link : model->GetLinks()) {
+      // Get all the visuals
+      sdf::ElementPtr linkSDF = link->GetSDF();
+
+      if (!linkSDF) {
+        std::cout << "Link had NULL SDF" << std::endl;
+        return;
       }
-
-
-
-
-//      // Set the visual's name. This should be unique.
-//      visualMsg.set_name("visual");
-//      visualMsg.set_parent_name(model_names.at(i));
-//      //visualMsg.mutable_material()->mutable_script()->set_name("Gazebo/Bricks");
-//      msgs::Set(visualMsg.mutable_material()->mutable_ambient(), colorA);
-//      // Create a cylinder
-////      msgs::Geometry *geomMsg = visualMsg.mutable_geometry();
-////      geomMsg->set_type(msgs::Geometry::CYLINDER);
-////      geomMsg->mutable_cylinder()->set_radius(1);
-////      geomMsg->mutable_cylinder()->set_length(.1);
-//      printf("modified %s supposedly\n", model_names.at(i).c_str());
-      pub->WaitForConnection();
-      pub->Publish(visualMsg);
+      if (linkSDF->HasElement("visual")) {
+        for (sdf::ElementPtr visualSDF = linkSDF->GetElement("visual");
+             visualSDF; visualSDF = linkSDF->GetNextElement("visual")) {
+          GZ_ASSERT(visualSDF->HasAttribute("name"),
+                    "Malformed visual element!");
+          std::string visualName = visualSDF->Get<std::string>("name");
+          gazebo::msgs::Visual visMsg;
+          visMsg = link->GetVisualMessage(visualName);
+          if ((!visMsg.has_material()) || visMsg.mutable_material() == NULL) {
+            gazebo::msgs::Material* materialMsg = new gazebo::msgs::Material;
+            visMsg.set_allocated_material(materialMsg);
+          }
+          // gazebo::msgs::Material* materialMsg = visMsg.mutable_material();
+          // if (materialMsg->has_ambient()) {
+          //   materialMsg->clear_ambient();
+          // }
+          // materialMsg->set_allocated_ambient(colorMsg);
+          // if (materialMsg->has_diffuse()) {
+          //   materialMsg->clear_diffuse();
+          // }
+          visMsg.set_name(link->GetScopedName());
+          visMsg.set_parent_name(model->GetScopedName());
+          // materialMsg->set_allocated_diffuse(diffuseMsg);
+          visPub_->Publish(visMsg);
+        }
+      }
     }
   }
-
-  private:
-  physics::WorldPtr world;
-  transport::NodePtr recieve_node;
-  transport::NodePtr send_node;
-  transport::SubscriberPtr sub;
-  transport::PublisherPtr pub;
-  physics::Model_V models;
-  std::vector<std::string> model_names;
-};
+}
 
 GZ_REGISTER_WORLD_PLUGIN(RandomizeMaterial)
-

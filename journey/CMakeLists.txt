@@ -25,10 +25,24 @@ catkin_package(
 )
 
 link_directories(${GAZEBO_LIBRARY_DIRS})
-include_directories(${catkin_INCLUDE_DIRS} ${gazebo_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS} ${gazebo_INCLUDE_DIRS})
 
 add_library(randomize_material src/randomize_material.cpp)
-target_link_libraries(randomize_material ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 
 add_executable(randomizer_node src/randomizer_node.cpp)
-target_link_libraries(randomizer_node ${catkin_LIBRARIES})
+add_dependencies(randomizer_node ${catkin_EXPORTED_TARGETS})
+
+target_link_libraries(randomizer_node ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+
+install(DIRECTORY include/${PROJECT_NAME}/
+        DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+        FILES_MATCHING PATTERN "*.h")
+
+foreach(dir launch)
+  install(DIRECTORY ${dir}/
+          DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/${dir})
+endforeach()
+
+install(TARGETS
+        randomizer_node
+        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
