@@ -45,10 +45,7 @@ void RandomizeMaterial::Call(ConstVector3dPtr& msg) {
   std::cout << "Randomizing material." << std::endl;
 
   for (auto model : world_->GetModels()) {
-    if (model->GetName().find("sean") != 0 &&
-        model->GetName().find("floor") != 0 &&
-        model->GetName().find("ceiling") != 0 &&
-        model->GetName().find("counter") != 0) {
+    if (model->GetName().find("sean") != 0) {
       continue;
     }
 

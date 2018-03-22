@@ -829,7 +829,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose frame=''>3.80002 0.099955 -1.4e-05 0 -2e-05 -3.9e-05</pose>
     </model>
-    <model name='ceiling'>
+    <model name='sean_ceiling'>
       <link name='link'>
         <pose frame=''>7.96507 7.76554 0 0 -0 0</pose>
         <inertial>
@@ -1791,7 +1791,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose frame=''>3.34999 8.80001 -6e-06 -1.2e-05 -0 -1.5708</pose>
     </model>
-    <model name='floor'>
+    <model name='sean_floor'>
       <link name='link'>
         <pose frame=''>7.96507 7.76554 0 0 -0 0</pose>
         <inertial>
@@ -4551,7 +4551,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose frame=''>0.187432 5.1262 3.261 1.5708 -0 0</pose>
     </model>
-    <model name='counter_bottom_0'>
+    <model name='sean_counter_bottom_0'>
       <link name='link'>
         <pose frame=''>0 0 0 0 -0 0</pose>
         <inertial>
