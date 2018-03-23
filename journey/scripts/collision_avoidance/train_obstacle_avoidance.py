@@ -333,7 +333,7 @@ class DeepDronePlanner:
         yaw_derivative = (yaw_error - self.yaw_prior) * self.update_rate
         vel_msg.angular.z = np.clip(
             self.yaw_kp * yaw_error + self.yaw_ki * self.yaw_integral +
-            self.yaw_kd * yaw_derivative, -1, 1)
+            self.yaw_kd * yaw_derivative, -0.5, 0.5)
         self.yaw_prior = yaw_error
 
         # Linear velocity in the forward axis
@@ -352,11 +352,11 @@ class DeepDronePlanner:
         up_derivative = (up_error - self.up_prior) * self.update_rate
         vel_msg.linear.z = np.clip(
             self.up_kp * up_error + self.up_ki * self.up_integral +
-            self.up_kd * up_derivative, -1, 1)
+            self.up_kd * up_derivative, -0.5, 0.5)
         self.up_prior = up_error
 
-        vel_msg.linear.z += control[0]
-        vel_msg.angular.z += control[1]
+        vel_msg.linear.z += control[0] * 0.5
+        vel_msg.angular.z += control[1] * 0.5
         vel_msg.linear.z = np.clip(vel_msg.linear.z, -1, 1)
         vel_msg.angular.z = np.clip(vel_msg.angular.z, -1, 1)
         self.velocity_publisher.publish(vel_msg)
@@ -423,7 +423,7 @@ class DeepDronePlanner:
     def action_to_control(self, action):
         if self.discrete_controls:
             argmax = np.argmax(action)
-            values = 1.5 * np.arange(self.atoms) / (self.atoms - 1.0) - 0.75
+            values = 2.0 * np.arange(self.atoms) / (self.atoms - 1.0) - 1.0
             linear_z = values[argmax / self.atoms]
             angular_z = values[argmax % self.atoms]
         else:
