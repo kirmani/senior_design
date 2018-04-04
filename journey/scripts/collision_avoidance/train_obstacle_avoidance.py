@@ -105,17 +105,17 @@ class DeepDronePlanner:
 
         # Velocity control scaling constant.
         self.forward_kp = 0.6
-        self.forward_ki = 0.01
+        self.forward_ki = 0.001
         self.forward_kd = 0.1
 
         # Gaz PID variables.
         self.up_kp = 0.6
-        self.up_ki = 0.01
-        self.up_kd = 0.1
+        self.up_ki = 0.1
+        self.up_kd = 0.001
 
         # Yaw PID variables.
         self.yaw_kp = 0.6
-        self.yaw_ki = 0.01
+        self.yaw_ki = 0.001
         self.yaw_kd = 0.1
 
         # Set up policy search network.
@@ -267,11 +267,11 @@ class DeepDronePlanner:
             self.frame_buffer.append(frame)
         return np.stack(list(self.frame_buffer), axis=-1)
 
-    def reset(self):
+    def reset(self, start=(0, 0, 0), goal=(0, 0, 0), training=True):
         self.velocity_publisher.publish(Twist())
 
         # Randomize simulation environment.
-        self.randomize_simulation()
+        self.randomize_simulation(start=start, training=training)
 
         # Clear our frame buffer.
         self.frame_buffer.clear()
@@ -284,16 +284,23 @@ class DeepDronePlanner:
         state = self.get_current_state()
 
         # Set goal pose.
-        goal_position = self.randomize_simulation.GetRandomAptPosition()
-        self.nav_goal.position.x = goal_position[0]
-        self.nav_goal.position.y = goal_position[1]
-        self.nav_goal.position.z = goal_position[2]
+        if training:
+            goal_position = self.randomize_simulation.GetRandomAptPosition()
+            self.nav_goal.position.x = goal_position[0]
+            self.nav_goal.position.y = goal_position[1]
+            self.nav_goal.position.z = goal_position[2]
+        else:
+            self.nav_goal.position.x = goal[0]
+            self.nav_goal.position.y = goal[1]
+            self.nav_goal.position.z = goal[2]
+
         self.forward_integral = 0.0
         self.forward_prior = 0.0
         self.up_integral = 0.0
         self.up_prior = 0.0
         self.yaw_integral = 0.0
         self.yaw_prior = 0.0
+
         print("Set navigation goal: (%.4f, %.4f, %.4f)" %
               (self.nav_goal.position.x, self.nav_goal.position.y,
                self.nav_goal.position.z))
@@ -326,7 +333,7 @@ class DeepDronePlanner:
         yaw_derivative = (yaw_error - self.yaw_prior) * self.update_rate
         vel_msg.angular.z = np.clip(
             self.yaw_kp * yaw_error + self.yaw_ki * self.yaw_integral +
-            self.yaw_kd * yaw_derivative, -1, 1)
+            self.yaw_kd * yaw_derivative, -0.5, 0.5)
         self.yaw_prior = yaw_error
 
         # Linear velocity in the forward axis
@@ -336,7 +343,7 @@ class DeepDronePlanner:
             forward_error - self.forward_prior) * self.update_rate
         vel_msg.linear.x = np.clip(self.forward_kp * forward_error +
                                    self.forward_ki * self.forward_integral +
-                                   self.forward_kd * forward_derivative, -1, 1)
+                                   self.forward_kd * forward_derivative, 0, 1)
         self.forward_prior = forward_error
 
         # Linear velocity in the up axis.
@@ -345,11 +352,11 @@ class DeepDronePlanner:
         up_derivative = (up_error - self.up_prior) * self.update_rate
         vel_msg.linear.z = np.clip(
             self.up_kp * up_error + self.up_ki * self.up_integral +
-            self.up_kd * up_derivative, -1, 1)
+            self.up_kd * up_derivative, -0.5, 0.5)
         self.up_prior = up_error
 
-        vel_msg.linear.z += control[0]
-        vel_msg.angular.z += control[1]
+        vel_msg.linear.z += control[0] * 0.5
+        vel_msg.angular.z += control[1] * 0.5
         vel_msg.linear.z = np.clip(vel_msg.linear.z, -1, 1)
         vel_msg.angular.z = np.clip(vel_msg.angular.z, -1, 1)
         self.velocity_publisher.publish(vel_msg)
@@ -416,7 +423,7 @@ class DeepDronePlanner:
     def action_to_control(self, action):
         if self.discrete_controls:
             argmax = np.argmax(action)
-            values = 1.5 * np.arange(self.atoms) / (self.atoms - 1.0) - 0.75
+            values = 2.0 * np.arange(self.atoms) / (self.atoms - 1.0) - 1.0
             linear_z = values[argmax / self.atoms]
             angular_z = values[argmax % self.atoms]
         else:
@@ -452,8 +459,9 @@ class DeepDronePlanner:
         env = Environment(self.reset, self.step, self.reward, self.terminal)
         model_dir = os.path.join(os.getcwd(), model_dir)
         self.ddpg.load_model(model_dir)
+
         validator = ModelValidator()
-        validator.validate()
+        validator.validate(env, self.ddpg)
 
     def plan(self, model_dir):
         # Load our model.

@@ -41,11 +41,7 @@ MATERIALS = [
 ]
 
 SPAWN_REGIONS = [
-    'living_room',
-    'laundry_room',
-    'kitchen',
-    'dining_room',
-    'entry_way'
+    'living_room', 'laundry_room', 'kitchen', 'dining_room', 'entry_way'
 ]
 
 
@@ -95,15 +91,17 @@ class SimulationRandomizer:
         # opposed to uniformly sampling, so doesn't bias to explore small
         # regions more often.
         room = np.random.random()
-        if room > 65:
+
+        if room < .65:
             spawn_room = 'living_room'
             min_x = 0.5
             max_x = 4.0
             min_y = 0.5
             max_y = 4.2
-            min_z = 1.2 
+            min_z = 1.2
             max_z = 2.5
-        elif room > .87:
+
+        elif room < .87:
             spawn_room = 'kitchen'
             min_x = 0.5
             max_x = 4.0
@@ -111,15 +109,17 @@ class SimulationRandomizer:
             max_y = 7.2
             min_z = 0.5 
             max_z = 2.5
-        elif room > .96: 
-            spawn_room = 'laundry_room' 
-            min_x = -0.8 
+
+        elif room < .96:
+            spawn_room = 'laundry_room'
+            min_x = -0.8
             max_x = -0.6
-            min_y = 4.3 
-            max_y = 4.8 
+            min_y = 4.3
+            max_y = 4.8
             min_z = 0.5
             max_z = 2.5
-        elif room > .98:
+
+        elif room < .98:
             spawn_room = 'dining_room'
             min_x = 5.0
             max_x = 5.4
@@ -127,6 +127,7 @@ class SimulationRandomizer:
             max_y = 8.2
             min_z = 1.5
             max_z = 2.5
+
         else:
             spawn_room = 'entry_way'
             min_x = 3.2
@@ -146,18 +147,24 @@ class SimulationRandomizer:
 
         return (tx, ty, tz, yaw)
 
-    def __call__(self):
+    def __call__(self, start=(0, 0, 0), training=True):
         print("Randomized simulation.")
 
         self.pause_physics()
 
-        self.randomizer_publisher.publish(EmptyMessage())
+        if training:
+            self.randomizer_publisher.publish(EmptyMessage())
 
-        #self.spawn_light()
+            self.set_intensity()
 
-        # Pick randomized parameters.
-        (quadrotor_tx, quadrotor_ty, quadrotor_tz,
-         quadrotor_yaw) = self.GetRandomAptPosition()
+            # Pick randomized parameters.
+            (quadrotor_tx, quadrotor_ty, quadrotor_tz,
+             quadrotor_yaw) = self.GetRandomAptPosition()
+        else:
+            quadrotor_tx = start[0]
+            quadrotor_ty = start[1]
+            quadrotor_tz = start[2]
+            quadrotor_yaw = 0
 
         # Spawn our quadrotor.
         self.spawn_quadrotor(
@@ -175,10 +182,12 @@ class SimulationRandomizer:
     def set_intensity(self):
         intensity = 100 + (np.random.random() * (235 - 100))
         diffuse = ColorRGBA()
+
         diffuse.r = intensity #all the same so greyscale
         diffuse.g = intensity
         diffuse.b = intensity
         diffuse.a = 255 #transparency 0 is completely transparent
+
         #changing attenuation doesn't seem do do anything
         atten_const = 0.9
         atten_lin = 0.01
