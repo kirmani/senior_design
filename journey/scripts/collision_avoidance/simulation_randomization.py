@@ -107,7 +107,7 @@ class SimulationRandomizer:
             max_x = 4.0
             min_y = 6.0
             max_y = 7.2
-            min_z = 0.5
+            min_z = 0.5 
             max_z = 2.5
 
         elif room < .96:
@@ -182,10 +182,12 @@ class SimulationRandomizer:
     def set_intensity(self):
         intensity = 100 + (np.random.random() * (235 - 100))
         diffuse = ColorRGBA()
-        diffuse.r = intensity  #all the same so greyscale
+
+        diffuse.r = intensity #all the same so greyscale
         diffuse.g = intensity
         diffuse.b = intensity
-        diffuse.a = 255  #transparency 0 is completely transparent
+        diffuse.a = 255 #transparency 0 is completely transparent
+
         #changing attenuation doesn't seem do do anything
         atten_const = 0.9
         atten_lin = 0.01
