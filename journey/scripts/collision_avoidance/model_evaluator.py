@@ -45,10 +45,15 @@ class ModelValidator:
         self.tests.append(Test("Across Living Room", (1, 1, 1), (4, 4, 1)))
         self.tests.append(Test("Through Kitchen", (1, 1, 1), (2, 6, 1)))
         self.tests.append(Test("Exit Laundry Room", (-.75, 5, 1), (1, 1, 1)))
-        self.tests.append(Test("Under Table", (5.25, 7, 1), (5, 4, 1)))
+        self.tests.append(Test("Under Table", (5.25, 6.5, .5), (3.9, 4, .6)))
         self.tests.append(Test("Around Corner", (5.5, 4, 1), (4, 2, 1)))
-        self.tests.append(Test("Between Couches", (2, 1.5, 1), (2, 4.5, 1)))
+        self.tests.append(Test("Between Couches", (2, 1.5, .5), (2, 4.2, .5)))
 
+        self.tests.append(Test("Medium Through Kitchen", (1, 1, 1), (2, 6, 1.7)))
+        self.tests.append(Test("Medium Exit Laundry Room", (-.5, 4.1, 1), (2, 3, 1)))
+        self.tests.append(Test("Medium Under Table", (5.25, 6.5, .5), (3.9, 4.3, .5)))
+        self.tests.append(Test("Medium Around Corner", (5, 4.5, 2), (3.7, 2, 2)))
+        self.tests.append(Test("Medium Between Couches", (1.9, 1.7, .3), (.98, 3.5, .4)))
         print("Validator Initialized")
 
     def validate(self, env, ddpg):
