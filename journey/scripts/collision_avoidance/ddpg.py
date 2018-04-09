@@ -494,35 +494,20 @@ class PolicyNetwork:
         return self.sess.run(self.actions, feed_dict={self.inputs: inputs})
 
     def predict_value(self, inputs, bootstraps=50):
-        preds = []
-        for b in range(bootstraps):
-            preds.append(
-                self.sess.run(
-                    [self.y_coll_out, self.b_coll_out],
-                    feed_dict={
-                        self.inputs: inputs,
-                    }))
-        y_coll_out = np.array([pred[0] for pred in preds])
-        b_coll_out = np.array([pred[1] for pred in preds])
-        preds = np.concatenate([y_coll_out, b_coll_out], axis=-1)
-        if self.use_probability:
-            preds = 1.0 / (1.0 + np.exp(-preds))
-        expectation = np.mean(preds, axis=0)
-        stddev = np.std(preds, axis=0)
-        preds = (expectation - self.uncertainty_weight * stddev)
-        if self.use_probability:
-            preds = np.clip(preds, 0, 1)
-        return preds
+        return self._predict(inputs, bootstraps, self.y_coll_out,
+                             self.b_coll_out)
 
     def predict_target_value(self, inputs, bootstraps=50):
+        return self._predict(inputs, bootstraps, self.target_y_coll_out,
+                             self.target_b_coll_out)
+
+    def _predict(self, inputs, bootstraps, y, b):
         preds = []
         for b in range(bootstraps):
             preds.append(
-                self.sess.run(
-                    [self.target_y_coll_out, self.target_b_coll_out],
-                    feed_dict={
-                        self.target_inputs: inputs,
-                    }))
+                self.sess.run([y, b], feed_dict={
+                    self.target_inputs: inputs,
+                }))
         y_coll_out = np.array([pred[0] for pred in preds])
         b_coll_out = np.array([pred[1] for pred in preds])
         preds = np.concatenate([y_coll_out, b_coll_out], axis=-1)
