@@ -137,13 +137,18 @@ class SimulationRandomizer:
             min_z = .5
             max_z = 2.5
 
-        tx = min_x + (np.random.random() * (max_x - min_x))
-        ty = min_y + (np.random.random() * (max_y - min_y))
-        tz = min_z + (np.random.random() * (max_z - min_z))
-        #NOTE: can't get drone to spawn facing the correct way
-        #but doesn't matter b/c have goal now
-        yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw -
-               self.max_quadrotor_start_yaw) * np.pi / 180.0
+        distance = 0
+        count = 0
+        while distance < 2.0 and count != 10:
+            tx = min_x + (np.random.random() * (max_x - min_x))
+            ty = min_y + (np.random.random() * (max_y - min_y))
+            tz = min_z + (np.random.random() * (max_z - min_z))
+            #NOTE: can't get drone to spawn facing the correct way
+            #but doesn't matter b/c have goal now
+            yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw -
+                   self.max_quadrotor_start_yaw) * np.pi / 180.0
+            distance = np.sqrt(tx*tx + ty*ty + tz*tz)
+            count = count + 1
 
         return (tx, ty, tz, yaw)
 
