@@ -267,11 +267,25 @@ class DeepDronePlanner:
             self.frame_buffer.append(frame)
         return np.stack(list(self.frame_buffer), axis=-1)
 
+    #if Im training and I collided, i want to repeat the start and end positions (yaw still random)
     def reset(self, start=(0, 0, 0), goal=(0, 0, 0), training=True):
+        repeat = False
+        repeat_num = 0
+        if self.collided is True:
+            if repeat_num < 7: #let's just hard code 10 TODO
+                repeat_num += 1
+                repeat = True
+            else: 
+                repeat_num = 0
+                repeat = False        
+        else: #if we failed a couple of times and then got it right, this makes sure repeat vars are set correctly
+            repeat_num = 0
+            repeat = False
+
         self.velocity_publisher.publish(Twist())
 
         # Randomize simulation environment.
-        self.randomize_simulation(start=start, training=training)
+        self.randomize_simulation(start=start, training=training, repeat=repeat)
 
         # Clear our frame buffer.
         self.frame_buffer.clear()
@@ -285,10 +299,12 @@ class DeepDronePlanner:
 
         # Set goal pose.
         if training:
-            goal_position = self.randomize_simulation.GetRandomAptPosition()
-            self.nav_goal.position.x = goal_position[0]
-            self.nav_goal.position.y = goal_position[1]
-            self.nav_goal.position.z = goal_position[2]
+            if repeat is False:
+                goal_position = self.randomize_simulation.GetRandomAptPosition()
+                self.nav_goal.position.x = goal_position[0]
+                self.nav_goal.position.y = goal_position[1]
+                self.nav_goal.position.z = goal_position[2]
+            #if true use same goal, so do nothing
         else:
             self.nav_goal.position.x = goal[0]
             self.nav_goal.position.y = goal[1]

@@ -58,6 +58,8 @@ class SimulationRandomizer:
         self.max_quadrotor_start_yaw = 180  # degrees
         self.num_boxes = 0
 
+        self.previous_start = [0,0,0]
+
         # Publish model state.
         self.model_state_publisher = rospy.Publisher(
             '/gazebo/set_model_state', ModelState, queue_size=10)
@@ -150,9 +152,13 @@ class SimulationRandomizer:
             distance = np.sqrt(tx*tx + ty*ty + tz*tz)
             count = count + 1
 
+        self.previous_start[0] = tx
+        self.previous_start[1] = ty
+        self.previous_start[2] = tz
         return (tx, ty, tz, yaw)
 
-    def __call__(self, start=(0, 0, 0), training=True):
+
+    def __call__(self, start=(0, 0, 0), training=True, repeat=False):
         print("Randomized simulation.")
 
         self.pause_physics()
@@ -162,9 +168,16 @@ class SimulationRandomizer:
 
             self.set_intensity()
 
-            # Pick randomized parameters.
-            (quadrotor_tx, quadrotor_ty, quadrotor_tz,
-             quadrotor_yaw) = self.GetRandomAptPosition()
+            if repeat is False:
+                # Pick randomized parameters.
+                (quadrotor_tx, quadrotor_ty, quadrotor_tz,
+                quadrotor_yaw) = self.GetRandomAptPosition()
+            else:
+                quadrotor_tx = self.previous_start[0]
+                quadrotor_ty = self.previous_start[1]
+                quadrotor_tz = self.previous_start[2]
+                quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw -
+                                self.max_quadrotor_start_yaw) * np.pi / 180.0
         else:
             quadrotor_tx = start[0]
             quadrotor_ty = start[1]
