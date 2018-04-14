@@ -58,7 +58,7 @@ class SimulationRandomizer:
         self.max_quadrotor_start_yaw = 180  # degrees
         self.num_boxes = 0
 
-        self.previous_start = [0,0,0]
+        #self.previous_start = [0,0,0]
 
         # Publish model state.
         self.model_state_publisher = rospy.Publisher(
@@ -109,7 +109,7 @@ class SimulationRandomizer:
             max_x = 4.0
             min_y = 6.0
             max_y = 7.2
-            min_z = 0.5 
+            min_z = 0.5
             max_z = 2.5
 
         elif room < .96:
@@ -152,9 +152,9 @@ class SimulationRandomizer:
             distance = np.sqrt(tx*tx + ty*ty + tz*tz)
             count = count + 1
 
-        self.previous_start[0] = tx
-        self.previous_start[1] = ty
-        self.previous_start[2] = tz
+        #self.previous_start[0] = tx
+        #self.previous_start[1] = ty
+        #self.previous_start[2] = tz
         return (tx, ty, tz, yaw)
 
 
@@ -168,14 +168,14 @@ class SimulationRandomizer:
 
             self.set_intensity()
 
-            if repeat is False:
+            if not repeat:
                 # Pick randomized parameters.
                 (quadrotor_tx, quadrotor_ty, quadrotor_tz,
                 quadrotor_yaw) = self.GetRandomAptPosition()
             else:
-                quadrotor_tx = self.previous_start[0]
-                quadrotor_ty = self.previous_start[1]
-                quadrotor_tz = self.previous_start[2]
+                quadrotor_tx = start[0]
+                quadrotor_ty = start[1]
+                quadrotor_tz = start[2]
                 quadrotor_yaw = (2.0 * np.random.random() * self.max_quadrotor_start_yaw -
                                 self.max_quadrotor_start_yaw) * np.pi / 180.0
         else:
@@ -195,6 +195,8 @@ class SimulationRandomizer:
         # Wait a little bit for the drone spawn to stabilize. Maybe there's a
         # way to do this without sleeping?
         rospy.sleep(2)
+
+        return (quadrotor_tx,quadrotor_ty,quadrotor_tz)
 
     #might not work because lights might not be considered models
     def set_intensity(self):
@@ -216,8 +218,8 @@ class SimulationRandomizer:
                                                   SetLightProperties)
         success = set_light_properties('sun', diffuse, atten_const, atten_lin,
                                        atten_quad)
-        if success:
-            print("set light properties was a success!")
+        #if success:
+        #    print("set light properties was a success!")
 
     def spawn_quadrotor(self, tx=0, ty=0, tz=1, roll=0, pitch=0, yaw=0):
         position = (tx, ty, tz)

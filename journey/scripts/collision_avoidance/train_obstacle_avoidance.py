@@ -138,6 +138,9 @@ class DeepDronePlanner:
             discrete_controls=self.discrete_controls,
             use_probability=self.use_probability)
 
+        self.repeat = False
+        self.repeat_num = 0
+        self.prev_start = (0,0,0)
         print("Deep drone planner initialized.")
 
     def on_new_image(self, image):
@@ -269,23 +272,24 @@ class DeepDronePlanner:
 
     #if Im training and I collided, i want to repeat the start and end positions (yaw still random)
     def reset(self, start=(0, 0, 0), goal=(0, 0, 0), training=True):
-        repeat = False
-        repeat_num = 0
-        if self.collided is True:
-            if repeat_num < 7: #let's just hard code 10 TODO
-                repeat_num += 1
-                repeat = True
-            else: 
-                repeat_num = 0
-                repeat = False        
+        if self.collided:
+            if self.repeat_num < 10: #let's just hard code 10 TODO
+                self.repeat_num += 1
+                self.repeat = True
+            else:
+                self.repeat_num = 0
+                self.repeat = False
         else: #if we failed a couple of times and then got it right, this makes sure repeat vars are set correctly
-            repeat_num = 0
-            repeat = False
+            self.repeat_num = 0
+            self.repeat = False
 
         self.velocity_publisher.publish(Twist())
 
         # Randomize simulation environment.
-        self.randomize_simulation(start=start, training=training, repeat=repeat)
+        if training:
+            self.prev_start = self.randomize_simulation(start=self.prev_start, training=training, repeat=self.repeat, data_requirement=0)
+        else:
+            self.prev_start = self.randomize_simulation(start=start, training=training, repeat=self.repeat)
 
         # Clear our frame buffer.
         self.frame_buffer.clear()
@@ -299,7 +303,7 @@ class DeepDronePlanner:
 
         # Set goal pose.
         if training:
-            if repeat is False:
+            if not self.repeat:
                 goal_position = self.randomize_simulation.GetRandomAptPosition()
                 self.nav_goal.position.x = goal_position[0]
                 self.nav_goal.position.y = goal_position[1]
