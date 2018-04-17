@@ -257,7 +257,8 @@ class DeepDronePlanner:
         greyscale = 0.2989 * r + 0.5870 * g + 0.1140 * b
         frame = scipy.misc.imresize(
             greyscale, [self.image_height, self.image_width], mode='F')
-        return (frame - np.mean(frame)) / np.std(frame)
+        adjusted_stddev = max(np.std(frame), 1.0 / np.sqrt(frame.size))
+        return (frame - np.mean(frame)) / adjusted_stddev
 
     def get_current_state(self):
         frame = self.get_current_frame()
