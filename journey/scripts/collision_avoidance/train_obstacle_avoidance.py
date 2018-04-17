@@ -255,8 +255,10 @@ class DeepDronePlanner:
         image_data = ros_numpy.numpify(self.image_msg)
         r, g, b = image_data[:, :, 0], image_data[:, :, 1], image_data[:, :, 2]
         greyscale = 0.2989 * r + 0.5870 * g + 0.1140 * b
-        return scipy.misc.imresize(
+        frame = scipy.misc.imresize(
             greyscale, [self.image_height, self.image_width], mode='F')
+        adjusted_stddev = max(np.std(frame), 1.0 / np.sqrt(frame.size))
+        return (frame - np.mean(frame)) / adjusted_stddev
 
     def get_current_state(self):
         frame = self.get_current_frame()
