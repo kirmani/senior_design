@@ -494,20 +494,19 @@ class PolicyNetwork:
         return self.sess.run(self.actions, feed_dict={self.inputs: inputs})
 
     def predict_value(self, inputs, bootstraps=50):
-        return self._predict(inputs, bootstraps, self.y_coll_out,
+        return self._predict(inputs, bootstraps, self.inputs, self.y_coll_out,
                              self.b_coll_out)
 
     def predict_target_value(self, inputs, bootstraps=50):
-        return self._predict(inputs, bootstraps, self.target_y_coll_out,
-                             self.target_b_coll_out)
+        return self._predict(inputs, bootstraps, self.target_inputs,
+                             self.target_y_coll_out, self.target_b_coll_out)
 
-    def _predict(self, inputs, bootstraps, y, b):
+    def _predict(self, inputs, bootstraps, i, y, b):
         preds = []
-        for b in range(bootstraps):
-            preds.append(
-                self.sess.run([y, b], feed_dict={
-                    self.target_inputs: inputs,
-                }))
+        for _ in range(bootstraps):
+            preds.append(self.sess.run([y, b], feed_dict={
+                i: inputs,
+            }))
         y_coll_out = np.array([pred[0] for pred in preds])
         b_coll_out = np.array([pred[1] for pred in preds])
         preds = np.concatenate([y_coll_out, b_coll_out], axis=-1)
